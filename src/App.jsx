@@ -16,11 +16,14 @@ const KEY_BINDINGS = {
 }
 
 const TRACK_URL = 'https://ncs.soundcloud.com/CARTOON-ON-AND-ON_1.mp3'
+const MAX_FRAME_TIME_MS = 34
 const ToneContext = window.AudioContext || window.webkitAudioContext
+let sharedAudioContext
 
 const playTone = (frequency = 600, duration = 0.04, gain = 0.03) => {
   if (!ToneContext) return
-  const context = new ToneContext()
+  if (!sharedAudioContext) sharedAudioContext = new ToneContext()
+  const context = sharedAudioContext
   const oscillator = context.createOscillator()
   const gainNode = context.createGain()
   oscillator.connect(gainNode)
@@ -29,7 +32,6 @@ const playTone = (frequency = 600, duration = 0.04, gain = 0.03) => {
   gainNode.gain.value = gain
   oscillator.start()
   oscillator.stop(context.currentTime + duration)
-  oscillator.onended = () => context.close()
 }
 
 function PiecePreview({ type }) {
@@ -62,7 +64,7 @@ function App() {
     let frameId = 0
 
     const frame = (now) => {
-      const dt = Math.min(34, now - last)
+      const dt = Math.min(MAX_FRAME_TIME_MS, now - last)
       last = now
       engine.update(dt, heldRef.current, actionRef.current)
       actionRef.current = {}
@@ -210,7 +212,7 @@ function App() {
         <button type="button" className="action" onClick={toggleMusic}>
           {musicOn ? 'Pause Music' : 'Play NCS Loop'}
         </button>
-        <audio ref={audioRef} src={TRACK_URL} loop preload="none" />
+        <audio ref={audioRef} src={TRACK_URL} loop preload="none" onError={() => setMusicOn(false)} />
       </aside>
 
       <section className="game-area">

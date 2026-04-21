@@ -3,6 +3,8 @@ import { I_KICKS, JLSTZ_KICKS } from './srs'
 import { BOARD_HEIGHT, BOARD_WIDTH, PIECES } from './tetrominoes'
 
 const SCORE_BY_CLEAR = [0, 100, 300, 500, 800]
+const SOFT_DROP_MULTIPLIER = 20
+
 const DEFAULT_SETTINGS = {
   das: 110,
   arr: 25,
@@ -142,7 +144,9 @@ export class TetrisEngine {
   }
 
   moveToWall(direction) {
-    while (this.tryMove(direction));
+    for (let attempts = 0; attempts < BOARD_WIDTH; attempts += 1) {
+      if (!this.tryMove(direction)) break
+    }
   }
 
   tryRotate(direction) {
@@ -291,8 +295,7 @@ export class TetrisEngine {
     if (actions.rotateCW) this.tryRotate(1)
     if (actions.rotateCCW) this.tryRotate(-1)
     if (actions.rotate180) {
-      this.tryRotate(1)
-      this.tryRotate(1)
+      if (this.tryRotate(1)) this.tryRotate(1)
     }
     if (actions.hardDrop) {
       this.hardDrop()
@@ -301,7 +304,7 @@ export class TetrisEngine {
 
     this.updateHorizontal(dt, held)
 
-    this.gravityTimer += (dt / 1000) * this.getGravity() * (held.softDrop ? 20 : 1)
+    this.gravityTimer += (dt / 1000) * this.getGravity() * (held.softDrop ? SOFT_DROP_MULTIPLIER : 1)
     while (this.gravityTimer >= 1) {
       if (!this.softDrop()) break
       this.gravityTimer -= 1

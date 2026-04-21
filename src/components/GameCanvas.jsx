@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { BOARD_HEIGHT, BOARD_WIDTH, PIECES } from '../logic/tetrominoes'
 
 const CELL_SIZE = 26
+const TAP_THRESHOLD_PX = 14
 
 const drawCell = (ctx, x, y, color, alpha = 1) => {
   ctx.save()
@@ -90,7 +91,7 @@ export default function GameCanvas({ state, onTap, onSwipe }) {
     const absX = Math.abs(dx)
     const absY = Math.abs(dy)
 
-    if (absX < 14 && absY < 14) {
+    if (absX < TAP_THRESHOLD_PX && absY < TAP_THRESHOLD_PX) {
       onTap()
       return
     }
