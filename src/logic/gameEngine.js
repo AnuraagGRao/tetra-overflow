@@ -57,6 +57,10 @@ const createInfectedRow = () => {
 // Purify infection timers per difficulty (ms between garbage waves)
 export const PURIFY_INFECTION_TIMERS = { easy: 12000, normal: 9000, hard: 6000 }
 
+// Extra multiplier applied to infection timers on touch/mobile devices
+// (set via engine.setTouchMultiplier — default 1.0, mobile portrait uses 1.5)
+const DEFAULT_TOUCH_MULTIPLIER = 1.0
+
 // Row-based purify board with difficulty-controlled hole count
 // difficulty: 'hard' (3 holes) | 'normal' (2 holes) | 'easy' (1 hole)
 const createPurifyBoard = (difficulty = 'normal') => {
@@ -206,7 +210,13 @@ export class TetrisEngine {
     this.settings = { ...DEFAULT_SETTINGS, ...settings }
     this.mode = GAME_MODE.NORMAL
     this._topOutHandler = null
+    this.touchMultiplier = DEFAULT_TOUCH_MULTIPLIER
     this.reset()
+  }
+
+  // Set a multiplier for infection timer intervals (1.0 = default, 1.5 = mobile portrait)
+  setTouchMultiplier(mult) {
+    this.touchMultiplier = typeof mult === 'number' && mult > 0 ? mult : DEFAULT_TOUCH_MULTIPLIER
   }
 
   reset(mode = this.mode, purifyDifficulty = this.purifyDifficulty ?? 'normal') {
@@ -257,7 +267,7 @@ export class TetrisEngine {
     this.blocksPurified = 0
     this.purifyTimer = PURIFY_DURATION_MS
     this.blitzTimer  = BLITZ_DURATION_MS
-    const baseInfTimer = PURIFY_INFECTION_TIMERS[purifyDifficulty] ?? 8000
+    const baseInfTimer = (PURIFY_INFECTION_TIMERS[purifyDifficulty] ?? 8000) * (this.touchMultiplier ?? DEFAULT_TOUCH_MULTIPLIER)
     this.infectionTimer = baseInfTimer + Math.random() * 2000
     // Versus / garbage
     this.pendingGarbage = 0
@@ -597,7 +607,7 @@ export class TetrisEngine {
       }
       if (!hasInf) {
         this.addInfectionLayer(3)
-        const baseInfTimer = PURIFY_INFECTION_TIMERS[this.purifyDifficulty] ?? 8000
+        const baseInfTimer = (PURIFY_INFECTION_TIMERS[this.purifyDifficulty] ?? 8000) * (this.touchMultiplier ?? DEFAULT_TOUCH_MULTIPLIER)
         this.infectionTimer = baseInfTimer + Math.random() * 2000
       }
     }
@@ -832,7 +842,7 @@ export class TetrisEngine {
       this.infectionTimer -= dt
       if (this.infectionTimer <= 0) {
         this.addInfectionLayer(3)
-        const baseInfTimer = PURIFY_INFECTION_TIMERS[this.purifyDifficulty] ?? 8000
+        const baseInfTimer = (PURIFY_INFECTION_TIMERS[this.purifyDifficulty] ?? 8000) * (this.touchMultiplier ?? DEFAULT_TOUCH_MULTIPLIER)
         this.infectionTimer = baseInfTimer + Math.random() * 2000
       }
     }
