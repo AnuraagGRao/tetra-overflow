@@ -228,6 +228,8 @@ export default function App() {
   const [countdown, setCountdown] = useState(null)
   const [highScores, setHighScores] = useState(() => loadHighScores())
   const [newHigh, setNewHigh]     = useState(false)
+  const [installPrompt, setInstallPrompt] = useState(null)
+  const [showInstallBanner, setShowInstallBanner] = useState(false)
   const checkMobile = () => window.innerWidth < 768 || (window.innerHeight < 600 && ('ontouchstart' in window || navigator.maxTouchPoints > 0))
   const checkLandscape = () => window.innerHeight < 600 && window.innerWidth > window.innerHeight && ('ontouchstart' in window || navigator.maxTouchPoints > 0)
   const [isMobile, setIsMobile]       = useState(checkMobile)
@@ -277,6 +279,39 @@ export default function App() {
     window.addEventListener('resize', handler)
     return () => window.removeEventListener('resize', handler)
   }, [])
+
+  // PWA install prompt
+  useEffect(() => {
+    const handler = (e) => {
+      e.preventDefault()
+      setInstallPrompt(e)
+      // Only show the banner if not already installed (standalone)
+      if (!window.matchMedia('(display-mode: standalone)').matches) {
+        setShowInstallBanner(true)
+      }
+    }
+    window.addEventListener('beforeinstallprompt', handler)
+    return () => window.removeEventListener('beforeinstallprompt', handler)
+  }, [])
+
+  const handleInstall = async () => {
+    if (!installPrompt) return
+    installPrompt.prompt()
+    const { outcome } = await installPrompt.userChoice
+    if (outcome === 'accepted') { setInstallPrompt(null); setShowInstallBanner(false) }
+  }
+
+  const handleDismissInstall = () => setShowInstallBanner(false)
+
+  const renderInstallBanner = () => showInstallBanner ? (
+    <div className="pwa-install-banner">
+      <span className="pwa-install-text">📲 Add Tetris to your home screen for the best experience</span>
+      <div className="pwa-install-actions">
+        <button type="button" className="pwa-install-btn" onClick={handleInstall}>Install</button>
+        <button type="button" className="pwa-dismiss-btn" onClick={handleDismissInstall}>✕</button>
+      </div>
+    </div>
+  ) : null
 
   const handleZenTopOut = () => {
     // Guard against multiple top-out callbacks firing during the same lock/spawn cycle.
@@ -974,7 +1009,37 @@ export default function App() {
   const renderMobileLandscape = () => (
     <div className="mobile-ls">
 
-      {/* ── Centre: HUD bar + zone bar + canvas ── */}
+      {/* Left context panel: difficulty controls (Versus / Purify only) */}
+      {(isVersus || isPurify) && (
+        <div className="ls-left">
+          {isVersus && (
+            <>
+              <div className="ls-diff-title">Bot AI</div>
+              {['easy', 'medium', 'hard'].map(d => (
+                <button key={d} type="button"
+                  className={`ls-diff-btn${botDifficulty === d ? ' active' : ''}`}
+                  onClick={() => setBotDiff(d)}>
+                  {d[0].toUpperCase() + d.slice(1)}
+                </button>
+              ))}
+            </>
+          )}
+          {isPurify && (
+            <>
+              <div className="ls-diff-title">Purify</div>
+              {['easy', 'normal', 'hard'].map(d => (
+                <button key={d} type="button"
+                  className={`ls-diff-btn${purifyDifficulty === d ? ' active' : ''}`}
+                  onClick={() => setPurifyDiff(d)}>
+                  {d[0].toUpperCase() + d.slice(1)}
+                </button>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Centre: HUD bar + zone bar + canvas */}
       <div className="ls-centre">
         {/* stat bar */}
         <div className="ls-hud">
@@ -1074,6 +1139,7 @@ export default function App() {
             { mode: GAME_MODE.NORMAL,  label: 'Normal'  },
             { mode: GAME_MODE.SPRINT,  label: 'Sprint'  },
             { mode: GAME_MODE.BLITZ,   label: 'Blitz'   },
+            { mode: GAME_MODE.MASTER,  label: 'Master'  },
             { mode: GAME_MODE.ZEN,     label: 'Zen'     },
             { mode: GAME_MODE.PURIFY,  label: 'Purify'  },
             { mode: GAME_MODE.VERSUS,  label: '1v1'     },
@@ -1186,6 +1252,7 @@ export default function App() {
             { mode: GAME_MODE.NORMAL, label: 'Normal' },
             { mode: GAME_MODE.SPRINT, label: 'Sprint' },
             { mode: GAME_MODE.BLITZ,  label: 'Blitz'  },
+            { mode: GAME_MODE.MASTER, label: 'Master' },
             { mode: GAME_MODE.ZEN,    label: 'Zen'    },
             { mode: GAME_MODE.PURIFY, label: 'Purify' },
             { mode: GAME_MODE.VERSUS, label: '1v1'    },
@@ -1195,6 +1262,36 @@ export default function App() {
               onClick={() => startGame(mode)}>{label}</button>
           ))}
         </div>
+
+        {/* Difficulty (Versus or Purify) */}
+        {isVersus && (
+          <div className="pt-diff-section">
+            <div className="pt-diff-label">Bot AI</div>
+            <div className="pt-diff-row">
+              {['easy', 'medium', 'hard'].map(d => (
+                <button key={d} type="button"
+                  className={`ls-diff-btn${botDifficulty === d ? ' active' : ''}`}
+                  onClick={() => setBotDiff(d)}>
+                  {d[0].toUpperCase() + d.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {isPurify && (
+          <div className="pt-diff-section">
+            <div className="pt-diff-label">Purify</div>
+            <div className="pt-diff-row">
+              {['easy', 'normal', 'hard'].map(d => (
+                <button key={d} type="button"
+                  className={`ls-diff-btn${purifyDifficulty === d ? ' active' : ''}`}
+                  onClick={() => setPurifyDiff(d)}>
+                  {d[0].toUpperCase() + d.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
     </div>
@@ -1273,6 +1370,7 @@ export default function App() {
   // ─── Root render ─────────────────────────────────────────────────────────────
   return (
     <div className={`app${state.zoneActive ? ' zone-active' : ''}`} style={!isMobile ? { '--board-w': `calc(260px * ${zoom})` } : undefined}>
+      {renderInstallBanner()}
       {isMobile
         ? (isLandscape ? renderMobileLandscape() : (isVersus ? renderMobileVersus() : renderMobileNormal()))
         : renderDesktop()
