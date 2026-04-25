@@ -8,6 +8,10 @@ const GBG_COLOR      = PIECES.GBG.color    // garbage grey
 
 const CELL_SIZE = 26
 
+const DRAG_START_PX     = 25    // min px before a swipe is committed
+const TAP_MAX_PX        = 13   // max total movement for a tap
+const HARD_DROP_VEL_PX_MS = 0.45 // px/ms threshold for hard-drop vs soft-drop
+
 const drawCell = (ctx, x, y, color, alpha = 1, blur = 12) => {
   ctx.save()
   ctx.globalAlpha = alpha
@@ -24,9 +28,7 @@ export default function GameCanvas({ state, onTap, onDragBegin, onDragEnd, onHar
   const pulseRef = useRef(0)
 
   // ── Touch constants ──────────────────────────────────────────────────────────
-  const DRAG_START_PX       = 11   // px movement before locking a direction
-  const TAP_MAX_PX          = 13   // max total movement for a tap
-  const HARD_DROP_VEL_PX_MS = 0.45 // px/ms threshold for hard-drop vs soft-drop
+  // (DRAG_START_PX, TAP_MAX_PX, HARD_DROP_VEL_PX_MS defined at module level)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -203,6 +205,7 @@ export default function GameCanvas({ state, onTap, onDragBegin, onDragEnd, onHar
   }, [state])
 
   const handlePointerDown = (event) => {
+    event.preventDefault()
     event.currentTarget.setPointerCapture(event.pointerId)
     touchRef.current = {
       x: event.clientX,
@@ -242,6 +245,7 @@ export default function GameCanvas({ state, onTap, onDragBegin, onDragEnd, onHar
       const elapsed = performance.now() - start.t
       const distY   = Math.abs(event.clientY - start.y)
       if (elapsed > 0 && distY / elapsed >= HARD_DROP_VEL_PX_MS) {
+        onDragEnd('down')      // clear softDrop before hard drop (prevents sticky speed)
         onHardDrop()           // fast fling → hard drop
       } else {
         onDragEnd('down')      // slow drag released → stop soft-drop

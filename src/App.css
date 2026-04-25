@@ -624,11 +624,26 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
 
 /* ── Touch controls ───────────────────────────────────────────────────────── */
 .touch-controls {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  display: flex;
   gap: 0.4rem;
   width: 100%;
   padding: 0.5rem;
+}
+
+/* Left panel: D-pad — 4 buttons in a single row by default */
+.touch-left {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.4rem;
+  flex: 4;
+}
+
+/* Right panel: 2×2 action grid */
+.touch-right {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.4rem;
+  flex: 2;
 }
 
 .control-button {
@@ -643,6 +658,7 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
   transition: background 0.08s;
   user-select: none;
   -webkit-user-select: none;
+  touch-action: manipulation;
 }
 .control-button:active { background: rgba(0, 229, 255, 0.18); }
 
@@ -841,7 +857,7 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
     max-width: 100%;
   }
 
-  /* ── Mobile action strip ── */
+  /* ── Mobile action strip (kept for versus layout) ── */
   .mobile-action-strip {
     display: flex;
     gap: 0.35rem;
@@ -854,6 +870,35 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
     flex-shrink: 0;
   }
 
+  /* ── Portrait bottom panel (mirrors landscape right panel) ── */
+  .pt-panel {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    grid-auto-rows: auto;
+    gap: 0.35rem;
+    padding: 0.4rem 0.4rem calc(env(safe-area-inset-bottom, 0px) + 0.4rem);
+    background: rgba(6, 8, 18, 0.99);
+    border-top: 1px solid var(--c-border);
+    flex-shrink: 0;
+  }
+
+  /* primary HOLD+Pause pair spans 2 of the 4 columns each */
+  .pt-panel .ls-primary-btns {
+    grid-column: 1 / -1;
+  }
+
+  /* Zone button spans full width */
+  .pt-panel .ls-zone-btn {
+    grid-column: 1 / -1;
+  }
+
+  /* util row spans 2 cols, theme spans 2 cols */
+  .pt-panel .ls-util   { grid-column: 1 / 3; }
+  .pt-panel .ls-theme  { grid-column: 3 / 5; display: flex; align-items: center; justify-content: center; }
+
+  /* mode grid spans full width — 6 buttons already in 2-col layout */
+  .pt-panel .ls-modes  { grid-column: 1 / -1; }
+
   /* ── Touch controls ── */
   .touch-controls {
     padding: 0.4rem 0.4rem calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
@@ -861,6 +906,8 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
     flex-shrink: 0;
     gap: 0.35rem;
   }
+  .touch-left  { gap: 0.35rem; }
+  .touch-right { gap: 0.35rem; }
 
   .control-button { min-height: 3.6rem; font-size: 1.2rem; }
 
@@ -961,9 +1008,227 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
 }
 
 /* ── Desktop: hide mobile-specific elements ────────────────────────────────── */
-@media (min-width: 768px) {
+@media (min-width: 768px) and (min-height: 600px) {
   .mobile-layout, .mobile-versus-layout { display: none !important; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MOBILE LANDSCAPE  (swipe + controller — no D-pad buttons)
+   2-column: canvas | action panel
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.mobile-ls {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: 1fr;
+  width: 100%;
+  height: 100svh;
+  overflow: hidden;
+  background: #090b16;
+}
+
+/* ── Centre column: HUD bar + zone bar + canvas ───────────────────────────── */
+.ls-centre {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100svh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* compact stat bar */
+.ls-hud {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  flex-wrap: nowrap;
+  gap: 0.3rem;
+  padding: 0.2rem 0.5rem;
+  background: rgba(8, 10, 22, 0.98);
+  border-bottom: 1px solid var(--c-border);
+  flex-shrink: 0;
+}
+
+.ls-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.05rem;
+  min-width: 0;
+}
+.ls-stat .l {
+  font-size: 0.42rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--c-muted);
+  line-height: 1;
+}
+.ls-stat .v {
+  font-size: 0.88rem;
+  font-weight: 900;
+  color: #fff;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* zone bar inside ls-centre */
+.ls-centre .mobile-zone-bar { flex-shrink: 0; }
+
+/* canvas wrapper */
+.ls-canvas-wrap {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  min-height: 0;
+}
+.ls-canvas-wrap .game-canvas {
+  height: 100% !important;
+  width: auto !important;
+  max-width: 100%;
+}
+.ls-canvas-wrap .overlay { border-radius: 0; }
+
+/* ── Right panel: Hold + Pause + Zone + utilities + modes ─────────────────── */
+.ls-right {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.4rem 0.4rem calc(env(safe-area-inset-right, 0px) + 0.4rem) 0.4rem;
+  background: rgba(6, 8, 18, 0.99);
+  border-left: 1px solid var(--c-border);
+  width: 8rem;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.ls-right::-webkit-scrollbar { display: none; }
+
+/* primary action buttons: HOLD and Pause/Resume side by side */
+.ls-primary-btns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.3rem;
+}
+
+.ls-action-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  padding: 0.45rem 0.2rem;
+  border-radius: 10px;
+  border: 1px solid rgba(80, 130, 200, 0.35);
+  background: rgba(14, 22, 50, 0.9);
+  color: #f0f6ff;
+  font-family: inherit;
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+}
+.ls-action-btn:active { background: rgba(0, 229, 255, 0.18); }
+
+.ls-hold-btn { border-color: rgba(100, 180, 255, 0.5); }
+.ls-pause-btn { border-color: rgba(250, 204, 21, 0.4); }
+
+.ls-btn-icon  { font-size: 1.2rem; line-height: 1; }
+.ls-btn-label { font-size: 0.5rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--c-muted); }
+
+/* Zone activate button */
+.ls-zone-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.35rem 0.3rem;
+  border-radius: 10px;
+  border: 1px solid rgba(30, 144, 255, 0.35);
+  background: rgba(10, 18, 45, 0.9);
+  color: var(--c-muted);
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s, background 0.2s;
+  touch-action: manipulation;
+}
+.ls-zone-btn:disabled { opacity: 0.35; cursor: default; }
+.ls-zone-btn.ready {
+  border-color: var(--c-zone);
+  color: var(--c-zone);
+  background: rgba(0, 207, 255, 0.08);
+  animation: zone-ready-pulse 0.8s ease-in-out infinite alternate;
+}
+.ls-zone-btn.active {
+  border-color: #8844ff;
+  color: #c4aaff;
+  background: rgba(136, 68, 255, 0.12);
+}
+
+/* Utility row: music + restart + theme */
+.ls-util {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.25rem;
+}
+
+.ls-util-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem 0.2rem;
+  border-radius: 8px;
+  border: 1px solid var(--c-border2);
+  background: rgba(14, 22, 50, 0.85);
+  color: var(--c-muted);
+  font-size: 0.85rem;
+  font-family: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.ls-util-btn:active, .ls-util-btn.active { background: rgba(0, 229, 255, 0.15); color: #fff; }
+
+/* ThemeSwitcher row */
+.ls-theme {
+  display: flex;
+  justify-content: center;
+}
+
+/* Mode selector: a small grid of mode buttons */
+.ls-modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.25rem;
+}
+
+.ls-mode-btn {
+  padding: 0.3rem 0.2rem;
+  border-radius: 8px;
+  border: 1px solid var(--c-border2);
+  background: rgba(14, 22, 50, 0.7);
+  color: var(--c-muted);
+  font-family: inherit;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: center;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.ls-mode-btn.active {
+  border-color: var(--c-accent);
+  color: var(--c-accent);
+  background: rgba(0, 229, 255, 0.08);
+}
+.ls-mode-btn:active { background: rgba(0, 229, 255, 0.15); }
+
 
 /* ═══════════════════════════════════════════════════════════════════════════
    ANIMATIONS

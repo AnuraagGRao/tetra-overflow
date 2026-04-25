@@ -228,7 +228,10 @@ export default function App() {
   const [countdown, setCountdown] = useState(null)
   const [highScores, setHighScores] = useState(() => loadHighScores())
   const [newHigh, setNewHigh]     = useState(false)
-  const [isMobile, setIsMobile]   = useState(() => window.innerWidth < 768)
+  const checkMobile = () => window.innerWidth < 768 || (window.innerHeight < 600 && ('ontouchstart' in window || navigator.maxTouchPoints > 0))
+  const checkLandscape = () => window.innerHeight < 600 && window.innerWidth > window.innerHeight && ('ontouchstart' in window || navigator.maxTouchPoints > 0)
+  const [isMobile, setIsMobile]       = useState(checkMobile)
+  const [isLandscape, setIsLandscape] = useState(checkLandscape)
   const [showMobileModes, setShowMobileModes] = useState(false)
   const [zenResetting, setZenResetting] = useState(false)
   const [zoom, setZoom] = useState(() => Number(localStorage.getItem('tetris-zoom') || 1))
@@ -255,7 +258,7 @@ export default function App() {
   const purifyDiffRef = useRef('normal')
   const botDiffRef    = useRef('medium')
   const botEnabledRef = useRef(true)
-  const isMobileRef   = useRef(window.innerWidth < 768)
+  const isMobileRef   = useRef(window.innerWidth < 768 || (window.innerHeight < 600 && ('ontouchstart' in window || navigator.maxTouchPoints > 0)))
   const botRef        = useRef(null)
   const zenResettingRef = useRef(false)
 
@@ -265,9 +268,11 @@ export default function App() {
   // Resize → isMobile
   useEffect(() => {
     const handler = () => {
-      const m = window.innerWidth < 768
+      const m = window.innerWidth < 768 || (window.innerHeight < 600 && ('ontouchstart' in window || navigator.maxTouchPoints > 0))
+      const ls = window.innerHeight < 600 && window.innerWidth > window.innerHeight && ('ontouchstart' in window || navigator.maxTouchPoints > 0)
       isMobileRef.current = m
       setIsMobile(m)
+      setIsLandscape(ls)
     }
     window.addEventListener('resize', handler)
     return () => window.removeEventListener('resize', handler)
@@ -475,21 +480,25 @@ export default function App() {
   const handlePress   = (key, hold) => {
     if (hold) {
       heldRef.current[key] = true
-      if (key === 'left' || key === 'right') playMoveSFX()
+      if (key === 'left' || key === 'right') { playMoveSFX(); navigator.vibrate?.(8) }
+      else if (key === 'softDrop') navigator.vibrate?.(5)
     } else {
       triggerAction(key)
+      if (key === 'rotateCW' || key === 'rotateCCW' || key === 'rotate180') navigator.vibrate?.(10)
+      else if (key === 'hardDrop') navigator.vibrate?.([15, 30, 15])
     }
   }
   const handleRelease = (key, hold) => { if (hold) heldRef.current[key] = false }
   const handleDragBegin = (dir) => {
     if (dir === 'left' || dir === 'right') heldRef.current[dir] = true
     else if (dir === 'down') heldRef.current.softDrop = true
+    else if (dir === 'up') triggerAction('hold')
   }
   const handleDragEnd = (dir) => {
     if (dir === 'left' || dir === 'right') heldRef.current[dir] = false
     else if (dir === 'down') heldRef.current.softDrop = false
   }
-  const handleHardDrop = () => { if (!countdownActiveRef.current) { actionRef.current.hardDrop = true; playHardDropSFX() } }
+  const handleHardDrop = () => { if (!countdownActiveRef.current) { heldRef.current.softDrop = false; actionRef.current.hardDrop = true; playHardDropSFX(); navigator.vibrate?.([15, 30, 15]) } }
   const handleZoneActivate = () => { actionRef.current.activateZone = true; playZoneActivateSFX() }
 
   // ─── Gamepad ──────────────────────────────────────────────────────────────
@@ -961,6 +970,124 @@ export default function App() {
     </>
   )
 
+  // ─── Mobile landscape (swipe + controller only) ────────────────────────────
+  const renderMobileLandscape = () => (
+    <div className="mobile-ls">
+
+      {/* ── Centre: HUD bar + zone bar + canvas ── */}
+      <div className="ls-centre">
+        {/* stat bar */}
+        <div className="ls-hud">
+          <div className="ls-stat">
+            <span className="l">HOLD</span>
+            <PiecePreview type={state.hold} small />
+          </div>
+          <div className="ls-stat">
+            <span className="l">Score</span>
+            <span className="v">{state.score.toLocaleString()}</span>
+          </div>
+          <div className="ls-stat">
+            <span className="l">Lv</span>
+            <span className="v">{state.level}</span>
+          </div>
+          <div className="ls-stat">
+            <span className="l">Lines</span>
+            <span className="v">{state.lines}{state.mode === GAME_MODE.SPRINT ? `/${SPRINT_LINES}` : ''}</span>
+          </div>
+          {state.mode === GAME_MODE.BLITZ && (
+            <div className="ls-stat">
+              <span className="l">Time</span>
+              <span className="v" style={{ color: state.blitzTimer < 15000 ? '#f87171' : '#facc15' }}>{fmt(state.blitzTimer)}</span>
+            </div>
+          )}
+          {state.mode === GAME_MODE.PURIFY && (
+            <div className="ls-stat">
+              <span className="l">Left</span>
+              <span className="v" style={{ color: state.purifyTimer < 30000 ? '#f87171' : '#a78bfa' }}>{fmt(state.purifyTimer)}</span>
+            </div>
+          )}
+          <div className="ls-stat">
+            <span className="l">Next</span>
+            <div style={{ display: 'flex', gap: '0.15rem' }}>
+              {state.queue.slice(0, 2).map((t, i) => <PiecePreview key={`${t}-${i}`} type={t} small />)}
+            </div>
+          </div>
+        </div>
+
+        {/* zone bar */}
+        {showZone && (
+          <div className="mobile-zone-bar">
+            <div className={`mobile-zone-fill${state.zoneActive ? ' zone-active' : ''}${zoneReady && !state.zoneActive ? ' zone-ready' : ''}`}
+              style={{ width: `${zoneFillPct}%` }} />
+          </div>
+        )}
+
+        {/* board */}
+        <div className={`ls-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`}>
+          <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
+            onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop} />
+          {renderOverlay(state, false)}
+          {renderPauseOverlay(state)}
+          {renderZoneEnd(state)}
+          {renderCountdown()}
+        </div>
+      </div>
+
+      {/* ── Right: actions + controls ── */}
+      <div className="ls-right">
+        {/* primary action buttons */}
+        <div className="ls-primary-btns">
+          <button type="button" className="ls-action-btn ls-hold-btn"
+            onPointerDown={(e) => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); triggerAction('hold'); navigator.vibrate?.(10) }}
+            onPointerUp={(e) => e.preventDefault()}
+            onPointerCancel={(e) => e.preventDefault()}>
+            <span className="ls-btn-icon">☰</span>
+            <span className="ls-btn-label">HOLD</span>
+          </button>
+          <button type="button" className="ls-action-btn ls-pause-btn" onClick={handlePauseToggle}>
+            <span className="ls-btn-icon">{state.paused ? '▶' : '⏸'}</span>
+            <span className="ls-btn-label">{state.paused ? 'Resume' : 'Pause'}</span>
+          </button>
+        </div>
+
+        {/* zone button — prominent when ready */}
+        {showZone && (
+          <button type="button"
+            className={`ls-zone-btn${state.zoneActive ? ' active' : ''}${zoneReady && !state.zoneActive ? ' ready' : ''}`}
+            disabled={!zoneReady && !state.zoneActive}
+            onClick={handleZoneActivate}>
+            <span>⚡</span>
+            <span className="ls-btn-label">{state.zoneActive ? 'ZONE ON' : zoneReady ? 'ZONE!' : `Zone ${state.zoneMeter}%`}</span>
+          </button>
+        )}
+
+        {/* utility row */}
+        <div className="ls-util">
+          <button type="button" className={`ls-util-btn${musicOn ? ' active' : ''}`} onClick={toggleMusic}>🎵</button>
+          <button type="button" className="ls-util-btn" onClick={() => startGame(gameMode)}>↺</button>
+        </div>
+        <div className="ls-theme"><ThemeSwitcher /></div>
+
+        {/* mode selector */}
+        <div className="ls-modes">
+          {[
+            { mode: GAME_MODE.NORMAL,  label: 'Normal'  },
+            { mode: GAME_MODE.SPRINT,  label: 'Sprint'  },
+            { mode: GAME_MODE.BLITZ,   label: 'Blitz'   },
+            { mode: GAME_MODE.ZEN,     label: 'Zen'     },
+            { mode: GAME_MODE.PURIFY,  label: 'Purify'  },
+            { mode: GAME_MODE.VERSUS,  label: '1v1'     },
+          ].map(({ mode, label }) => (
+            <button key={mode} type="button"
+              className={`ls-mode-btn${gameMode === mode ? ' active' : ''}`}
+              onClick={() => startGame(mode)}>{label}</button>
+          ))}
+        </div>
+      </div>
+
+    </div>
+  )
+
   // ─── Mobile non-versus ──────────────────────────────────────────────────────
   const renderMobileNormal = () => (
     <div className="mobile-layout">
@@ -1018,25 +1145,58 @@ export default function App() {
         {renderCountdown()}
       </div>
 
-      {/* Action strip */}
-      <div className="mobile-action-strip">
-        <button type="button" className="icon-btn" onClick={() => startGame(gameMode)}>↺</button>
-        <button type="button" className="icon-btn" onClick={handlePauseToggle}>{state.paused ? '▶' : '⏸'}</button>
-        <button type="button" className={`icon-btn${musicOn ? ' active' : ''}`} onClick={toggleMusic}>🎵</button>
-        {zoneReady && !state.zoneActive && showZone && (
-          <button type="button" className="icon-btn" style={{ color: 'var(--c-zone)', borderColor: 'var(--c-zone)' }} onClick={handleZoneActivate}>⚡ Zone</button>
+      {/* Bottom panel: same controls as landscape */}
+      <div className="pt-panel">
+        {/* HOLD + Pause */}
+        <div className="ls-primary-btns">
+          <button type="button" className="ls-action-btn ls-hold-btn"
+            onPointerDown={(e) => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); triggerAction('hold'); navigator.vibrate?.(10) }}
+            onPointerUp={(e) => e.preventDefault()}
+            onPointerCancel={(e) => e.preventDefault()}>
+            <span className="ls-btn-icon">☰</span>
+            <span className="ls-btn-label">HOLD</span>
+          </button>
+          <button type="button" className="ls-action-btn ls-pause-btn" onClick={handlePauseToggle}>
+            <span className="ls-btn-icon">{state.paused ? '▶' : '⏸'}</span>
+            <span className="ls-btn-label">{state.paused ? 'Resume' : 'Pause'}</span>
+          </button>
+        </div>
+
+        {/* Zone */}
+        {showZone && (
+          <button type="button"
+            className={`ls-zone-btn${state.zoneActive ? ' active' : ''}${zoneReady && !state.zoneActive ? ' ready' : ''}`}
+            disabled={!zoneReady && !state.zoneActive}
+            onClick={handleZoneActivate}>
+            <span>⚡</span>
+            <span className="ls-btn-label">{state.zoneActive ? 'ZONE ON' : zoneReady ? 'ZONE!' : `Zone ${state.zoneMeter}%`}</span>
+          </button>
         )}
-        <button type="button" className="icon-btn" onClick={() => setShowMobileModes(v => !v)}>⬡ Mode</button>
+
+        {/* Utilities */}
+        <div className="ls-util">
+          <button type="button" className={`ls-util-btn${musicOn ? ' active' : ''}`} onClick={toggleMusic}>🎵</button>
+          <button type="button" className="ls-util-btn" onClick={() => startGame(gameMode)}>↺</button>
+        </div>
+        <div className="ls-theme"><ThemeSwitcher /></div>
+
+        {/* Mode grid */}
+        <div className="ls-modes">
+          {[
+            { mode: GAME_MODE.NORMAL, label: 'Normal' },
+            { mode: GAME_MODE.SPRINT, label: 'Sprint' },
+            { mode: GAME_MODE.BLITZ,  label: 'Blitz'  },
+            { mode: GAME_MODE.ZEN,    label: 'Zen'    },
+            { mode: GAME_MODE.PURIFY, label: 'Purify' },
+            { mode: GAME_MODE.VERSUS, label: '1v1'    },
+          ].map(({ mode, label }) => (
+            <button key={mode} type="button"
+              className={`ls-mode-btn${gameMode === mode ? ' active' : ''}`}
+              onClick={() => startGame(mode)}>{label}</button>
+          ))}
+        </div>
       </div>
 
-      {showMobileModes && (
-        <div className="mobile-mode-select">
-          {modeButtons}
-          <ThemeSwitcher />
-        </div>
-      )}
-
-      <TouchControls onPress={handlePress} onRelease={handleRelease} />
     </div>
   )
 
@@ -1107,7 +1267,6 @@ export default function App() {
         )}
       </div>
 
-      <TouchControls onPress={handlePress} onRelease={handleRelease} />
     </div>
   )
 
@@ -1115,7 +1274,7 @@ export default function App() {
   return (
     <div className={`app${state.zoneActive ? ' zone-active' : ''}`} style={!isMobile ? { '--board-w': `calc(260px * ${zoom})` } : undefined}>
       {isMobile
-        ? (isVersus ? renderMobileVersus() : renderMobileNormal())
+        ? (isLandscape ? renderMobileLandscape() : (isVersus ? renderMobileVersus() : renderMobileNormal()))
         : renderDesktop()
       }
     </div>
