@@ -4,6 +4,7 @@ import './App.css'
 import GameCanvas from './components/GameCanvas'
 import TouchControls from './components/TouchControls'
 import ThemeSwitcher from './components/ThemeSwitcher'
+import AboutPage from './components/AboutPage'
 import { useTheme } from './contexts/ThemeContext'
 import { MusicManager } from './audio/musicManager'
 import {
@@ -163,6 +164,13 @@ const playComboSFX = (c) => {
 
 const playZenResetSFX = () => arp([784, 880, 1047, 1319], 0.20, 0.04, 'sine')
 
+const playCountdownTickSFX = (second) => {
+  // Rising pitch + urgency as it counts down to 1
+  const freq = 660 + (10 - second) * 55
+  playNote(freq, 0.07, 0.12, 'square')
+  if (second <= 3) playNote(freq * 1.5, 0.05, 0.06, 'sine', 0.028)
+}
+
 // ─── High-score storage ───────────────────────────────────────────────────────
 const HS_KEY = 'tetris-highs'
 const loadHighScores = () => {
@@ -230,6 +238,7 @@ export default function App() {
   const [newHigh, setNewHigh]     = useState(false)
   const [installPrompt, setInstallPrompt] = useState(null)
   const [showInstallBanner, setShowInstallBanner] = useState(false)
+  const [showAbout, setShowAbout] = useState(false)
   const checkMobile = () => window.innerWidth < 768 || (window.innerHeight < 600 && ('ontouchstart' in window || navigator.maxTouchPoints > 0))
   const checkLandscape = () => window.innerHeight < 600 && window.innerWidth > window.innerHeight && ('ontouchstart' in window || navigator.maxTouchPoints > 0)
   const [isMobile, setIsMobile]       = useState(checkMobile)
@@ -263,6 +272,8 @@ export default function App() {
   const isMobileRef   = useRef(window.innerWidth < 768 || (window.innerHeight < 600 && ('ontouchstart' in window || navigator.maxTouchPoints > 0)))
   const botRef        = useRef(null)
   const zenResettingRef = useRef(false)
+  const prevBlitzSecRef  = useRef(null)
+  const prevPurifySecRef = useRef(null)
 
   useEffect(() => { engine.setSettings(settings) },  [engine, settings])
   useEffect(() => { engine2.setSettings(settings) }, [engine2, settings])
@@ -295,6 +306,13 @@ export default function App() {
   }, [])
 
   const handleInstall = async () => {
+    if (!installPrompt) return
+    installPrompt.prompt()
+    const { outcome } = await installPrompt.userChoice
+    if (outcome === 'accepted') { setInstallPrompt(null); setShowInstallBanner(false) }
+  }
+
+  const handleInstallFromAbout = async () => {
     if (!installPrompt) return
     installPrompt.prompt()
     const { outcome } = await installPrompt.userChoice
@@ -338,6 +356,7 @@ export default function App() {
     prevGameOverRef.current = false; prevGameOver2Ref.current = false
     prevLevelRef.current = 1; prevBackToBackRef.current = false; prevZoneMeterRef.current = 0; prevZoneActiveRef.current = false
     zenResettingRef.current = false
+    prevBlitzSecRef.current = null; prevPurifySecRef.current = null
     setZenResetting(false)
     setNewHigh(false)
     heldRef.current  = { left: false, right: false, softDrop: false }
@@ -439,6 +458,29 @@ export default function App() {
         musicManager?.setZoneFx?.(false)
       }
       prevZoneActiveRef.current = ns.zoneActive
+
+      // 10-second countdown ticks for Blitz and Purify timers
+      if (!ns.gameOver && !ns.paused) {
+        if (ns.mode === GAME_MODE.BLITZ && ns.blitzTimer > 0 && ns.blitzTimer <= 10000) {
+          const sec = Math.ceil(ns.blitzTimer / 1000)
+          if (prevBlitzSecRef.current !== null && sec !== prevBlitzSecRef.current) {
+            playCountdownTickSFX(sec)
+          }
+          prevBlitzSecRef.current = sec
+        } else {
+          prevBlitzSecRef.current = null
+        }
+        if (ns.mode === GAME_MODE.PURIFY && ns.purifyTimer > 0 && ns.purifyTimer <= 10000) {
+          const sec = Math.ceil(ns.purifyTimer / 1000)
+          if (prevPurifySecRef.current !== null && sec !== prevPurifySecRef.current) {
+            playCountdownTickSFX(sec)
+          }
+          prevPurifySecRef.current = sec
+        } else {
+          prevPurifySecRef.current = null
+        }
+      }
+
       if (ns.gameOver && !prevGameOverRef.current && gameModeRef.current !== GAME_MODE.ZEN) {
         playGameOverSFX()
         if (musicOnRef.current) { musicManager?.stop(); musicOnRef.current = false; setMusicOn(false) }
@@ -913,6 +955,7 @@ export default function App() {
             🔍 {Math.round(zoom * 100)}%
           </button>
           <ThemeSwitcher />
+          <button type="button" className="icon-btn" onClick={() => setShowAbout(true)} title="About">ℹ About</button>
         </div>
       </header>
 
@@ -1101,19 +1144,10 @@ export default function App() {
       {/* ── Right: actions + controls ── */}
       <div className="ls-right">
         {/* primary action buttons */}
-        <div className="ls-primary-btns">
-          <button type="button" className="ls-action-btn ls-hold-btn"
-            onPointerDown={(e) => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); triggerAction('hold'); navigator.vibrate?.(10) }}
-            onPointerUp={(e) => e.preventDefault()}
-            onPointerCancel={(e) => e.preventDefault()}>
-            <span className="ls-btn-icon">☰</span>
-            <span className="ls-btn-label">HOLD</span>
-          </button>
-          <button type="button" className="ls-action-btn ls-pause-btn" onClick={handlePauseToggle}>
-            <span className="ls-btn-icon">{state.paused ? '▶' : '⏸'}</span>
-            <span className="ls-btn-label">{state.paused ? 'Resume' : 'Pause'}</span>
-          </button>
-        </div>
+        <button type="button" className="ls-action-btn ls-pause-btn" onClick={handlePauseToggle}>
+          <span className="ls-btn-icon">{state.paused ? '▶' : '⏸'}</span>
+          <span className="ls-btn-label">{state.paused ? 'Resume' : 'Pause'}</span>
+        </button>
 
         {/* zone button — prominent when ready */}
         {showZone && (
@@ -1127,9 +1161,10 @@ export default function App() {
         )}
 
         {/* utility row */}
-        <div className="ls-util">
+        <div className="ls-util ls-util-3">
           <button type="button" className={`ls-util-btn${musicOn ? ' active' : ''}`} onClick={toggleMusic}>🎵</button>
           <button type="button" className="ls-util-btn" onClick={() => startGame(gameMode)}>↺</button>
+          <button type="button" className="ls-util-btn" onClick={() => setShowAbout(true)}>ℹ</button>
         </div>
         <div className="ls-theme"><ThemeSwitcher /></div>
 
@@ -1213,20 +1248,11 @@ export default function App() {
 
       {/* Bottom panel: same controls as landscape */}
       <div className="pt-panel">
-        {/* HOLD + Pause */}
-        <div className="ls-primary-btns">
-          <button type="button" className="ls-action-btn ls-hold-btn"
-            onPointerDown={(e) => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); triggerAction('hold'); navigator.vibrate?.(10) }}
-            onPointerUp={(e) => e.preventDefault()}
-            onPointerCancel={(e) => e.preventDefault()}>
-            <span className="ls-btn-icon">☰</span>
-            <span className="ls-btn-label">HOLD</span>
-          </button>
-          <button type="button" className="ls-action-btn ls-pause-btn" onClick={handlePauseToggle}>
-            <span className="ls-btn-icon">{state.paused ? '▶' : '⏸'}</span>
-            <span className="ls-btn-label">{state.paused ? 'Resume' : 'Pause'}</span>
-          </button>
-        </div>
+        {/* Pause */}
+        <button type="button" className="ls-action-btn ls-pause-btn" style={{ gridColumn: '1 / -1' }} onClick={handlePauseToggle}>
+          <span className="ls-btn-icon">{state.paused ? '▶' : '⏸'}</span>
+          <span className="ls-btn-label">{state.paused ? 'Resume' : 'Pause'}</span>
+        </button>
 
         {/* Zone */}
         {showZone && (
@@ -1240,9 +1266,10 @@ export default function App() {
         )}
 
         {/* Utilities */}
-        <div className="ls-util">
+        <div className="ls-util ls-util-3">
           <button type="button" className={`ls-util-btn${musicOn ? ' active' : ''}`} onClick={toggleMusic}>🎵</button>
           <button type="button" className="ls-util-btn" onClick={() => startGame(gameMode)}>↺</button>
+          <button type="button" className="ls-util-btn" onClick={() => setShowAbout(true)}>ℹ</button>
         </div>
         <div className="ls-theme"><ThemeSwitcher /></div>
 
@@ -1375,6 +1402,13 @@ export default function App() {
         ? (isLandscape ? renderMobileLandscape() : (isVersus ? renderMobileVersus() : renderMobileNormal()))
         : renderDesktop()
       }
+      {showAbout && (
+        <AboutPage
+          onClose={() => setShowAbout(false)}
+          installPrompt={installPrompt}
+          onInstall={handleInstallFromAbout}
+        />
+      )}
     </div>
   )
 }

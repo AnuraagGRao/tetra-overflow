@@ -24,9 +24,9 @@
   --radius:     10px;
   --board-w:    260px;
   /* Theme-switchable extras (defaults = Neon Glass) */
-  --c-glass:    rgba(255, 255, 255, 0.06);
-  --c-glow:     rgba(0, 229, 255, 0.35);
-  --c-grid:     rgba(0, 229, 255, 0.06);
+  --c-glass:    rgba(0, 229, 255, 0.10);
+  --c-glow:     rgba(0, 229, 255, 0.45);
+  --c-grid:     rgba(0, 229, 255, 0.07);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -649,12 +649,9 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
 .control-button {
   min-height: 3.2rem;
   border-radius: 10px;
-  border: 1px solid rgba(80, 130, 200, 0.3);
-  background: rgba(14, 22, 50, 0.85);
-  color: #f0f6ff;
-  font-size: 1.1rem;
-  font-family: inherit;
-  font-weight: 700;
+    border: 1px solid var(--c-border2);
+    background: var(--c-glass);
+    color: var(--c-text);
   transition: background 0.08s;
   user-select: none;
   -webkit-user-select: none;
@@ -767,6 +764,7 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
     flex-direction: column;
     min-height: 100svh;
     width: 100%;
+    background: var(--c-bg);
   }
 
   /* ── Top HUD bar ── */
@@ -774,8 +772,8 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
     display: flex;
     align-items: stretch;
     gap: 0;
-    background: rgba(8, 10, 22, 0.98);
-    border-bottom: 1px solid var(--c-border);
+    background: var(--c-panel);
+    border-bottom: 1px solid var(--c-border2);
     width: 100%;
     flex-shrink: 0;
   }
@@ -786,7 +784,7 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
     align-items: center;
     justify-content: center;
     padding: 0.3rem 0.45rem;
-    border-right: 1px solid var(--c-border);
+    border-right: 1px solid var(--c-border2);
     gap: 0.1rem;
     min-width: 58px;
   }
@@ -814,7 +812,7 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
     align-items: center;
     justify-content: center;
     padding: 0.3rem 0.45rem;
-    border-left: 1px solid var(--c-border);
+    border-left: 1px solid var(--c-border2);
     gap: 0.15rem;
     min-width: 58px;
   }
@@ -843,7 +841,7 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #090b16;
+    background: var(--c-bg);
     overflow: hidden;
     min-height: 0;
   }
@@ -864,8 +862,8 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
     align-items: center;
     justify-content: center;
     padding: 0.3rem 0.5rem;
-    background: rgba(8, 10, 22, 0.98);
-    border-top: 1px solid var(--c-border);
+    background: var(--c-panel);
+    border-top: 1px solid var(--c-border2);
     border-bottom: 1px solid var(--c-border);
     flex-shrink: 0;
   }
@@ -877,13 +875,13 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
     grid-auto-rows: auto;
     gap: 0.35rem;
     padding: 0.4rem 0.4rem calc(env(safe-area-inset-bottom, 0px) + 0.4rem);
-    background: rgba(6, 8, 18, 0.99);
-    border-top: 1px solid var(--c-border);
+    background: var(--c-panel);
+    border-top: 1px solid var(--c-border2);
     flex-shrink: 0;
   }
 
-  /* primary HOLD+Pause pair spans 2 of the 4 columns each */
-  .pt-panel .ls-primary-btns {
+  /* Pause button spans full width */
+  .pt-panel .ls-action-btn {
     grid-column: 1 / -1;
   }
 
@@ -902,7 +900,7 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
   /* ── Touch controls ── */
   .touch-controls {
     padding: 0.4rem 0.4rem calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
-    background: rgba(6, 8, 18, 0.99);
+    background: var(--c-panel);
     flex-shrink: 0;
     gap: 0.35rem;
   }
@@ -919,6 +917,7 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
     flex-direction: column;
     min-height: 100svh;
     width: 100%;
+    background: var(--c-bg);
   }
 
   .bot-mini-area {
@@ -926,7 +925,7 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
     align-items: center;
     gap: 0.6rem;
     padding: 0.4rem 0.6rem;
-    background: rgba(15, 8, 8, 0.97);
+    background: var(--c-panel);
     border-bottom: 1px solid rgba(248, 113, 113, 0.25);
     flex-shrink: 0;
   }
@@ -1024,7 +1023,7 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
   width: 100%;
   height: 100svh;
   overflow: hidden;
-  background: #090b16;
+  background: var(--c-bg);
 }
 
 /* ── Centre column: HUD bar + zone bar + canvas ─────────────────────────── */
@@ -1047,8 +1046,8 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
   flex-wrap: nowrap;
   gap: 0.3rem;
   padding: 0.2rem 0.5rem;
-  background: rgba(8, 10, 22, 0.98);
-  border-bottom: 1px solid var(--c-border);
+  background: var(--c-panel);
+  border-bottom: 1px solid var(--c-border2);
   flex-shrink: 0;
 }
 
@@ -1087,6 +1086,7 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
   justify-content: center;
   overflow: hidden;
   min-height: 0;
+  background: var(--c-bg);
 }
 .ls-canvas-wrap .game-canvas {
   height: 100% !important;
@@ -1103,8 +1103,8 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
   flex-direction: column;
   gap: 0.3rem;
   padding: 0.4rem;
-  background: rgba(6, 8, 18, 0.99);
-  border-right: 1px solid var(--c-border);
+  background: var(--c-panel);
+  border-right: 1px solid var(--c-border2);
   width: 5.5rem;
   justify-content: center;
 }
@@ -1123,7 +1123,7 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
   padding: 0.4rem 0.2rem;
   border-radius: 8px;
   border: 1px solid var(--c-border2);
-  background: rgba(14, 22, 50, 0.7);
+  background: var(--c-glass);
   color: var(--c-muted);
   font-family: inherit;
   font-size: 0.68rem;
@@ -1135,9 +1135,9 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
 .ls-diff-btn.active {
   border-color: var(--c-accent);
   color: var(--c-accent);
-  background: rgba(0, 229, 255, 0.1);
+  background: var(--c-glow);
 }
-.ls-diff-btn:active { background: rgba(0, 229, 255, 0.15); }
+.ls-diff-btn:active { background: var(--c-glow); }
 
 /* ── Right panel: Hold + Pause + Zone + utilities + modes ─────────────────── */
 .ls-right {
@@ -1147,8 +1147,8 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
   flex-direction: column;
   gap: 0.3rem;
   padding: 0.4rem 0.4rem calc(env(safe-area-inset-right, 0px) + 0.4rem) 0.4rem;
-  background: rgba(6, 8, 18, 0.99);
-  border-left: 1px solid var(--c-border);
+  background: var(--c-panel);
+  border-left: 1px solid var(--c-border2);
   width: 8rem;
   overflow-y: auto;
   scrollbar-width: none;
@@ -1158,13 +1158,6 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
 /* Landscape right panel must occupy column 2 when left panel exists, or col 2 otherwise */
 /* (the grid is 1fr auto so the right column always anchors right) */
 
-/* primary action buttons: HOLD and Pause/Resume side by side */
-.ls-primary-btns {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.3rem;
-}
-
 .ls-action-btn {
   display: flex;
   flex-direction: column;
@@ -1173,9 +1166,9 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
   gap: 0.15rem;
   padding: 0.45rem 0.2rem;
   border-radius: 10px;
-  border: 1px solid rgba(80, 130, 200, 0.35);
-  background: rgba(14, 22, 50, 0.9);
-  color: #f0f6ff;
+  border: 1px solid var(--c-border2);
+  background: var(--c-glass);
+  color: var(--c-text);
   font-family: inherit;
   cursor: pointer;
   user-select: none;
@@ -1183,7 +1176,6 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
 }
 .ls-action-btn:active { background: rgba(0, 229, 255, 0.18); }
 
-.ls-hold-btn { border-color: rgba(100, 180, 255, 0.5); }
 .ls-pause-btn { border-color: rgba(250, 204, 21, 0.4); }
 
 .ls-btn-icon  { font-size: 1.2rem; line-height: 1; }
@@ -1391,6 +1383,10 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
   gap: 0.25rem;
 }
 
+.ls-util-3 {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
 .ls-util-btn {
   display: flex;
   align-items: center;
@@ -1398,14 +1394,14 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
   padding: 0.35rem 0.2rem;
   border-radius: 8px;
   border: 1px solid var(--c-border2);
-  background: rgba(14, 22, 50, 0.85);
+  background: var(--c-glass);
   color: var(--c-muted);
   font-size: 0.85rem;
   font-family: inherit;
   cursor: pointer;
   touch-action: manipulation;
 }
-.ls-util-btn:active, .ls-util-btn.active { background: rgba(0, 229, 255, 0.15); color: #fff; }
+.ls-util-btn:active, .ls-util-btn.active { background: var(--c-glow); color: var(--c-text); }
 
 /* ThemeSwitcher row */
 .ls-theme {
@@ -1424,7 +1420,7 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
   padding: 0.3rem 0.2rem;
   border-radius: 8px;
   border: 1px solid var(--c-border2);
-  background: rgba(14, 22, 50, 0.7);
+  background: var(--c-glass);
   color: var(--c-muted);
   font-family: inherit;
   font-size: 0.62rem;
@@ -1437,9 +1433,10 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
 .ls-mode-btn.active {
   border-color: var(--c-accent);
   color: var(--c-accent);
-  background: rgba(0, 229, 255, 0.08);
+  background: var(--c-glow);
+  text-shadow: 0 0 8px var(--c-accent);
 }
-.ls-mode-btn:active { background: rgba(0, 229, 255, 0.15); }
+.ls-mode-btn:active { background: var(--c-glow); }
 
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1524,7 +1521,8 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
 .theme-btn.active {
   opacity: 1;
   background: var(--c-glass);
-  box-shadow: 0 0 0 1.5px var(--c-accent);
+  box-shadow: 0 0 0 2px var(--c-accent), 0 0 8px var(--c-accent);
+  transform: scale(1.12);
 }
 
 /* Mobile: theme-switcher inside mode panel — stretch to fill */
@@ -1535,3 +1533,204 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
   padding: 4px 8px;
   width: 100%;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ABOUT PAGE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.about-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 5, 16, 0.82);
+  backdrop-filter: blur(8px);
+  padding: 1rem;
+  animation: combo-pop 0.18s ease-out;
+}
+
+.about-modal {
+  position: relative;
+  width: 100%;
+  max-width: 380px;
+  background: var(--c-panel);
+  border: 1px solid var(--c-border2);
+  border-radius: 16px;
+  padding: 1.6rem 1.4rem 1.2rem;
+  box-shadow: 0 0 60px var(--c-glow), 0 20px 60px rgba(0,0,0,0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  max-height: 90svh;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.about-modal::-webkit-scrollbar { display: none; }
+
+.about-close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  background: none;
+  border: 1px solid var(--c-border2);
+  color: var(--c-muted);
+  border-radius: 6px;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.about-close:hover { color: var(--c-text); border-color: var(--c-accent); }
+
+.about-logo {
+  font-size: 2.2rem;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #fff;
+  text-shadow: 0 0 24px var(--c-accent), 0 0 48px var(--c-accent);
+  line-height: 1;
+  text-align: center;
+}
+.about-logo span   { color: var(--c-accent); }
+.about-logo-i      { color: var(--c-accent); text-shadow: 0 0 18px var(--c-accent); }
+
+.about-tagline {
+  text-align: center;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--c-muted);
+  margin-top: -0.4rem;
+}
+
+.about-dev-card {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  background: var(--c-glass);
+  border: 1px solid var(--c-border2);
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+}
+
+.about-avatar {
+  font-size: 2rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.about-dev-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.about-dev-name {
+  font-size: 1.05rem;
+  font-weight: 900;
+  color: var(--c-text);
+  letter-spacing: 0.04em;
+}
+
+.about-dev-role {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--c-muted);
+  letter-spacing: 0.08em;
+}
+
+.about-desc {
+  font-size: 0.8rem;
+  color: var(--c-muted);
+  line-height: 1.55;
+  text-align: center;
+}
+
+.about-install-box {
+  background: var(--c-glass);
+  border: 1px solid var(--c-border2);
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.about-install-title {
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: var(--c-text);
+  letter-spacing: 0.06em;
+}
+
+.about-installed {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #4ade80;
+  text-shadow: 0 0 10px rgba(74, 222, 128, 0.5);
+}
+
+.about-ios-steps {
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0;
+}
+.about-ios-steps li {
+  font-size: 0.8rem;
+  color: var(--c-muted);
+  line-height: 1.45;
+}
+.about-ios-steps li strong { color: var(--c-text); }
+.about-share-icon {
+  display: inline-block;
+  background: var(--c-glass);
+  border: 1px solid var(--c-border2);
+  border-radius: 4px;
+  padding: 0 4px;
+  font-size: 0.75rem;
+  vertical-align: middle;
+}
+
+.about-install-btn {
+  padding: 0.55rem 1.2rem;
+  border-radius: 10px;
+  border: 1px solid var(--c-accent);
+  background: rgba(0, 229, 255, 0.12);
+  color: var(--c-accent);
+  font-family: inherit;
+  font-size: 0.88rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s;
+  text-shadow: 0 0 8px var(--c-accent);
+  box-shadow: 0 0 14px rgba(0, 229, 255, 0.14);
+  align-self: center;
+  width: 100%;
+}
+.about-install-btn:active { background: rgba(0, 229, 255, 0.28); }
+
+.about-no-prompt {
+  font-size: 0.78rem;
+  color: var(--c-muted);
+  line-height: 1.5;
+}
+.about-no-prompt strong { color: var(--c-text); }
+
+.about-stack {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  font-size: 0.68rem;
+  color: var(--c-muted);
+  letter-spacing: 0.06em;
+}
+.about-stack-dot { opacity: 0.4; }
