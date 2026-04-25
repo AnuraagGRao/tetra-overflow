@@ -199,7 +199,7 @@ const CONFIG_KEY = 'tetris-config'
 const DEFAULT_CONFIG = { sfxEnabled: true, hapticEnabled: true, musicVolume: 1.0, das: 110, arr: 25 }
 const loadConfig = () => {
   try { return { ...DEFAULT_CONFIG, ...JSON.parse(localStorage.getItem(CONFIG_KEY) ?? '{}') } }
-  catch { return { ...DEFAULT_CONFIG } }
+  catch (e) { console.warn('Failed to load config:', e); return { ...DEFAULT_CONFIG } }
 }
 
 // ─── High-score storage ───────────────────────────────────────────────────────
