@@ -2,8 +2,10 @@
 // Plays a looping EDM/chiptune track at 140 BPM with drums, bass, and lead.
 
 const BPM = 140
-const STEP = 60 / BPM / 4 // 16th-note duration in seconds
+const BASE_STEP = 60 / BPM / 4 // 16th-note duration in seconds at 140 BPM
 const LOOKAHEAD = 0.12 // schedule this many seconds ahead
+// BPM increase rate per game level (6% per level, capped at 2× via setLevel)
+const BPM_SCALE_FACTOR = 0.06
 
 // ─── Frequency table (A-minor pentatonic + extras) ───────────────────────────
 const HZ = {
@@ -88,6 +90,7 @@ export class MusicManager {
     this.purifyMode = false
     this.zenMode    = false
     this.levelTier  = 0   // 0=normal, 1=high (lv5+), 2=intense (lv10+)
+    this._step      = BASE_STEP  // current 16th-note duration (shrinks as BPM rises)
 
     this.masterGain = audioCtx.createGain()
     this.masterGain.gain.value = 0
@@ -176,8 +179,8 @@ export class MusicManager {
     osc.connect(lpf); lpf.connect(g); g.connect(this.masterGain)
     osc.type = 'sawtooth'; osc.frequency.value = hz
     g.gain.setValueAtTime(0.55, t)
-    g.gain.exponentialRampToValueAtTime(0.001, t + STEP * 1.8)
-    osc.start(t); osc.stop(t + STEP * 2)
+    g.gain.exponentialRampToValueAtTime(0.001, t + this._step * 1.8)
+    osc.start(t); osc.stop(t + this._step * 2)
   }
 
   _lead(note, t) {
@@ -191,8 +194,8 @@ export class MusicManager {
       osc.type = 'square'; osc.detune.value = detune
       osc.frequency.value = hz
       g.gain.setValueAtTime(0.09, t)
-      g.gain.exponentialRampToValueAtTime(0.001, t + STEP * 3.5)
-      osc.start(t); osc.stop(t + STEP * 4)
+      g.gain.exponentialRampToValueAtTime(0.001, t + this._step * 3.5)
+      osc.start(t); osc.stop(t + this._step * 4)
     }
   }
 
@@ -205,8 +208,8 @@ export class MusicManager {
     osc.connect(g); g.connect(this.masterGain)
     osc.type = 'triangle'; osc.frequency.value = hz * 2
     g.gain.setValueAtTime(0.04, t)
-    g.gain.exponentialRampToValueAtTime(0.001, t + STEP * 2.5)
-    osc.start(t); osc.stop(t + STEP * 3)
+    g.gain.exponentialRampToValueAtTime(0.001, t + this._step * 2.5)
+    osc.start(t); osc.stop(t + this._step * 3)
   }
 
   _chordPad(notes, t) {
@@ -218,9 +221,9 @@ export class MusicManager {
       osc.connect(g); g.connect(this.masterGain)
       osc.type = 'sine'; osc.frequency.value = hz
       g.gain.setValueAtTime(0.0, t)
-      g.gain.linearRampToValueAtTime(0.048, t + STEP * 2)
-      g.gain.exponentialRampToValueAtTime(0.001, t + STEP * 7.5)
-      osc.start(t); osc.stop(t + STEP * 8)
+      g.gain.linearRampToValueAtTime(0.048, t + this._step * 2)
+      g.gain.exponentialRampToValueAtTime(0.001, t + this._step * 7.5)
+      osc.start(t); osc.stop(t + this._step * 8)
     }
   }
 
@@ -235,8 +238,8 @@ export class MusicManager {
     osc.connect(lpf); lpf.connect(g); g.connect(this.masterGain)
     osc.type = 'sawtooth'; osc.frequency.value = hz
     g.gain.setValueAtTime(0.065, t)
-    g.gain.exponentialRampToValueAtTime(0.001, t + STEP * 3.8)
-    osc.start(t); osc.stop(t + STEP * 4)
+    g.gain.exponentialRampToValueAtTime(0.001, t + this._step * 3.8)
+    osc.start(t); osc.stop(t + this._step * 4)
   }
 
   // ── Zen voices ─────────────────────────────────────────────────────
@@ -248,9 +251,9 @@ export class MusicManager {
     osc.connect(g); g.connect(this.masterGain)
     osc.type = 'sine'; osc.frequency.value = hz
     g.gain.setValueAtTime(0.0, t)
-    g.gain.linearRampToValueAtTime(0.11, t + STEP * 3)
-    g.gain.exponentialRampToValueAtTime(0.001, t + STEP * 7.5)
-    osc.start(t); osc.stop(t + STEP * 8)
+    g.gain.linearRampToValueAtTime(0.11, t + this._step * 3)
+    g.gain.exponentialRampToValueAtTime(0.001, t + this._step * 7.5)
+    osc.start(t); osc.stop(t + this._step * 8)
   }
 
   _zenMelody(note, t) {
@@ -261,8 +264,8 @@ export class MusicManager {
     osc.connect(g); g.connect(this.masterGain)
     osc.type = 'triangle'; osc.frequency.value = hz
     g.gain.setValueAtTime(0.07, t)
-    g.gain.exponentialRampToValueAtTime(0.001, t + STEP * 3.8)
-    osc.start(t); osc.stop(t + STEP * 4)
+    g.gain.exponentialRampToValueAtTime(0.001, t + this._step * 3.8)
+    osc.start(t); osc.stop(t + this._step * 4)
   }
 
   // ── Scheduler ────────────────────────────────────────────────────────────────────
@@ -313,7 +316,7 @@ export class MusicManager {
   _tick() {
     while (this.nextTime < this.ctx.currentTime + LOOKAHEAD) {
       this._scheduleStep(this.nextTime)
-      this.nextTime += STEP
+      this.nextTime += this._step
     }
   }
 
@@ -358,6 +361,9 @@ export class MusicManager {
 
   setLevel(level) {
     this.levelTier = level >= 10 ? 2 : level >= 5 ? 1 : 0
+    // Dynamic BPM: playback rate increases BPM_SCALE_FACTOR per level, capped at 2.0×
+    const rate = Math.min(1.0 + (level - 1) * BPM_SCALE_FACTOR, 2.0)
+    this._step = BASE_STEP / rate
     // Subtly boost master volume at higher levels for energy
     if (this.playing) {
       const target = this.levelTier === 2 ? 0.28 : this.levelTier === 1 ? 0.25 : 0.22

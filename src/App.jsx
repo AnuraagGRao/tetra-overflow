@@ -278,6 +278,7 @@ export default function App() {
   const [showMobileModes, setShowMobileModes] = useState(false)
   const [zenResetting, setZenResetting] = useState(false)
   const [zoom, setZoom] = useState(() => Number(localStorage.getItem('tetris-zoom') || 1))
+  const [isUiHidden, setIsUiHidden] = useState(false)
   const cycleZoom = () => setZoom(z => {
     const next = z >= 1.5 ? 1 : z >= 1.25 ? 1.5 : 1.25
     localStorage.setItem('tetris-zoom', next)
@@ -328,6 +329,13 @@ export default function App() {
     window.addEventListener('resize', handler)
     return () => window.removeEventListener('resize', handler)
   }, [])
+
+  // Sync infection-timer multiplier: give mobile portrait players 1.5× more reaction time
+  useEffect(() => {
+    const mult = isMobile && !isLandscape ? 1.5 : 1.0
+    engine.setTouchMultiplier(mult)
+    engine2.setTouchMultiplier(mult)
+  }, [engine, engine2, isMobile, isLandscape])
 
   // PWA install prompt
   useEffect(() => {
@@ -1301,7 +1309,16 @@ export default function App() {
 
   // ─── Mobile non-versus ──────────────────────────────────────────────────────
   const renderMobileNormal = () => (
-    <div className="mobile-layout">
+    <div className={`mobile-layout${isUiHidden ? ' ui-hidden' : ''}`}>
+      {/* Floating UI toggle tab — always visible on the right bezel */}
+      <button
+        type="button"
+        className="ui-toggle-tab"
+        onClick={() => setIsUiHidden(h => !h)}
+        aria-label={isUiHidden ? 'Show controls' : 'Hide controls'}
+      >
+        {isUiHidden ? '▲' : '▼'}
+      </button>
       {/* HUD */}
       <div className="mobile-hud">
         <div className="mobile-hud-hold">
