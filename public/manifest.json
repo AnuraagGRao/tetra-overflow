@@ -2,21 +2,21 @@
   "name": "Tetra Overflow Ultra",
   "short_name": "TetraUltra",
   "description": "Mobile-first PWA block-stacking game with Ultimate mode, Zone mechanic, and glitch effects.",
-  "start_url": "/tetris-mobile-clone/",
-  "scope": "/tetris-mobile-clone/",
+  "start_url": "/tetra-overflow/",
+  "scope": "/tetra-overflow/",
   "display": "fullscreen",
   "background_color": "#05060d",
   "theme_color": "#05060d",
   "orientation": "any",
   "icons": [
     {
-      "src": "/tetris-mobile-clone/icons/icon-192.svg",
+      "src": "/tetra-overflow/icons/icon-192.svg",
       "sizes": "192x192",
       "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "/tetris-mobile-clone/icons/icon-512.svg",
+      "src": "/tetra-overflow/icons/icon-512.svg",
       "sizes": "512x512",
       "type": "image/svg+xml",
       "purpose": "maskable"

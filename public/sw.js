@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tetris-mobile-v1'
+const CACHE_NAME = 'tetra-overflow-v1'
 // Build absolute paths relative to the SW scope so it works under any base URL
 const BASE = self.registration.scope
 const APP_SHELL = ['', 'index.html', 'manifest.json'].map(p => new URL(p, BASE).href)
