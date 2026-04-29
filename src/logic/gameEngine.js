@@ -2,10 +2,11 @@ import { createBag } from './randomBag'
 import { I_KICKS, JLSTZ_KICKS } from './srs'
 import { BOARD_HEIGHT, BOARD_WIDTH, PIECES } from './tetrominoes'
 
-export const GAME_MODE = { NORMAL: 'normal', SPRINT: 'sprint', BLITZ: 'blitz', MASTER: 'master', PURIFY: 'purify', VERSUS: 'versus', ZEN: 'zen' }
+export const GAME_MODE = { NORMAL: 'normal', SPRINT: 'sprint', BLITZ: 'blitz', MASTER: 'master', PURIFY: 'purify', VERSUS: 'versus', ZEN: 'zen', ULTIMATE: 'ultimate' }
 export const PURIFY_DURATION_MS = 180000
 export const BLITZ_DURATION_MS  = 120000
 export const SPRINT_LINES       = 40
+export const ULTIMATE_GARBAGE_INTERVAL_MS = 8000  // Random garbage every ~8s
 
 const SCORE_BY_CLEAR = [0, 100, 300, 500, 800]
 const T_SPIN_SCORE = [400, 800, 1200, 1600]
@@ -264,11 +265,16 @@ export class TetrisEngine {
     this.pieceLocked = false
     this.pieceHeld = false
     this.b2bCount = 0
+    this.infectionAdded = false
     this.blocksPurified = 0
     this.purifyTimer = PURIFY_DURATION_MS
     this.blitzTimer  = BLITZ_DURATION_MS
     const baseInfTimer = (PURIFY_INFECTION_TIMERS[purifyDifficulty] ?? 8000) * this.touchMultiplier
     this.infectionTimer = baseInfTimer + Math.random() * 2000
+    // Ultimate mode: random garbage timer + meme chaos flag
+    this.ultimateGarbageTimer = ULTIMATE_GARBAGE_INTERVAL_MS * (0.7 + Math.random() * 0.6)
+    this.ultimateGarbageAdded = false
+    this.useMemeBlocks = false  // set to true externally once cat image is loaded
     // Versus / garbage
     this.pendingGarbage = 0
     this.lastGarbage = 0
@@ -668,6 +674,7 @@ export class TetrisEngine {
   }
 
   addInfectionLayer(count = 3) {
+    this.infectionAdded = true
     // Add `count` garbage rows of INF blocks at the bottom
     const holeCount = this.purifyDifficulty === 'easy' ? 1 : this.purifyDifficulty === 'hard' ? 3 : 2
     for (let i = 0; i < count; i++) {
@@ -755,9 +762,12 @@ export class TetrisEngine {
   getGravity() {
     // In Zone: gravity stops; manual drop only
     if (this.zoneActive) return 0
-    if (this.mode === GAME_MODE.MASTER) return Math.min(8, 1.2 + this.level * 0.35)
-    if (this.mode === GAME_MODE.BLITZ)  return Math.min(3.5, 0.85 + this.level * 0.22)
-    return Math.min(2.5, 0.85 + this.level * 0.15)
+    if (this.mode === GAME_MODE.MASTER) return Math.min(20, 1.2 + this.level * 0.35)
+    // Exponential scaling: ~0.8 G/s at Lv1 → ~4 at Lv10 → ~11 at Lv15 → capped at 20
+    const base = 0.8 * Math.pow(1.22, this.level - 1)
+    if (this.mode === GAME_MODE.BLITZ) return Math.min(20, base * 1.25)
+    if (this.mode === GAME_MODE.ULTIMATE) return Math.min(20, base * 1.15)
+    return Math.min(20, base)
   }
 
   updateHorizontal(dt, held) {
@@ -806,6 +816,8 @@ export class TetrisEngine {
     this.lockFlash = false
     this.lastCombo = 0
     this.lastGarbage = 0
+    this.infectionAdded = false
+    this.ultimateGarbageAdded = false
     // Tick down zone-end result overlay
     if (this.zoneEndResult) {
       this.zoneEndResult = { ...this.zoneEndResult, ttl: this.zoneEndResult.ttl - dt }
@@ -844,6 +856,24 @@ export class TetrisEngine {
         this.addInfectionLayer(3)
         const baseInfTimer = (PURIFY_INFECTION_TIMERS[this.purifyDifficulty] ?? 8000) * this.touchMultiplier
         this.infectionTimer = baseInfTimer + Math.random() * 2000
+      }
+    }
+
+    // Ultimate mode: periodic random garbage
+    if (this.mode === GAME_MODE.ULTIMATE) {
+      this.ultimateGarbageTimer -= dt
+      if (this.ultimateGarbageTimer <= 0) {
+        const lines = 2 + Math.floor(Math.random() * 2)  // 2 or 3 lines
+        this._applyGarbage(lines)
+        this.ultimateGarbageAdded = true
+        this.shake = Math.max(this.shake, 5)
+        this.floatingTexts.push({
+          text: ['🐱 OIIA!', '😂 CHAOS!', '🎵 VIBE!', '💥 REKT!', '🤣 LOL!'][Math.floor(Math.random() * 5)],
+          x: 1, y: 8,
+          ttl: 1200, maxTtl: 1200,
+          big: true,
+        })
+        this.ultimateGarbageTimer = ULTIMATE_GARBAGE_INTERVAL_MS * (0.6 + Math.random() * 0.8)
       }
     }
 
@@ -961,6 +991,9 @@ export class TetrisEngine {
       purifyTimer: this.purifyTimer,
       gameOverReason: this.gameOverReason,
       b2bCount: this.b2bCount,
+      infectionAdded: this.infectionAdded,
+      ultimateGarbageAdded: this.ultimateGarbageAdded,
+      useMemeBlocks: this.useMemeBlocks,
     }
   }
 }

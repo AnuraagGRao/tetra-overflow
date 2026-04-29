@@ -1,385 +1,185 @@
-// Procedural BGM using the Web Audio lookahead scheduling pattern.
-// Plays a looping EDM/chiptune track at 140 BPM with drums, bass, and lead.
-
-const BPM = 140
-const BASE_STEP = 60 / BPM / 4 // 16th-note duration in seconds at 140 BPM
-const LOOKAHEAD = 0.12 // schedule this many seconds ahead
-// BPM increase rate per game level (6% per level, capped at 2× via setLevel)
-const BPM_SCALE_FACTOR = 0.06
-
-// ─── Frequency table (A-minor pentatonic + extras) ───────────────────────────
-const HZ = {
-  G2: 98.0, A2: 110.0, C3: 130.8, D3: 146.8, E3: 164.8, G3: 196.0,
-  A3: 220.0, C4: 261.6, D4: 293.7, E4: 329.6, G4: 392.0,
-  A4: 440.0, C5: 523.3, D5: 587.3, E5: 659.3, G5: 784.0, A5: 880.0,
-}
-
-// ─── 32-step (2-bar) drum + bass patterns ────────────────────────────────────
-const KICK  = [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0]
-const SNARE = [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0]
-const HIHAT = [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0]
-// Open hi-hat on the last 16th of each bar (the "pick-up" note)
-const OPEN_HH = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1]
-
-const BASS = [
-  'A2',null,'A2',null,'C3',null,'D3',null,
-  'E3',null,'E3',null,'D3',null,'C3',null,
-  'A2',null,'A2',null,'G2',null,'A2',null,
-  'C3',null,'D3',null,'C3',null,'A2',null,
-]
-// Variation bass phrase (bars 3-4 of the 4-bar loop)
-const BASS_B = [
-  'E3',null,'E3',null,'D3',null,'C3',null,
-  'A2',null,'G2',null,'A2',null,'C3',null,
-  'D3',null,'E3',null,'G3',null,'E3',null,
-  'D3',null,'C3',null,'A2',null,null,null,
-]
-
-// ─── Lead melody — two 32-step phrases for a 4-bar loop ──────────────────────
-const LEAD = [
-  'A4',null,null,null,'C5',null,null,null,
-  'E5',null,null,null,'G5',null,'C5',null,
-  'D5',null,null,null,'C5',null,null,null,
-  'A4',null,null,null,null,null,null,null,
-]
-const LEAD_B = [
-  'G4',null,null,null,'A4',null,'C5',null,
-  'E5',null,'D5',null,'C5',null,null,null,
-  'A4',null,'C5',null,'E5',null,'G5',null,
-  'A5',null,null,null,'E5',null,'C5',null,
-]
-
-// ─── Purify-mode pattern (Eb-minor, ominous) ─────────────────────────────────
-const PURIFY_BASS = [
-  'C3',null,'C3',null,'Eb3',null,'F3',null,
-  'G3',null,'G3',null,'F3',null,'Eb3',null,
-  'C3',null,'Ab2',null,'C3',null,'Eb3',null,
-  'F3',null,'Eb3',null,'C3',null,null,null,
-]
-const PURIFY_LEAD = [
-  'Eb4',null,null,null,'F4',null,null,null,
-  'Ab4',null,null,null,'G3',null,null,null,
-  'Eb4',null,'F4',null,'Ab4',null,null,null,
-  null, null,null,null,'Eb4',null,null,null,
-]
-const HZ_EXTRA = { Ab2: 103.8, Eb3: 155.6, F3: 174.6, Ab3: 207.7, Eb4: 311.1, F4: 349.2, Ab4: 415.3 }
-const ALL_HZ = { ...HZ, ...HZ_EXTRA }
-
-// ─── Zen mode: C-major pentatonic, slow sparse pads ──────────────────────────
-const ZEN_PAD = [
-  'C4',null,null,null,null,null,null,null,
-  'G4',null,null,null,null,null,null,null,
-  'E4',null,null,null,null,null,null,null,
-  'A3',null,null,null,null,null,null,null,
-]
-const ZEN_MELODY = [
-  null,null,null,null,'E5',null,null,null,
-  null,null,null,null,'D5',null,null,null,
-  null,null,null,null,'C5',null,null,null,
-  null,null,null,null,'A4',null,null,null,
+// Background music using pre-recorded MP3 tracks + Web Audio one-shot SFX.
+// Per-track gain — adjust these values if a track sounds louder/quieter than the rest.
+const TRACKS = [
+  { url: new URL('./Full_Throttle_Logic.mp3',    import.meta.url).href, gain: 0.85 },
+  { url: new URL('./Gravity_s_Last_Descent.mp3', import.meta.url).href, gain: 0.75 },
+  { url: new URL('./Perfect_Rotation.mp3',       import.meta.url).href, gain: 0.90 },
+  { url: new URL('./The_Last_Key.mp3',           import.meta.url).href, gain: 0.80 },
+  { url: new URL('./The_Winning_Move.mp3',       import.meta.url).href, gain: 0.85 },
 ]
 
 export class MusicManager {
   constructor(audioCtx) {
     this.ctx        = audioCtx
     this.playing    = false
-    this.step       = 0
-    this.barPhase   = 0   // 0-3, advances every 32 steps (4-bar loop)
-    this.nextTime   = 0
-    this.tickId     = null
-    this.purifyMode = false
-    this.zenMode    = false
-    this.levelTier  = 0   // 0=normal, 1=high (lv5+), 2=intense (lv10+)
-    this._step      = BASE_STEP  // current 16th-note duration (shrinks as BPM rises)
+    this.trackIndex = 0
+    this._source    = null   // current AudioBufferSourceNode
+    this._trackGain = null   // per-track normalisation GainNode
+    this._buffers   = new Array(TRACKS.length).fill(null)
+    this._loaded    = new Array(TRACKS.length).fill(false)
+    this._targetVol = 0.9   // master volume target while playing
+    this._repeatCount = 0   // how many times current track has played
+    this._maxRepeats  = 2   // play each track 2–3 times (randomised per track)
 
+    // Audio graph: trackGain -> masterGain -> lpf -> volumeGain -> destination
     this.masterGain = audioCtx.createGain()
     this.masterGain.gain.value = 0
-    // Insert a low-pass filter after master gain so we can apply Zone FX
+
     this.lpf = audioCtx.createBiquadFilter()
     this.lpf.type = 'lowpass'
-    this.lpf.frequency.value = 18000 // wide open by default
+    this.lpf.frequency.value = 18000
     this.lpf.Q.value = 0.7
-    // Separate volume gain node (user-controlled)
+
     this.volumeGain = audioCtx.createGain()
     this.volumeGain.gain.value = 1.0
+
     this.masterGain.connect(this.lpf)
     this.lpf.connect(this.volumeGain)
     this.volumeGain.connect(audioCtx.destination)
 
-    // Pre-generate a half-second white-noise buffer (reused for every drum hit)
-    const noiseLen = Math.floor(audioCtx.sampleRate * 0.5)
-    this.noiseBuf = audioCtx.createBuffer(1, noiseLen, audioCtx.sampleRate)
-    const nd = this.noiseBuf.getChannelData(0)
-    for (let i = 0; i < noiseLen; i++) nd[i] = Math.random() * 2 - 1
+    this._loadAll()
   }
 
-  // ── Drum voices ─────────────────────────────────────────────────────────────
-  _kick(t) {
-    const { ctx } = this
-    const osc = ctx.createOscillator()
-    const g   = ctx.createGain()
-    osc.connect(g); g.connect(this.masterGain)
-    osc.type = 'sine'
-    osc.frequency.setValueAtTime(160, t)
-    osc.frequency.exponentialRampToValueAtTime(40, t + 0.08)
-    g.gain.setValueAtTime(1.4, t)
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.14)
-    osc.start(t); osc.stop(t + 0.15)
+  // -- Asset loading ----------------------------------------------------------
+  _loadAll() {
+    TRACKS.forEach(({ url }, i) => {
+      fetch(url)
+        .then(r => r.arrayBuffer())
+        .then(ab => this.ctx.decodeAudioData(ab))
+        .then(buf => {
+          this._buffers[i] = buf
+          this._loaded[i]  = true
+          // If we are playing and were waiting for this track, start it now
+          if (this.playing && this._source === null && this.trackIndex === i) {
+            this._playIndex(i)
+          }
+        })
+        .catch(e => {
+          console.warn('MusicManager: failed to load track', i, url, e)
+          this._loaded[i] = true
+        })
+    })
   }
 
-  _snare(t) {
-    const { ctx } = this
-    // White-noise burst
-    const ns  = ctx.createBufferSource(); ns.buffer = this.noiseBuf
-    const hpf = ctx.createBiquadFilter(); hpf.type = 'highpass'; hpf.frequency.value = 1800
-    const ng  = ctx.createGain()
-    ns.connect(hpf); hpf.connect(ng); ng.connect(this.masterGain)
-    ng.gain.setValueAtTime(0.55, t)
-    ng.gain.exponentialRampToValueAtTime(0.001, t + 0.1)
-    ns.start(t); ns.stop(t + 0.11)
-    // Tonal body
-    const osc = ctx.createOscillator(); const og = ctx.createGain()
-    osc.connect(og); og.connect(this.masterGain)
-    osc.type = 'triangle'; osc.frequency.value = 185
-    og.gain.setValueAtTime(0.45, t)
-    og.gain.exponentialRampToValueAtTime(0.001, t + 0.07)
-    osc.start(t); osc.stop(t + 0.08)
-  }
+  // -- Playback ---------------------------------------------------------------
+  _playIndex(index) {
+    if (!this.playing) return
 
-  _hihat(t) {
-    const { ctx } = this
-    const ns  = ctx.createBufferSource(); ns.buffer = this.noiseBuf
-    const bpf = ctx.createBiquadFilter(); bpf.type = 'bandpass'; bpf.frequency.value = 9000; bpf.Q.value = 0.5
-    const g   = ctx.createGain()
-    ns.connect(bpf); bpf.connect(g); g.connect(this.masterGain)
-    g.gain.setValueAtTime(0.16, t)
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.03)
-    ns.start(t); ns.stop(t + 0.035)
-  }
-
-  _openHihat(t) {
-    const { ctx } = this
-    const ns  = ctx.createBufferSource(); ns.buffer = this.noiseBuf
-    const bpf = ctx.createBiquadFilter(); bpf.type = 'bandpass'; bpf.frequency.value = 6500; bpf.Q.value = 0.6
-    const g   = ctx.createGain()
-    ns.connect(bpf); bpf.connect(g); g.connect(this.masterGain)
-    g.gain.setValueAtTime(0.22, t)
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.11)
-    ns.start(t); ns.stop(t + 0.12)
-  }
-
-  // ── Melodic voices ───────────────────────────────────────────────────────────
-  _bass(note, t) {
-    if (!note) return
-    const hz = ALL_HZ[note]; if (!hz) return
-    const { ctx } = this
-    const osc = ctx.createOscillator()
-    const lpf = ctx.createBiquadFilter(); lpf.type = 'lowpass'; lpf.frequency.value = 700; lpf.Q.value = 2.5
-    const g   = ctx.createGain()
-    osc.connect(lpf); lpf.connect(g); g.connect(this.masterGain)
-    osc.type = 'sawtooth'; osc.frequency.value = hz
-    g.gain.setValueAtTime(0.55, t)
-    g.gain.exponentialRampToValueAtTime(0.001, t + this._step * 1.8)
-    osc.start(t); osc.stop(t + this._step * 2)
-  }
-
-  _lead(note, t) {
-    if (!note) return
-    const hz = ALL_HZ[note]; if (!hz) return
-    const { ctx } = this
-    // Two slightly detuned square waves for width
-    for (const detune of [0, 5]) {
-      const osc = ctx.createOscillator(); const g = ctx.createGain()
-      osc.connect(g); g.connect(this.masterGain)
-      osc.type = 'square'; osc.detune.value = detune
-      osc.frequency.value = hz
-      g.gain.setValueAtTime(0.09, t)
-      g.gain.exponentialRampToValueAtTime(0.001, t + this._step * 3.5)
-      osc.start(t); osc.stop(t + this._step * 4)
-    }
-  }
-
-  _lead2(note, t) {
-    // Octave-up triangle wave for intensity boost
-    if (!note) return
-    const hz = ALL_HZ[note]; if (!hz) return
-    const { ctx } = this
-    const osc = ctx.createOscillator(); const g = ctx.createGain()
-    osc.connect(g); g.connect(this.masterGain)
-    osc.type = 'triangle'; osc.frequency.value = hz * 2
-    g.gain.setValueAtTime(0.04, t)
-    g.gain.exponentialRampToValueAtTime(0.001, t + this._step * 2.5)
-    osc.start(t); osc.stop(t + this._step * 3)
-  }
-
-  _chordPad(notes, t) {
-    // Soft stacked sine pad — fades in slowly, sustains over 2 beats
-    const { ctx } = this
-    for (const note of notes) {
-      const hz = ALL_HZ[note]; if (!hz) continue
-      const osc = ctx.createOscillator(); const g = ctx.createGain()
-      osc.connect(g); g.connect(this.masterGain)
-      osc.type = 'sine'; osc.frequency.value = hz
-      g.gain.setValueAtTime(0.0, t)
-      g.gain.linearRampToValueAtTime(0.048, t + this._step * 2)
-      g.gain.exponentialRampToValueAtTime(0.001, t + this._step * 7.5)
-      osc.start(t); osc.stop(t + this._step * 8)
-    }
-  }
-
-  _purifyLead(note, t) {
-    // Hollow sawtooth for an ominous Purify lead melody
-    if (!note) return
-    const hz = ALL_HZ[note]; if (!hz) return
-    const { ctx } = this
-    const osc = ctx.createOscillator()
-    const lpf = ctx.createBiquadFilter(); lpf.type = 'lowpass'; lpf.frequency.value = 900; lpf.Q.value = 3
-    const g   = ctx.createGain()
-    osc.connect(lpf); lpf.connect(g); g.connect(this.masterGain)
-    osc.type = 'sawtooth'; osc.frequency.value = hz
-    g.gain.setValueAtTime(0.065, t)
-    g.gain.exponentialRampToValueAtTime(0.001, t + this._step * 3.8)
-    osc.start(t); osc.stop(t + this._step * 4)
-  }
-
-  // ── Zen voices ─────────────────────────────────────────────────────
-  _zenPad(note, t) {
-    if (!note) return
-    const hz = ALL_HZ[note]; if (!hz) return
-    const { ctx } = this
-    const osc = ctx.createOscillator(); const g = ctx.createGain()
-    osc.connect(g); g.connect(this.masterGain)
-    osc.type = 'sine'; osc.frequency.value = hz
-    g.gain.setValueAtTime(0.0, t)
-    g.gain.linearRampToValueAtTime(0.11, t + this._step * 3)
-    g.gain.exponentialRampToValueAtTime(0.001, t + this._step * 7.5)
-    osc.start(t); osc.stop(t + this._step * 8)
-  }
-
-  _zenMelody(note, t) {
-    if (!note) return
-    const hz = ALL_HZ[note]; if (!hz) return
-    const { ctx } = this
-    const osc = ctx.createOscillator(); const g = ctx.createGain()
-    osc.connect(g); g.connect(this.masterGain)
-    osc.type = 'triangle'; osc.frequency.value = hz
-    g.gain.setValueAtTime(0.07, t)
-    g.gain.exponentialRampToValueAtTime(0.001, t + this._step * 3.8)
-    osc.start(t); osc.stop(t + this._step * 4)
-  }
-
-  // ── Scheduler ────────────────────────────────────────────────────────────────────
-  _scheduleStep(t) {
-    const s = this.step % 32
-    // Advance bar phase every 32 steps (one 2-bar phrase = 1 barPhase tick)
-    if (s === 0 && this.step > 0) this.barPhase = (this.barPhase + 1) % 4
-
-    if (this.zenMode) {
-      this._zenPad(ZEN_PAD[s], t)
-      this._zenMelody(ZEN_MELODY[s], t)
-      this.step += 1
+    const buf = this._buffers[index]
+    if (!buf) {
+      // Buffer not ready — poll then retry
+      const wait = setInterval(() => {
+        if (this._loaded[index]) {
+          clearInterval(wait)
+          if (this.playing) this._playIndex(index)
+        }
+      }, 100)
       return
     }
 
-    // Drums — use fill pattern on last bar of every 4-bar cycle
-    const isLastBar = this.barPhase === 3
-    if (KICK[s])  this._kick(t)
-    if (SNARE[s]) this._snare(t)
-    if (HIHAT[s]) this._hihat(t)
-    // Open hi-hat on the pick-up note; skip during purify (too busy)
-    if (OPEN_HH[s] && !this.purifyMode) this._openHihat(t)
-    // Extra kick on step 10 in the intense fill bar
-    if (isLastBar && s === 10 && this.levelTier >= 1) this._kick(t)
+    // Tear down previous nodes
+    try { this._source?.stop() } catch {}
+    this._source?.disconnect()
+    this._trackGain?.disconnect()
 
-    // Bass — alternate phrase every 2 bars (barPhase 2-3 uses BASS_B)
-    const useBassB = !this.purifyMode && (this.barPhase === 2 || this.barPhase === 3)
-    const bass = this.purifyMode ? PURIFY_BASS[s] : (useBassB ? BASS_B[s] : BASS[s])
-    this._bass(bass, t)
+    const tg = this.ctx.createGain()
+    tg.gain.value = TRACKS[index].gain
+    tg.connect(this.masterGain)
+    this._trackGain = tg
 
-    if (this.purifyMode) {
-      // Ominous lead + sparse open hihats for tension
-      this._purifyLead(PURIFY_LEAD[s], t)
-      if (s % 8 === 0) this._openHihat(t)
-    } else {
-      // Lead — alternate phrase every 2 bars
-      const leadNote = (this.barPhase === 1 || this.barPhase === 3) ? LEAD_B[s] : LEAD[s]
-      this._lead(leadNote, t)
-      if (this.levelTier >= 1) this._lead2(leadNote, t)
-      // Chord pad on beat 1 and beat 3 of each bar (steps 0 and 16)
-      if (s === 0)  this._chordPad(['A3', 'C4', 'E4'], t)
-      if (s === 16) this._chordPad(['G3', 'C4', 'D4'], t)
+    const src = this.ctx.createBufferSource()
+    src.buffer = buf
+    src.loop   = false
+    src.connect(tg)
+    src.onended = () => {
+      if (!this.playing) return
+      this._repeatCount++
+      if (this._repeatCount < this._maxRepeats) {
+        // Play the same track again
+        this._playIndex(index)
+      } else {
+        // Enough repeats — pick a new random track
+        this._repeatCount = 0
+        this._maxRepeats  = 2 + Math.floor(Math.random() * 2)  // 2 or 3 next time
+        let next
+        do { next = Math.floor(Math.random() * TRACKS.length) } while (next === index && TRACKS.length > 1)
+        this.trackIndex = next
+        this._playIndex(this.trackIndex)
+      }
     }
-
-    this.step += 1
+    src.start()
+    this._source = src
   }
 
-  _tick() {
-    while (this.nextTime < this.ctx.currentTime + LOOKAHEAD) {
-      this._scheduleStep(this.nextTime)
-      this.nextTime += this._step
-    }
-  }
+  // -- Public API -------------------------------------------------------------
 
-  // ── Public API ───────────────────────────────────────────────────────────────
-  start(purifyMode = false, zenMode = false) {
+  /** Start BGM (call from user-gesture handler). */
+  start() {
     if (this.playing) return
     if (this.ctx.state === 'suspended') this.ctx.resume()
-    this.purifyMode = purifyMode
-    this.zenMode    = zenMode
-    this.playing    = true
-    this.step       = 0
-    this.barPhase   = 0
-    this.nextTime   = this.ctx.currentTime + 0.06
-    // Fade in
-    this.masterGain.gain.cancelScheduledValues(this.ctx.currentTime)
-    this.masterGain.gain.setValueAtTime(0, this.ctx.currentTime)
-    this.masterGain.gain.linearRampToValueAtTime(0.22, this.ctx.currentTime + 0.5)
-    this.tickId = setInterval(() => this._tick(), 12)
+    this.playing = true
+    // Start from a random track each session
+    this.trackIndex   = Math.floor(Math.random() * TRACKS.length)
+    this._repeatCount = 0
+    this._maxRepeats  = 2 + Math.floor(Math.random() * 2)
+    const t = this.ctx.currentTime
+    this.masterGain.gain.cancelScheduledValues(t)
+    this.masterGain.gain.setValueAtTime(0, t)
+    this.masterGain.gain.linearRampToValueAtTime(this._targetVol, t + 0.6)
+    this._playIndex(this.trackIndex)
   }
 
+  /** Fully stop BGM (game over / quitting). */
   stop() {
     if (!this.playing) return
-    // Fade out then clear interval
+    this.playing = false
     const t = this.ctx.currentTime
     this.masterGain.gain.cancelScheduledValues(t)
     this.masterGain.gain.setValueAtTime(this.masterGain.gain.value, t)
-    this.masterGain.gain.linearRampToValueAtTime(0, t + 0.3)
+    this.masterGain.gain.linearRampToValueAtTime(0, t + 0.4)
     setTimeout(() => {
-      clearInterval(this.tickId)
-      this.tickId = null
-      this.playing = false
-    }, 350)
+      try { this._source?.stop() } catch {}
+      this._source    = null
+      this._trackGain = null
+    }, 450)
   }
 
-  setPurifyMode(on) { this.purifyMode = on }
-  setZenMode(on)    { this.zenMode    = on }
+  /** Mute BGM without stopping playback (game paused). */
+  pause() {
+    const t = this.ctx.currentTime
+    this.masterGain.gain.cancelScheduledValues(t)
+    this.masterGain.gain.setValueAtTime(this.masterGain.gain.value, t)
+    this.masterGain.gain.linearRampToValueAtTime(0, t + 0.15)
+  }
 
+  /** Restore BGM after a game-pause. */
+  resume() {
+    if (!this.playing) return
+    if (this.ctx.state === 'suspended') this.ctx.resume()
+    const t = this.ctx.currentTime
+    this.masterGain.gain.cancelScheduledValues(t)
+    this.masterGain.gain.setValueAtTime(this.masterGain.gain.value, t)
+    this.masterGain.gain.linearRampToValueAtTime(this._targetVol, t + 0.35)
+  }
+
+  /** User-controlled master volume (0-1). */
   setVolume(vol) {
     const v = Math.max(0, Math.min(1, vol))
+    this._targetVol = v
     this.volumeGain.gain.setTargetAtTime(v, this.ctx.currentTime, 0.05)
   }
 
-  setLevel(level) {
-    this.levelTier = level >= 10 ? 2 : level >= 5 ? 1 : 0
-    // Dynamic BPM: playback rate increases BPM_SCALE_FACTOR per level, capped at 2.0×
-    const rate = Math.min(1.0 + (level - 1) * BPM_SCALE_FACTOR, 2.0)
-    this._step = BASE_STEP / rate
-    // Subtly boost master volume at higher levels for energy
-    if (this.playing) {
-      const target = this.levelTier === 2 ? 0.28 : this.levelTier === 1 ? 0.25 : 0.22
-      const t = this.ctx.currentTime
-      this.masterGain.gain.cancelScheduledValues(t)
-      this.masterGain.gain.setValueAtTime(this.masterGain.gain.value, t)
-      this.masterGain.gain.linearRampToValueAtTime(target, t + 2.0)
-    }
-  }
+  // No-ops kept for API compat
+  setLevel(_level)   {}
+  setPurifyMode(_on) {}
+  setZenMode(_on)    {}
 
-  // ── Zone FX: muffle/duck the mix while Zone is active ─────────────────────
+  /** Zone low-pass + volume duck effect. */
   setZoneFx(on) {
     if (!this.ctx) return
     const t = this.ctx.currentTime
     const targetFreq = on ? 900 : 18000
-    const targetGain = on ? 0.18 : (this.levelTier === 2 ? 0.28 : this.levelTier === 1 ? 0.25 : 0.22)
+    const targetGain = on ? this._targetVol * 0.35 : this._targetVol
     this.lpf.frequency.cancelScheduledValues(t)
     this.lpf.frequency.setValueAtTime(this.lpf.frequency.value, t)
     this.lpf.frequency.linearRampToValueAtTime(targetFreq, t + 0.25)
@@ -388,7 +188,7 @@ export class MusicManager {
     this.masterGain.gain.linearRampToValueAtTime(targetGain, t + 0.35)
   }
 
-  // ── One-shot SFX (bypass masterGain — always audible) ────────────────────────
+  // -- One-shot SFX (bypass masterGain, always audible even when BGM is muted) -
   _sfxNote(hz, gain, dur, type = 'triangle', offset = 0) {
     const { ctx } = this
     const osc = ctx.createOscillator(); const g = ctx.createGain()
@@ -401,30 +201,22 @@ export class MusicManager {
   }
 
   playCountdownBeep(n) {
-    // n = 3/2/1 → ascending blip, n = 0 → "GO!" fanfare
     if (!this.ctx) return
     if (this.ctx.state === 'suspended') this.ctx.resume()
     if (n > 0) {
       const freqs = [261.6, 293.7, 329.6]
       this._sfxNote(freqs[n - 1] ?? 261.6, 0.18, 0.28, 'triangle')
     } else {
-      [523.3, 659.3, 784.0, 1046.5].forEach((hz, i) =>
+      // "GO!" fanfare
+      ;[523.3, 659.3, 784.0, 1046.5].forEach((hz, i) =>
         this._sfxNote(hz, 0.22, 0.24, 'triangle', i * 0.05))
     }
-  }
-
-  playLevelUp() {
-    if (!this.ctx) return
-    if (this.ctx.state === 'suspended') this.ctx.resume()
-    // C4-E4-G4-C5 jingle
-    [261.6, 329.6, 392.0, 523.3].forEach((hz, i) =>
-      this._sfxNote(hz, 0.20, 0.22, 'sine', i * 0.07))
   }
 
   playZoneReady() {
     if (!this.ctx) return
     if (this.ctx.state === 'suspended') this.ctx.resume()
-    [784.0, 1046.5].forEach((hz, i) =>
+    ;[784.0, 1046.5].forEach((hz, i) =>
       this._sfxNote(hz, 0.14, 0.38, 'triangle', i * 0.14))
   }
 

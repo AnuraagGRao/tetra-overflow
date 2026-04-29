@@ -1,5 +1,8 @@
+import { useTheme } from '../contexts/ThemeContext'
+
 export default function SettingsPage({ config, onConfig, onClose }) {
   const set = (key, val) => onConfig(prev => ({ ...prev, [key]: val }))
+  const { colorMode, setColorMode } = useTheme()
 
   return (
     <div className="about-overlay" onClick={onClose}>
@@ -7,6 +10,21 @@ export default function SettingsPage({ config, onConfig, onClose }) {
         <button type="button" className="about-close" onClick={onClose} aria-label="Close">✕</button>
 
         <div className="settings-title">⚙ Settings</div>
+
+        {/* Display section */}
+        <div className="settings-section">
+          <div className="settings-section-title">Display</div>
+          <div className="settings-row">
+            <span className="settings-label">Light Mode</span>
+            <button
+              type="button"
+              className={`settings-toggle${colorMode === 'light' ? ' on' : ''}`}
+              onClick={() => setColorMode(colorMode === 'light' ? 'dark' : 'light')}
+            >
+              {colorMode === 'light' ? '☀ ON' : '☾ OFF'}
+            </button>
+          </div>
+        </div>
 
         {/* Sound section */}
         <div className="settings-section">
@@ -22,6 +40,19 @@ export default function SettingsPage({ config, onConfig, onClose }) {
                 className="settings-slider"
               />
               <span className="settings-val">{Math.round(config.musicVolume * 100)}%</span>
+            </div>
+          </div>
+
+          <div className="settings-row">
+            <span className="settings-label">SFX Volume</span>
+            <div className="settings-slider-wrap">
+              <input
+                type="range" min="0" max="1" step="0.05"
+                value={config.sfxVolume ?? 1.0}
+                onChange={e => set('sfxVolume', +e.target.value)}
+                className="settings-slider"
+              />
+              <span className="settings-val">{Math.round((config.sfxVolume ?? 1.0) * 100)}%</span>
             </div>
           </div>
 
@@ -80,6 +111,46 @@ export default function SettingsPage({ config, onConfig, onClose }) {
         <button type="button" className="about-install-btn" onClick={onClose}>
           Done
         </button>
+
+        {/* Touch Controls Reference */}
+        <div className="settings-section">
+          <div className="settings-section-title">Touch Controls</div>
+          <div className="touch-controls-grid">
+            <div className="touch-ctrl-card">
+              <span className="touch-ctrl-icon">👆</span>
+              <span className="touch-ctrl-action">Tap</span>
+              <span className="touch-ctrl-desc">Rotate CW</span>
+            </div>
+            <div className="touch-ctrl-card touch-ctrl-card--accent">
+              <span className="touch-ctrl-icon">👆×3</span>
+              <span className="touch-ctrl-action">Triple Tap</span>
+              <span className="touch-ctrl-desc">Activate Zone</span>
+            </div>
+            <div className="touch-ctrl-card">
+              <span className="touch-ctrl-icon">←→</span>
+              <span className="touch-ctrl-action">Swipe ← →</span>
+              <span className="touch-ctrl-desc">Move</span>
+            </div>
+            <div className="touch-ctrl-card">
+              <span className="touch-ctrl-icon">↑</span>
+              <span className="touch-ctrl-action">Swipe Up</span>
+              <span className="touch-ctrl-desc">Hold Piece</span>
+            </div>
+            <div className="touch-ctrl-card">
+              <span className="touch-ctrl-icon">↓</span>
+              <span className="touch-ctrl-action">Swipe Down</span>
+              <span className="touch-ctrl-desc">Soft Drop</span>
+            </div>
+            <div className="touch-ctrl-card">
+              <span className="touch-ctrl-icon">⚡↓</span>
+              <span className="touch-ctrl-action">Fling Down</span>
+              <span className="touch-ctrl-desc">Hard Drop</span>
+            </div>
+          </div>
+        </div>
+        <div className="settings-version">
+          Tetra Overflow<sup className="settings-version-ultra">Ultra</sup> v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.0.0'}
+        </div>
       </div>
     </div>
   )

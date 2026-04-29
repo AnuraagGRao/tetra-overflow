@@ -6,13 +6,16 @@ import TouchControls from './components/TouchControls'
 import ThemeSwitcher from './components/ThemeSwitcher'
 import AboutPage from './components/AboutPage'
 import SettingsPage from './components/SettingsPage'
+import LoadingScreen from './components/LoadingScreen'
+import GlitchOverlay from './components/GlitchOverlay'
 import { useTheme } from './contexts/ThemeContext'
 import { MusicManager } from './audio/musicManager'
+import catImageUrl from './meme/oiia_cat_assets_by_awesomeconsoles7_djwlgwe-fullview.png'
+import catMusicUrl from './meme/YTDown_YouTube_OIIAOIIA-CAT-but-in-4K-Not-Actually_Media_ZHgyQGoeaB0_009_128k.mp3'
 import {
   BLITZ_DURATION_MS, GAME_MODE, PURIFY_DURATION_MS,
   SPRINT_LINES, TetrisEngine, ZONE_DURATION_MS, ZONE_MIN_METER,
 } from './logic/gameEngine'
-import { TetrisBot } from './logic/tetrisBot'
 import { PIECES } from './logic/tetrominoes'
 
 // ─── Key bindings ─────────────────────────────────────────────────────────────
@@ -32,17 +35,17 @@ const KEY_BINDINGS = {
   KeyP:       { action: 'pause' },
 }
 
-const P2_BINDINGS = {
-  KeyD: { held: 'right' }, KeyA: { held: 'left' }, KeyS: { held: 'softDrop' },
-  KeyW: { action: 'rotateCW' }, KeyQ: { action: 'rotateCCW' },
-  KeyE: { action: 'rotate180' }, KeyR: { action: 'hold' }, KeyT: { action: 'hardDrop' },
-}
+
 
 // ─── Audio ────────────────────────────────────────────────────────────────────
 const MAX_FRAME_TIME_MS = 34
 const ToneContext = window.AudioContext || window.webkitAudioContext
 let sharedAudioContext
 let musicManager
+
+// SFX master volume scale (0–1), updated from config
+let _sfxVol = 1.0
+const setSfxVolume = (v) => { _sfxVol = Math.max(0, Math.min(1, v)) }
 
 const getAudioCtx = () => {
   if (!ToneContext) return null
@@ -59,7 +62,7 @@ const playNote = (freq, duration, gain, type = 'sine', offset = 0) => {
   osc.connect(g); g.connect(ctx.destination)
   osc.type = type; osc.frequency.value = freq
   const t = ctx.currentTime + offset
-  g.gain.setValueAtTime(gain, t)
+  g.gain.setValueAtTime(gain * _sfxVol, t)
   g.gain.exponentialRampToValueAtTime(0.001, t + duration)
   osc.start(t); osc.stop(t + duration + 0.01)
 }
@@ -78,7 +81,7 @@ const playNoise = (lpFreq, gain, dur, offset = 0) => {
   const g = ctx.createGain()
   src.connect(flt); flt.connect(g); g.connect(ctx.destination)
   const t = ctx.currentTime + offset
-  g.gain.setValueAtTime(gain, t)
+  g.gain.setValueAtTime(gain * _sfxVol, t)
   g.gain.exponentialRampToValueAtTime(0.001, t + dur)
   src.start(t); src.stop(t + dur + 0.01)
 }
@@ -88,12 +91,29 @@ let _lastMoveBeep = 0
 const playMoveSFX = () => {
   const now = performance.now(); if (now - _lastMoveBeep < 75) return
   _lastMoveBeep = now
-  playNote(380, 0.022, 0.026, 'triangle')
+  playNote(380, 0.022, 0.07, 'triangle')
+}
+
+const playTapSFX = () => {
+  playNote(1200, 0.028, 0.055, 'sine')
+}
+
+const playSwipeSFX = (dir) => {
+  // Left/right: quick lateral tick; up: rising pip; down: falling pip
+  if (dir === 'left' || dir === 'right') {
+    playNote(dir === 'left' ? 520 : 620, 0.030, 0.06, 'triangle')
+  } else if (dir === 'up') {
+    playNote(700, 0.025, 0.06, 'triangle')
+    playNote(900, 0.022, 0.05, 'triangle', 0.018)
+  } else if (dir === 'down') {
+    playNote(600, 0.025, 0.06, 'triangle')
+    playNote(420, 0.022, 0.05, 'triangle', 0.018)
+  }
 }
 
 const playRotateSFX = () => {
-  playNote(1100, 0.032, 0.048, 'triangle')
-  playNote(750,  0.022, 0.030, 'sine', 0.010)
+  playNote(1100, 0.032, 0.10, 'triangle')
+  playNote(750,  0.022, 0.07, 'sine', 0.010)
 }
 
 const playLockSFX = () => {
@@ -105,78 +125,121 @@ const playLockSFX = () => {
   const t = ctx.currentTime
   osc.frequency.setValueAtTime(110, t)
   osc.frequency.exponentialRampToValueAtTime(52, t + 0.07)
-  g.gain.setValueAtTime(0.07, t)
+  g.gain.setValueAtTime(0.13 * _sfxVol, t)
   g.gain.exponentialRampToValueAtTime(0.001, t + 0.10)
   osc.start(t); osc.stop(t + 0.11)
 }
 
 const playHardDropSFX = () => {
   // Deep bass thud + high click + noise
-  playNote(75, 0.18, 0.14, 'sine')
-  playNote(280, 0.06, 0.07, 'square', 0.006)
-  playNoise(600, 0.08, 0.10, 0.006)
+  playNote(75, 0.18, 0.22, 'sine')
+  playNote(280, 0.06, 0.14, 'square', 0.006)
+  playNoise(600, 0.14, 0.10, 0.006)
 }
 
 const playLineClearSFX = () => {
-  playNoise(9000, 0.055, 0.08)
-  arp([392, 523, 659, 784], 0.095, 0.065, 'sine')
+  playNoise(9000, 0.10, 0.08)
+  arp([392, 523, 659, 784], 0.095, 0.12, 'sine')
 }
 
 const playTSpinSFX = () => {
-  arp([330, 415, 523, 659, 784], 0.10, 0.075, 'triangle')
-  playNote(330, 0.20, 0.028, 'sine', 0.06)
+  arp([330, 415, 523, 659, 784], 0.10, 0.13, 'triangle')
+  playNote(330, 0.20, 0.06, 'sine', 0.06)
 }
 
 const playTetrisSFX = () => {
-  arp([262, 330, 392, 523, 659, 784, 1047], 0.09, 0.08, 'sine')
-  playNote(131, 0.35, 0.065, 'sine', 0.12)
+  arp([262, 330, 392, 523, 659, 784, 1047], 0.09, 0.14, 'sine')
+  playNote(131, 0.35, 0.11, 'sine', 0.12)
 }
 
 const playAllClearSFX = () => {
   // Full chromatic sweep + bass boom
   const fs = [262,294,330,349,392,440,494,523,587,659,698,784,880,988,1047,1319]
-  fs.forEach((f, i) => playNote(f, 0.14, 0.075, 'sine', i * 0.038))
-  playNote(65,  0.45, 0.10, 'sine', 0.22)
-  playNote(131, 0.30, 0.08, 'sine', 0.22)
-  playNoise(10000, 0.09, 0.22, 0.12)
+  fs.forEach((f, i) => playNote(f, 0.14, 0.13, 'sine', i * 0.038))
+  playNote(65,  0.45, 0.16, 'sine', 0.22)
+  playNote(131, 0.30, 0.14, 'sine', 0.22)
+  playNoise(10000, 0.15, 0.22, 0.12)
 }
 
-const playB2BSFX = () => arp([1047, 1319, 1568], 0.065, 0.065, 'sine')
+const playB2BSFX = () => arp([1047, 1319, 1568], 0.065, 0.12, 'sine')
 
-const playLevelUpSFX = () => arp([261.6, 329.6, 392.0, 523.3], 0.10, 0.12, 'triangle')
+const playLevelUpSFX = () => arp([261.6, 329.6, 392.0, 523.3], 0.10, 0.20, 'triangle')
 
 const playZoneActivateSFX = () => {
-  arp([131, 165, 196, 262, 330, 392, 523, 784], 0.13, 0.075, 'triangle')
-  playNoise(2500, 0.07, 0.16, 0.06)
+  arp([131, 165, 196, 262, 330, 392, 523, 784], 0.13, 0.13, 'triangle')
+  playNoise(2500, 0.12, 0.16, 0.06)
 }
 
 const playGameOverSFX = () => {
-  arp([523, 466, 415, 370, 330, 294, 262, 233, 220], 0.12, 0.09, 'sawtooth')
-  playNote(55, 0.5, 0.08, 'sine', 0.12)
-  playNoise(700, 0.055, 0.4, 0.06)
+  arp([523, 466, 415, 370, 330, 294, 262, 233, 220], 0.12, 0.16, 'sawtooth')
+  playNote(55, 0.5, 0.14, 'sine', 0.12)
+  playNoise(700, 0.10, 0.4, 0.06)
 }
 
 const playComboSFX = (c) => {
   const base = Math.min(440 + c * 80, 1400)
-  playNote(base, 0.09, 0.07, 'triangle')
-  if (c >= 3) playNote(base * 1.26, 0.07, 0.055, 'triangle', 0.022)
-  if (c >= 5) playNote(base * 1.5,  0.06, 0.045, 'sine',     0.044)
+  playNote(base, 0.09, 0.13, 'triangle')
+  if (c >= 3) playNote(base * 1.26, 0.07, 0.11, 'triangle', 0.022)
+  if (c >= 5) playNote(base * 1.5,  0.06, 0.09, 'sine',     0.044)
 }
 
-const playZenResetSFX = () => arp([784, 880, 1047, 1319], 0.20, 0.04, 'sine')
+const playZenResetSFX = () => arp([784, 880, 1047, 1319], 0.20, 0.08, 'sine')
+
+const playPauseSFX = () => {
+  playNote(440, 0.06, 0.09, 'triangle')
+  playNote(330, 0.05, 0.09, 'triangle', 0.055)
+}
+
+const playResumeSFX = () => {
+  playNote(330, 0.05, 0.10, 'triangle')
+  playNote(440, 0.06, 0.12, 'triangle', 0.055)
+  playNote(523, 0.06, 0.14, 'triangle', 0.110)
+}
+
+const playInfectionSFX = () => {
+  // Creeping infection: eerie detuned oscillator pulse + low organic hum + subtle noise
+  const ctx = getAudioCtx(); if (!ctx) return
+  const t = ctx.currentTime
+
+  // Warbling, detuned low pulse — like something alive and wrong
+  const osc1 = ctx.createOscillator(); const g1 = ctx.createGain()
+  osc1.connect(g1); g1.connect(ctx.destination)
+  osc1.type = 'sawtooth'
+  osc1.frequency.setValueAtTime(82, t)
+  osc1.frequency.linearRampToValueAtTime(74, t + 0.18)
+  osc1.frequency.linearRampToValueAtTime(88, t + 0.36)
+  osc1.frequency.linearRampToValueAtTime(76, t + 0.55)
+  g1.gain.setValueAtTime(0.09 * _sfxVol, t)
+  g1.gain.linearRampToValueAtTime(0.06 * _sfxVol, t + 0.55)
+  g1.gain.exponentialRampToValueAtTime(0.001, t + 0.70)
+  osc1.start(t); osc1.stop(t + 0.71)
+
+  // High-pitched unsettling shimmer
+  const osc2 = ctx.createOscillator(); const g2 = ctx.createGain()
+  osc2.connect(g2); g2.connect(ctx.destination)
+  osc2.type = 'sine'
+  osc2.frequency.setValueAtTime(880, t + 0.05)
+  osc2.frequency.exponentialRampToValueAtTime(440, t + 0.55)
+  g2.gain.setValueAtTime(0.07 * _sfxVol, t + 0.05)
+  g2.gain.exponentialRampToValueAtTime(0.001, t + 0.65)
+  osc2.start(t + 0.05); osc2.stop(t + 0.66)
+
+  // Quiet organic crackle
+  playNoise(1200, 0.06, 0.5, 0.02)
+}
 
 const playHoldSFX = () => {
-  playNote(660, 0.045, 0.038, 'triangle')
-  playNote(990, 0.035, 0.028, 'triangle', 0.018)
+  playNote(660, 0.045, 0.09, 'triangle')
+  playNote(990, 0.035, 0.07, 'triangle', 0.018)
 }
 
 const playZoneMeterMilestoneSFX = (tier) => {
   // tier: 1 = 50%, 2 = 75%
   if (tier === 2) {
-    playNote(880, 0.07, 0.08, 'triangle')
-    playNote(1320, 0.05, 0.06, 'triangle', 0.03)
+    playNote(880, 0.07, 0.14, 'triangle')
+    playNote(1320, 0.05, 0.11, 'triangle', 0.03)
   } else {
-    playNote(660, 0.06, 0.06, 'triangle')
+    playNote(660, 0.06, 0.11, 'triangle')
   }
 }
 
@@ -196,7 +259,7 @@ const playCountdownTickSFX = (second) => {
 
 // ─── Config / settings storage ───────────────────────────────────────────────
 const CONFIG_KEY = 'tetris-config'
-const DEFAULT_CONFIG = { sfxEnabled: true, hapticEnabled: true, musicVolume: 1.0, das: 110, arr: 25 }
+const DEFAULT_CONFIG = { sfxEnabled: true, hapticEnabled: true, musicVolume: 1.0, sfxVolume: 1.0, das: 110, arr: 25 }
 const loadConfig = () => {
   try { return { ...DEFAULT_CONFIG, ...JSON.parse(localStorage.getItem(CONFIG_KEY) ?? '{}') } }
   catch (e) { console.warn('Failed to load config:', e); return { ...DEFAULT_CONFIG } }
@@ -254,15 +317,11 @@ function PiecePreview({ type, small = false }) {
 export default function App() {
   const { setTheme } = useTheme()
   const engine  = useMemo(() => new TetrisEngine(), [])
-  const engine2 = useMemo(() => new TetrisEngine(), [])
 
+  const [isLoading, setIsLoading] = useState(true)
   const [state,  setState]  = useState(() => engine.getState())
-  const [state2, setState2] = useState(() => engine2.getState())
   const [config, setConfig] = useState(loadConfig)
   const [gameMode, setGameMode]   = useState(GAME_MODE.NORMAL)
-  const [purifyDifficulty, setPurifyDifficulty] = useState('normal')
-  const [botDifficulty, setBotDifficulty]       = useState('medium')
-  const [botEnabled, setBotEnabled]             = useState(true)
   const [musicOn, setMusicOn]     = useState(false)
   const [countdown, setCountdown] = useState(null)
   const [highScores, setHighScores] = useState(() => loadHighScores())
@@ -286,12 +345,9 @@ export default function App() {
   })
 
   const heldRef   = useRef({ left: false, right: false, softDrop: false })
-  const held2Ref  = useRef({ left: false, right: false, softDrop: false })
   const gpHeldRef  = useRef({ left: false, right: false, softDrop: false })
   const actionRef  = useRef({})
-  const action2Ref = useRef({})
   const prevGameOverRef  = useRef(false)
-  const prevGameOver2Ref = useRef(false)
   const prevLevelRef      = useRef(1)
   const prevBackToBackRef = useRef(false)
   const prevZoneMeterRef  = useRef(0)
@@ -299,23 +355,29 @@ export default function App() {
   const musicOnRef  = useRef(false)
   const countdownActiveRef = useRef(false)
   const gameModeRef = useRef(GAME_MODE.NORMAL)
-  const purifyDiffRef = useRef('normal')
   const botDiffRef    = useRef('medium')
-  const botEnabledRef = useRef(true)
   const isMobileRef   = useRef(window.innerWidth < 768 || (window.innerHeight < 600 && ('ontouchstart' in window || navigator.maxTouchPoints > 0)))
-  const botRef        = useRef(null)
   const zenResettingRef = useRef(false)
   const prevBlitzSecRef  = useRef(null)
   const prevPurifySecRef = useRef(null)
   const configRef         = useRef(config)
   useEffect(() => { configRef.current = config }, [config])
 
+  // ─── Ultimate cat music (separate Audio element) ─────────────────────────
+  const catAudioRef = useRef(null)
+  useEffect(() => {
+    const el = new Audio(catMusicUrl)
+    el.loop = true
+    el.volume = 0.70
+    catAudioRef.current = el
+    return () => { el.pause(); el.src = '' }
+  }, [])
+
   // Persist config changes
   useEffect(() => { localStorage.setItem(CONFIG_KEY, JSON.stringify(config)) }, [config])
 
   // Sync engine DAS/ARR from config
   useEffect(() => { engine.setSettings({ das: config.das, arr: config.arr }) },  [engine, config.das, config.arr])
-  useEffect(() => { engine2.setSettings({ das: config.das, arr: config.arr }) }, [engine2, config.das, config.arr])
 
   // Resize → isMobile
   useEffect(() => {
@@ -380,8 +442,7 @@ export default function App() {
   useEffect(() => {
     const mult = isMobile && !isLandscape ? 1.5 : 1.0
     engine.setTouchMultiplier(mult)
-    engine2.setTouchMultiplier(mult)
-  }, [engine, engine2, isMobile, isLandscape])
+  }, [engine, isMobile, isLandscape])
 
   // PWA install prompt
   useEffect(() => {
@@ -415,7 +476,7 @@ export default function App() {
 
   const renderInstallBanner = () => showInstallBanner ? (
     <div className="pwa-install-banner">
-      <span className="pwa-install-text">📲 Add Tetris to your home screen for the best experience</span>
+      <span className="pwa-install-text">📲 Add Tetra Overflow Ultra to your home screen for the best experience</span>
       <div className="pwa-install-actions">
         <button type="button" className="pwa-install-btn" onClick={handleInstall}>Install</button>
         <button type="button" className="pwa-dismiss-btn" onClick={handleDismissInstall}>✕</button>
@@ -441,30 +502,30 @@ export default function App() {
   const startGame = (mode) => {
     getAudioCtx()
     setGameMode(mode); gameModeRef.current = mode
-    const diff = purifyDiffRef.current
-    engine.reset(mode, diff)
-    engine2.reset(mode, diff)
-    setState(engine.getState()); setState2(engine2.getState())
-    prevGameOverRef.current = false; prevGameOver2Ref.current = false
+    engine.reset(mode, 'easy')
+    setState(engine.getState())
+    prevGameOverRef.current = false
     prevLevelRef.current = 1; prevBackToBackRef.current = false; prevZoneMeterRef.current = 0; prevZoneActiveRef.current = false
     zenResettingRef.current = false
     prevBlitzSecRef.current = null; prevPurifySecRef.current = null
     setZenResetting(false)
     setNewHigh(false)
     heldRef.current  = { left: false, right: false, softDrop: false }
-    held2Ref.current = { left: false, right: false, softDrop: false }
-    actionRef.current = {}; action2Ref.current = {}
-    // Create bot for versus
-    if (mode === GAME_MODE.VERSUS) {
-      botRef.current = new TetrisBot(botDiffRef.current)
-    }
+    actionRef.current = {}
     // Zen: wire topout handler + auto-apply zen theme
     if (mode === GAME_MODE.ZEN) {
       engine.setTopOutHandler(handleZenTopOut)
-      setTheme('zen')
+      setTheme('classic')
+    } else if (mode === GAME_MODE.ULTIMATE) {
+      engine.setTopOutHandler(null)
+      // Signal engine to use meme blocks (cat image)
+      engine.useMemeBlocks = true
     } else {
       engine.setTopOutHandler(null)
+      engine.useMemeBlocks = false
     }
+    // Unlock Vibration API on Android (requires a user-gesture context — startGame is called from button click)
+    try { navigator.vibrate?.(1) } catch {}
     countdownActiveRef.current = true
     setCountdown(3)
     setShowMobileModes(false)
@@ -477,6 +538,13 @@ export default function App() {
       countdownActiveRef.current = false
       setCountdown(null)
       musicManager?.playCountdownBeep?.(0) // "GO!" fanfare
+      // Start music: Ultimate uses cat track, others use normal BGM
+      if (gameModeRef.current === GAME_MODE.ULTIMATE) {
+        catAudioRef.current?.play().catch(() => {})
+      } else if (musicOnRef.current) {
+        musicManager?.start()
+        musicManager?.setVolume(configRef.current.musicVolume)
+      }
       return
     }
     musicManager?.playCountdownBeep?.(countdown) // 3, 2, 1 beeps
@@ -497,27 +565,11 @@ export default function App() {
         }
         engine.update(dt, held, actionRef.current)
         actionRef.current = {}
-        const mode = gameModeRef.current
-        if (mode === GAME_MODE.VERSUS) {
-          // Bot drives P2
-          const useBotForP2 = isMobileRef.current || botEnabledRef.current
-          if (useBotForP2 && botRef.current) {
-            botRef.current.update(dt, engine2, held2Ref.current, action2Ref)
-          }
-          engine2.update(dt, held2Ref.current, action2Ref.current)
-          action2Ref.current = {}
-        }
       } else {
-        actionRef.current = {}; action2Ref.current = {}
+        actionRef.current = {}
       }
 
       const ns  = engine.getState()
-      const ns2 = engine2.getState()
-
-      if (gameModeRef.current === GAME_MODE.VERSUS) {
-        if (ns.lastGarbage  > 0) engine2.receiveGarbage(ns.lastGarbage)
-        if (ns2.lastGarbage > 0) engine.receiveGarbage(ns2.lastGarbage)
-      }
 
       const cfg = configRef.current
       const sfxOn = cfg.sfxEnabled
@@ -526,26 +578,35 @@ export default function App() {
 
       if (ns.hardDropped) {
         if (sfxOn) playHardDropSFX()
+        doVibrate([25, 50, 25])
       } else if (ns.pieceLocked) {
         if (sfxOn) playLockSFX()
-        doVibrate(6)
+        doVibrate(25)
       }
       if (ns.pieceHeld) {
         if (sfxOn) playHoldSFX()
-        doVibrate(8)
+        doVibrate(25)
+      }
+      if (ns.infectionAdded) {
+        if (sfxOn) playInfectionSFX()
+        doVibrate([30, 15, 30, 15, 40])
+      }
+      if (ns.ultimateGarbageAdded) {
+        if (sfxOn) playInfectionSFX()  // reuse chaos SFX
+        doVibrate([80, 30, 80])
       }
       if (ns.lastCombo > 0 && sfxOn) playComboSFX(ns.lastCombo)
       if (ns.lastClear) {
         const { spinType, lines, isAllClear } = ns.lastClear
         if (isAllClear) {
           if (sfxOn) playAllClearSFX()
-          doVibrate([20, 5, 20, 5, 20, 5, 60])
+          doVibrate([30, 10, 30, 10, 30, 10, 80])
         } else if (spinType === 'tSpin' || spinType === 'allSpin') {
           if (sfxOn) playTSpinSFX()
-          doVibrate([10, 10, 30])
+          doVibrate([20, 15, 40])
         } else if (lines === 4) {
           if (sfxOn) playTetrisSFX()
-          doVibrate([20, 5, 20, 5, 20, 5, 60])
+          doVibrate([30, 10, 30, 10, 30, 10, 80])
         } else if (lines > 0) {
           if (sfxOn) playLineClearSFX()
           doVibrate(playLineClearHaptic(lines))
@@ -562,13 +623,13 @@ export default function App() {
       if (!ns.zoneActive) {
         if (ns.zoneMeter >= 100 && prevMeter < 100) {
           musicManager?.playZoneReady?.()
-          doVibrate([10, 10, 10, 10, 20])
+          doVibrate([20, 15, 20, 15, 40])
         } else if (ns.zoneMeter >= 75 && prevMeter < 75) {
           if (sfxOn) playZoneMeterMilestoneSFX(2)
-          doVibrate([8, 8, 15])
+          doVibrate([15, 12, 25])
         } else if (ns.zoneMeter >= 50 && prevMeter < 50) {
           if (sfxOn) playZoneMeterMilestoneSFX(1)
-          doVibrate(10)
+          doVibrate(25)
         }
       }
       prevZoneMeterRef.current = ns.zoneMeter
@@ -620,34 +681,17 @@ export default function App() {
         }
       }
       prevGameOverRef.current = ns.gameOver
-      if (musicOnRef.current) {
-        musicManager?.setLevel?.(ns.level)
-        musicManager?.setPurifyMode?.(ns.mode === GAME_MODE.PURIFY)
-        musicManager?.setZenMode?.(ns.mode === GAME_MODE.ZEN)
-      }
-      if (ns2.gameOver && !prevGameOver2Ref.current && gameModeRef.current === GAME_MODE.VERSUS) {
-        if (!ns.gameOver) { engine.gameOver = true; engine.gameOverReason = 'win' }
-      }
-      prevGameOver2Ref.current = ns2.gameOver
       setState(ns)
-      if (gameModeRef.current === GAME_MODE.VERSUS) setState2(ns2)
       frameId = requestAnimationFrame(frame)
     }
     frameId = requestAnimationFrame(frame)
     return () => cancelAnimationFrame(frameId)
-  }, [engine, engine2])
+  }, [engine])
 
   // ─── Keyboard ──────────────────────────────────────────────────────────────
   useEffect(() => {
     const down = (ev) => {
       const sfxOn = configRef.current.sfxEnabled
-      if (!isMobileRef.current && gameModeRef.current === GAME_MODE.VERSUS && !botEnabledRef.current && P2_BINDINGS[ev.code]) {
-        if (ev.repeat) return
-        const b = P2_BINDINGS[ev.code]; ev.preventDefault()
-        if (b.held) held2Ref.current[b.held] = true
-        if (b.action) { action2Ref.current[b.action] = true; if (b.action.startsWith('rotate') && sfxOn) playRotateSFX() }
-        return
-      }
       const b = KEY_BINDINGS[ev.code]; if (!b) return
       ev.preventDefault(); if (ev.repeat) return
       if (b.held) {
@@ -667,9 +711,6 @@ export default function App() {
       }
     }
     const up = (ev) => {
-      if (!isMobileRef.current && gameModeRef.current === GAME_MODE.VERSUS && !botEnabledRef.current && P2_BINDINGS[ev.code]) {
-        const b = P2_BINDINGS[ev.code]; if (b.held) held2Ref.current[b.held] = false; return
-      }
       const b = KEY_BINDINGS[ev.code]; if (!b?.held) return
       ev.preventDefault(); heldRef.current[b.held] = false
     }
@@ -686,15 +727,16 @@ export default function App() {
     const hapticOn = configRef.current.hapticEnabled
     if (action === 'rotateCW' || action === 'rotateCCW' || action === 'rotate180') {
       if (sfxOn) playRotateSFX()
-      if (hapticOn) navigator.vibrate?.(10)
+      if (hapticOn) navigator.vibrate?.(20)
     } else if (action === 'hardDrop') {
       if (sfxOn) playHardDropSFX()
-      if (hapticOn) navigator.vibrate?.([15, 30, 15])
+      if (hapticOn) navigator.vibrate?.([25, 50, 25])
     } else if (action === 'activateZone') {
       if (sfxOn) playZoneActivateSFX()
-      if (hapticOn) navigator.vibrate?.([20, 10, 40])
+      if (hapticOn) navigator.vibrate?.([30, 15, 50])
     } else if (action === 'hold') {
-      if (hapticOn) navigator.vibrate?.(8)
+      if (sfxOn) playHoldSFX()
+      if (hapticOn) navigator.vibrate?.(25)
     }
   }
   const handlePress   = (key, hold) => {
@@ -702,17 +744,25 @@ export default function App() {
     const hapticOn = configRef.current.hapticEnabled
     if (hold) {
       heldRef.current[key] = true
-      if (key === 'left' || key === 'right') { if (sfxOn) playMoveSFX(); if (hapticOn) navigator.vibrate?.(8) }
-      else if (key === 'softDrop' && hapticOn) navigator.vibrate?.(5)
+      if (key === 'left' || key === 'right') { if (sfxOn) playMoveSFX(); if (hapticOn) navigator.vibrate?.(20) }
+      else if (key === 'softDrop' && hapticOn) navigator.vibrate?.(15)
     } else {
       triggerAction(key)
     }
   }
   const handleRelease = (key, hold) => { if (hold) heldRef.current[key] = false }
   const handleDragBegin = (dir) => {
-    if (dir === 'left' || dir === 'right') heldRef.current[dir] = true
-    else if (dir === 'down') heldRef.current.softDrop = true
-    else if (dir === 'up') triggerAction('hold')
+    const sfxOn = configRef.current.sfxEnabled
+    if (dir === 'left' || dir === 'right') {
+      heldRef.current[dir] = true
+      if (sfxOn) playSwipeSFX(dir)
+    } else if (dir === 'down') {
+      heldRef.current.softDrop = true
+      if (sfxOn) playSwipeSFX('down')
+    } else if (dir === 'up') {
+      if (sfxOn) playSwipeSFX('up')
+      triggerAction('hold')
+    }
   }
   const handleDragEnd = (dir) => {
     if (dir === 'left' || dir === 'right') heldRef.current[dir] = false
@@ -723,13 +773,13 @@ export default function App() {
       heldRef.current.softDrop = false
       actionRef.current.hardDrop = true
       if (configRef.current.sfxEnabled) playHardDropSFX()
-      if (configRef.current.hapticEnabled) navigator.vibrate?.([15, 30, 15])
+      if (configRef.current.hapticEnabled) navigator.vibrate?.([25, 50, 25])
     }
   }
   const handleZoneActivate = () => {
     actionRef.current.activateZone = true
     if (configRef.current.sfxEnabled) playZoneActivateSFX()
-    if (configRef.current.hapticEnabled) navigator.vibrate?.([20, 10, 40])
+    if (configRef.current.hapticEnabled) navigator.vibrate?.([30, 15, 50])
   }
 
   // ─── Gamepad ──────────────────────────────────────────────────────────────
@@ -780,10 +830,15 @@ export default function App() {
             if (pressed && !prev[bi]) {
               if (action === 'pause') {
                 engine.togglePause()
-                if (gameModeRef.current === GAME_MODE.VERSUS) engine2.togglePause()
                 const s = engine.getState(); setState(s)
-                if (s.paused) { if (musicOnRef.current) musicManager?.stop() }
-                else { if (musicOnRef.current) musicManager?.start(s.mode === GAME_MODE.PURIFY, s.mode === GAME_MODE.ZEN) }
+                const sfxOn = configRef.current.sfxEnabled
+                if (s.paused) {
+                  if (sfxOn) playPauseSFX()
+                  if (musicOnRef.current) musicManager?.pause()
+                } else {
+                  if (sfxOn) playResumeSFX()
+                  if (musicOnRef.current) musicManager?.resume()
+                }
               } else if (!countdownActiveRef.current) {
                 actionRef.current[action] = true
                 const sfxOn = configRef.current.sfxEnabled
@@ -791,7 +846,7 @@ export default function App() {
                 else if (action === 'hardDrop' && sfxOn) playHardDropSFX()
                 else if (action === 'activateZone') {
                   if (sfxOn) playZoneActivateSFX()
-                  if (configRef.current.hapticEnabled) navigator.vibrate?.([20, 10, 40])
+                  if (configRef.current.hapticEnabled) navigator.vibrate?.([30, 15, 50])
                 }
               }
             }
@@ -806,14 +861,19 @@ export default function App() {
     }
     rafId = requestAnimationFrame(poll)
     return () => cancelAnimationFrame(rafId)
-  }, [engine, engine2]) // eslint-disable-line
+  }, [engine]) // eslint-disable-line
 
   const handlePauseToggle = () => {
     engine.togglePause()
-    if (gameModeRef.current === GAME_MODE.VERSUS) engine2.togglePause()
     const s = engine.getState(); setState(s)
-    if (s.paused) { if (musicOnRef.current) musicManager?.stop() }
-    else { if (musicOnRef.current) musicManager?.start(s.mode === GAME_MODE.PURIFY, s.mode === GAME_MODE.ZEN) }
+    const sfxOn = configRef.current.sfxEnabled
+    if (s.paused) {
+      if (sfxOn) playPauseSFX()
+      if (musicOnRef.current) musicManager?.pause()
+    } else {
+      if (sfxOn) playResumeSFX()
+      if (musicOnRef.current) musicManager?.resume()
+    }
   }
 
   const toggleMusic = () => {
@@ -822,7 +882,7 @@ export default function App() {
       if (musicOnRef.current) {
         musicManager.stop(); musicOnRef.current = false; setMusicOn(false)
       } else {
-        musicManager.start(state.mode === GAME_MODE.PURIFY, state.mode === GAME_MODE.ZEN)
+        musicManager.start()
         musicManager.setVolume(configRef.current.musicVolume)
         musicOnRef.current = true; setMusicOn(true)
       }
@@ -836,14 +896,27 @@ export default function App() {
     if (musicOnRef.current) musicManager?.setVolume?.(config.musicVolume)
   }, [config.musicVolume])
 
-  const setBotDiff = (d) => { setBotDifficulty(d); botDiffRef.current = d; botRef.current?.setDifficulty(d) }
-  const setPurifyDiff = (d) => { setPurifyDifficulty(d); purifyDiffRef.current = d }
+  // Sync SFX volume when config changes
+  useEffect(() => {
+    setSfxVolume(config.sfxVolume ?? 1.0)
+  }, [config.sfxVolume])
+
+  const setBotDiff = (d) => { setBotDifficulty(d); botDiffRef.current = d }
 
   // ─── Derived ────────────────────────────────────────────────────────────────
   const zoneReady  = state.zoneMeter >= ZONE_MIN_METER
-  const isVersus   = gameMode === GAME_MODE.VERSUS
   const isPurify   = state.mode === GAME_MODE.PURIFY
-  const showZone   = state.mode === GAME_MODE.NORMAL || state.mode === GAME_MODE.VERSUS
+  const isUltimate = state.mode === GAME_MODE.ULTIMATE
+  const showZone   = state.mode === GAME_MODE.NORMAL || state.mode === GAME_MODE.ULTIMATE
+
+  // Glitch effect: active in Ultimate when stack reaches row 10 from top
+  const glitchActive = isUltimate && (() => {
+    if (!state.board) return false
+    for (let r = 0; r < 10; r++) {
+      if (state.board[r]?.some(c => c !== null)) return true
+    }
+    return false
+  })()
 
   const fmt = (ms) => {
     const t = Math.max(0, Math.ceil(ms / 1000)), m = Math.floor(t / 60), s = t % 60
@@ -926,10 +999,9 @@ export default function App() {
     { mode: GAME_MODE.NORMAL, label: 'Normal' },
     { mode: GAME_MODE.SPRINT, label: 'Sprint' },
     { mode: GAME_MODE.BLITZ,  label: 'Blitz'  },
-    { mode: GAME_MODE.MASTER, label: 'Master' },
     { mode: GAME_MODE.PURIFY, label: 'Purify' },
-    { mode: GAME_MODE.VERSUS, label: '1v1'    },
     { mode: GAME_MODE.ZEN,    label: '🧘 Zen'  },
+    { mode: GAME_MODE.ULTIMATE, label: '⚡ Ultimate' },
   ]
 
   const modeButtons = (
@@ -958,7 +1030,6 @@ export default function App() {
           <span className="label">Level</span>
           <span className="value">
             {state.level}
-            {state.mode === GAME_MODE.MASTER && state.level >= 20 && <span className="badge-20g">20G</span>}
           </span>
         </div>
         <div className="stat-item">
@@ -986,12 +1057,6 @@ export default function App() {
           <div className="purify-count-row">
             <span>Purified</span>
             <strong>{state.blocksPurified}</strong>
-          </div>
-          <div className="purify-difficulty-select" style={{ marginTop: '0.4rem' }}>
-            {[['easy','Easy'],['normal','Normal'],['hard','Hard']].map(([d, label]) => (
-              <button key={d} type="button" className={`diff-btn${purifyDifficulty === d ? ' active' : ''}`}
-                onClick={() => setPurifyDiff(d)}>{label}</button>
-            ))}
           </div>
         </div>
       ) : showZone ? (() => {
@@ -1060,41 +1125,9 @@ export default function App() {
         </div>
       </div>
 
-      {isVersus && (
-        <div className="bot-controls">
-          <div className="flank-label">Bot AI</div>
-          <div className="diff-row">
-            {['easy', 'medium', 'hard'].map(d => (
-              <button key={d} type="button" className={`diff-btn${botDifficulty === d ? ' active' : ''}`}
-                onClick={() => setBotDiff(d)}>{d[0].toUpperCase() + d.slice(1)}</button>
-            ))}
-          </div>
-        </div>
-      )}
-
       <div style={{ marginTop: '0.5rem' }}>
         <button type="button" className="icon-btn" style={{ width: '100%', justifyContent: 'center', fontSize: '0.72rem' }} onClick={() => setShowSettings(true)}>⚙ Settings</button>
       </div>
-    </div>
-  )
-
-  // ─── Versus sidebar (desktop) ────────────────────────────────────────────────
-  const renderVersusSidebar = (s, side = 'left') => (
-    <div className="versus-sidebar">
-      {side === 'left' ? (
-        <>
-          <div className="flank-label">Hold</div>
-          <PiecePreview type={s.hold} />
-          <div className="flank-label" style={{ marginTop: '0.5rem' }}>Score</div>
-          <div style={{ fontSize: '0.9rem', fontWeight: 700 }}>{s.score.toLocaleString()}</div>
-          <div style={{ fontSize: '0.72rem', color: 'var(--c-muted)' }}>Lv {s.level}</div>
-        </>
-      ) : (
-        <>
-          <div className="flank-label">Next</div>
-          {s.queue.slice(0, 3).map((t, i) => <PiecePreview key={`${t}-${i}`} type={t} small />)}
-        </>
-      )}
     </div>
   )
 
@@ -1102,7 +1135,7 @@ export default function App() {
   const renderDesktop = () => (
     <>
       <header className="site-header">
-        <div className="site-logo">TET<span>R</span><span className="logo-i">I</span>S</div>
+        <div className="site-logo">TETRA <span className="logo-overflow">OVERFLOW</span><sup className="logo-ultra">Ultra</sup></div>
         <div className="header-controls">
           <button type="button" className="icon-btn" onClick={() => startGame(gameMode)}>↺ Restart</button>
           <button type="button" className="icon-btn" onClick={handlePauseToggle}>
@@ -1125,53 +1158,7 @@ export default function App() {
       <div className="play-area">
         {leftFlank}
 
-        {isVersus ? (
-          <div className="versus-wrap">
-            {/* P1 */}
-            <div className="versus-player">
-              <div className="versus-player-label">Player 1</div>
-              <div className="versus-board-row">
-                {renderVersusSidebar(state, 'left')}
-                <div className="game-area">
-                  <div className="game-canvas-wrap">
-                    <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
-                      onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop} />
-                    {renderOverlay(state, false)}
-                    {renderPauseOverlay(state)}
-                    {renderZoneEnd(state)}
-                    {renderCountdown()}
-                  </div>
-                </div>
-                {renderVersusSidebar(state, 'right')}
-              </div>
-              {state.pendingGarbage > 0 && <div style={{ color: '#fca5a5', fontSize: '0.8rem' }}>⚠ {state.pendingGarbage} incoming</div>}
-            </div>
-
-            {/* VS divider */}
-            <div style={{ display: 'flex', alignItems: 'center', padding: '0 0.5rem', fontSize: '1.4rem', fontWeight: 900, color: 'var(--c-muted)', alignSelf: 'center' }}>VS</div>
-
-            {/* P2 (Bot) */}
-            <div className="versus-player">
-              <div className="versus-player-label bot">Bot AI — {botDifficulty}</div>
-              <div className="versus-board-row">
-                {renderVersusSidebar(state2, 'left')}
-                <div className="game-area">
-                  <div className="game-canvas-wrap">
-                    <GameCanvas state={state2} onTap={() => {}} onDragBegin={() => {}} onDragEnd={() => {}} onHardDrop={() => {}} />
-                    {renderOverlay(state2, true)}
-                    {renderCountdown()}
-                  </div>
-                  {state2.pendingGarbage > 0 && (
-                    <div className="garbage-warning">⚠ {state2.pendingGarbage} incoming</div>
-                  )}
-                </div>
-                {renderVersusSidebar(state2, 'right')}
-              </div>
-              <div className="p2-hint">Keyboard P2: WASD·Q·E·R·T (if bot disabled)</div>
-            </div>
-          </div>
-        ) : (
-          <div className="game-area">
+        <div className="game-area">
             {state.combo > 1 && (
               <div className="combo-display">
                 <div className="combo-number">{state.combo}</div>
@@ -1181,7 +1168,9 @@ export default function App() {
       {!isPurify && state.backToBack && <div className="b2b-badge">🔥 B2B{state.b2bCount > 1 ? ` x${state.b2bCount}` : ''}</div>}
             <div className={`game-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`}>
               <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
+                onTripleTap={() => triggerAction('activateZone')}
                 onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop} />
+              <GlitchOverlay active={glitchActive} />
               {renderOverlay(state, false)}
               {renderPauseOverlay(state)}
               {renderZoneEnd(state)}
@@ -1202,7 +1191,6 @@ export default function App() {
               <span />
             </div>
           </div>
-        )}
 
         {rightFlank}
       </div>
@@ -1213,33 +1201,11 @@ export default function App() {
   const renderMobileLandscape = () => (
     <div className="mobile-ls">
 
-      {/* Left context panel: difficulty controls (Versus / Purify only) */}
-      {(isVersus || isPurify) && (
+      {/* Left context panel: Purify info only */}
+      {isPurify && (
         <div className="ls-left">
-          {isVersus && (
-            <>
-              <div className="ls-diff-title">Bot AI</div>
-              {['easy', 'medium', 'hard'].map(d => (
-                <button key={d} type="button"
-                  className={`ls-diff-btn${botDifficulty === d ? ' active' : ''}`}
-                  onClick={() => setBotDiff(d)}>
-                  {d[0].toUpperCase() + d.slice(1)}
-                </button>
-              ))}
-            </>
-          )}
-          {isPurify && (
-            <>
-              <div className="ls-diff-title">Purify</div>
-              {['easy', 'normal', 'hard'].map(d => (
-                <button key={d} type="button"
-                  className={`ls-diff-btn${purifyDifficulty === d ? ' active' : ''}`}
-                  onClick={() => setPurifyDiff(d)}>
-                  {d[0].toUpperCase() + d.slice(1)}
-                </button>
-              ))}
-            </>
-          )}
+          <div className="ls-diff-title">Purify</div>
+          <div style={{ fontSize: '0.72rem', color: 'var(--c-muted)' }}>Clear the infection!</div>
         </div>
       )}
 
@@ -1294,6 +1260,7 @@ export default function App() {
         {/* board */}
         <div className={`ls-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`}>
           <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
+            onTripleTap={() => triggerAction('activateZone')}
             onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop} />
           {renderOverlay(state, false)}
           {renderPauseOverlay(state)}
@@ -1338,10 +1305,9 @@ export default function App() {
             { mode: GAME_MODE.NORMAL,  label: 'Normal'  },
             { mode: GAME_MODE.SPRINT,  label: 'Sprint'  },
             { mode: GAME_MODE.BLITZ,   label: 'Blitz'   },
-            { mode: GAME_MODE.MASTER,  label: 'Master'  },
             { mode: GAME_MODE.ZEN,     label: 'Zen'     },
             { mode: GAME_MODE.PURIFY,  label: 'Purify'  },
-            { mode: GAME_MODE.VERSUS,  label: '1v1'     },
+            { mode: GAME_MODE.ULTIMATE, label: '⚡ Ultimate' },
           ].map(({ mode, label }) => (
             <button key={mode} type="button"
               className={`ls-mode-btn${gameMode === mode ? ' active' : ''}`}
@@ -1412,11 +1378,33 @@ export default function App() {
       )}
       <div className={`mobile-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`}>
         <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
+          onTripleTap={() => triggerAction('activateZone')}
           onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop} />
+        <GlitchOverlay active={glitchActive} />
         {renderOverlay(state, false)}
         {renderPauseOverlay(state)}
         {renderZoneEnd(state)}
         {renderCountdown()}
+
+        {/* Fullscreen mini HUD — visible only when UI is hidden */}
+        {isUiHidden && (
+          <div className="fullscreen-mini-hud">
+            <div className="fmh-hold">
+              <div className="fmh-label">Hold</div>
+              <PiecePreview type={state.hold} small />
+            </div>
+            {showZone && (
+              <div className="fmh-zone-wrap">
+                <div className={`fmh-zone-bar${state.zoneActive ? ' zone-active' : ''}${zoneReady && !state.zoneActive ? ' zone-ready' : ''}`}
+                  style={{ height: `${zoneFillPct}%` }} />
+              </div>
+            )}
+            <div className="fmh-next">
+              <div className="fmh-label">Next</div>
+              {state.queue.slice(0, 3).map((t, i) => <PiecePreview key={`${t}-${i}`} type={t} small />)}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Bottom panel: same controls as landscape */}
@@ -1453,10 +1441,9 @@ export default function App() {
             { mode: GAME_MODE.NORMAL, label: 'Normal' },
             { mode: GAME_MODE.SPRINT, label: 'Sprint' },
             { mode: GAME_MODE.BLITZ,  label: 'Blitz'  },
-            { mode: GAME_MODE.MASTER, label: 'Master' },
             { mode: GAME_MODE.ZEN,    label: 'Zen'    },
             { mode: GAME_MODE.PURIFY, label: 'Purify' },
-            { mode: GAME_MODE.VERSUS, label: '1v1'    },
+            { mode: GAME_MODE.ULTIMATE, label: '⚡ Ultimate' },
           ].map(({ mode, label }) => (
             <button key={mode} type="button"
               className={`ls-mode-btn${gameMode === mode ? ' active' : ''}`}
@@ -1464,105 +1451,6 @@ export default function App() {
           ))}
         </div>
 
-        {/* Difficulty (Versus or Purify) */}
-        {isVersus && (
-          <div className="pt-diff-section">
-            <div className="pt-diff-label">Bot AI</div>
-            <div className="pt-diff-row">
-              {['easy', 'medium', 'hard'].map(d => (
-                <button key={d} type="button"
-                  className={`ls-diff-btn${botDifficulty === d ? ' active' : ''}`}
-                  onClick={() => setBotDiff(d)}>
-                  {d[0].toUpperCase() + d.slice(1)}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        {isPurify && (
-          <div className="pt-diff-section">
-            <div className="pt-diff-label">Purify</div>
-            <div className="pt-diff-row">
-              {['easy', 'normal', 'hard'].map(d => (
-                <button key={d} type="button"
-                  className={`ls-diff-btn${purifyDifficulty === d ? ' active' : ''}`}
-                  onClick={() => setPurifyDiff(d)}>
-                  {d[0].toUpperCase() + d.slice(1)}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-    </div>
-  )
-
-  // ─── Mobile versus (vs bot) ─────────────────────────────────────────────────
-  const renderMobileVersus = () => (
-    <div className="mobile-versus-layout">
-      {/* Bot mini area */}
-      <div className="bot-mini-area">
-        <div className="bot-canvas-wrap">
-          <GameCanvas state={state2} onTap={() => {}} onDragBegin={() => {}} onDragEnd={() => {}} onHardDrop={() => {}}
-            className="bot-canvas" />
-        </div>
-        <div className="bot-info">
-          <div className="bot-name">Bot AI</div>
-          <div className="bot-diff-row">
-            {['easy', 'medium', 'hard'].map(d => (
-              <button key={d} type="button" className={`bot-diff-btn${botDifficulty === d ? ' active' : ''}`}
-                onClick={() => setBotDiff(d)}>{d[0].toUpperCase() + d.slice(1)}</button>
-            ))}
-          </div>
-          {state2.pendingGarbage > 0 && <div className="bot-incoming">⚠ {state2.pendingGarbage} lines incoming!</div>}
-          {state2.gameOver && <div className="bot-incoming" style={{ color: '#4ade80' }}>Bot defeated!</div>}
-        </div>
-      </div>
-
-      {/* Zone bar - only in Normal and Versus modes */}
-      {showZone && (
-        <div className="mobile-zone-bar">
-          <div className={`mobile-zone-fill${state.zoneActive ? ' zone-active' : ''}${zoneReady && !state.zoneActive ? ' zone-ready' : ''}`}
-            style={{ width: `${zoneFillPct}%` }} />
-        </div>
-      )}
-
-      {/* Player HUD */}
-      <div className="mobile-hud">
-        <div className="mobile-hud-hold">
-          <div style={{ fontSize: '0.5rem', letterSpacing: '0.1em', color: 'var(--c-muted)', textTransform: 'uppercase' }}>Hold</div>
-          <PiecePreview type={state.hold} small />
-        </div>
-        <div className="mobile-hud-center">
-          <div className="mobile-stat"><span className="l">Score</span><span className="v" style={{ fontSize: '0.95rem' }}>{state.score.toLocaleString()}</span></div>
-          <div className="mobile-stat"><span className="l">Lv</span><span className="v">{state.level}</span></div>
-          <div className="mobile-stat"><span className="l">Lines</span><span className="v">{state.lines}</span></div>
-        </div>
-        <div className="mobile-hud-next">
-          <div style={{ fontSize: '0.5rem', letterSpacing: '0.1em', color: 'var(--c-muted)', textTransform: 'uppercase' }}>Next</div>
-          {state.queue.slice(0, 3).map((t, i) => <PiecePreview key={`${t}-${i}`} type={t} small />)}
-        </div>
-      </div>
-
-      {/* Board */}
-      <div className="mobile-canvas-wrap">
-        <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
-          onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop} />
-        {renderOverlay(state, false)}
-        {renderPauseOverlay(state)}
-        {renderZoneEnd(state)}
-        {renderCountdown()}
-      </div>
-
-      {/* Action strip */}
-      <div className="mobile-action-strip">
-        <button type="button" className="icon-btn" onClick={() => startGame(gameMode)}>↺</button>
-        <button type="button" className="icon-btn" onClick={handlePauseToggle}>{state.paused ? '▶' : '⏸'}</button>
-        <button type="button" className={`icon-btn${musicOn ? ' active' : ''}`} onClick={toggleMusic}>🎵</button>
-        {zoneReady && !state.zoneActive && (
-          <button type="button" className="icon-btn" style={{ color: 'var(--c-zone)', borderColor: 'var(--c-zone)' }} onClick={handleZoneActivate}>⚡</button>
-        )}
       </div>
 
     </div>
@@ -1570,10 +1458,12 @@ export default function App() {
 
   // ─── Root render ─────────────────────────────────────────────────────────────
   return (
-    <div className={`app${state.zoneActive ? ' zone-active' : ''}`} style={!isMobile ? { '--board-w': `calc(260px * ${zoom})` } : undefined}>
+    <>
+      {isLoading && <LoadingScreen onDone={() => setIsLoading(false)} />}
+      <div className={`app${state.zoneActive ? ' zone-active' : ''}`} style={!isMobile ? { '--board-w': `calc(260px * ${zoom})` } : undefined}>
       {renderInstallBanner()}
       {isMobile
-        ? (isLandscape ? renderMobileLandscape() : (isVersus ? renderMobileVersus() : renderMobileNormal()))
+        ? (isLandscape ? renderMobileLandscape() : renderMobileNormal())
         : renderDesktop()
       }
       {showAbout && (
@@ -1591,5 +1481,6 @@ export default function App() {
         />
       )}
     </div>
+    </>
   )
 }

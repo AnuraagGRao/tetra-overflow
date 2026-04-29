@@ -88,17 +88,27 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
 }
 
 .site-logo {
-  font-size: 1.35rem;
+  font-size: 1.1rem;
   font-weight: 900;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.10em;
   text-transform: uppercase;
   color: #fff;
   text-shadow: 0 0 20px var(--c-accent), 0 0 40px var(--c-accent);
   user-select: none;
+  white-space: nowrap;
 }
 
-.site-logo span { color: var(--c-accent); }
-.site-logo .logo-i { color: #00f5ff; text-shadow: 0 0 18px #00f5ff, 0 0 36px #00a8ff; }
+.site-logo .logo-overflow { color: var(--c-accent); }
+.site-logo .logo-ultra {
+  font-size: 0.55em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #a78bfa;
+  text-shadow: 0 0 10px #a78bfa, 0 0 20px #a78bfa;
+  vertical-align: super;
+  text-transform: none;
+  margin-left: 0.05em;
+}
 
 .header-controls {
   display: flex;
@@ -408,12 +418,14 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
-  color: #fff;
+  color: #ffffff;
   backdrop-filter: blur(6px);
-  background: rgba(5, 6, 18, 0.7);
+  -webkit-backdrop-filter: blur(6px);
+  /* Solid dark fallback so light themes don't show a blank overlay */
+  background: rgba(5, 6, 13, 0.88);
   border-radius: 4px;
   text-align: center;
-  z-index: 30;
+  z-index: 100;
   padding: 1rem;
 }
 
@@ -421,19 +433,20 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
   font-size: 2.4rem;
   font-weight: 900;
   letter-spacing: 0.06em;
-  text-shadow: 0 0 24px var(--c-accent);
+  color: #ffffff;
+  text-shadow: 0 0 24px rgba(255, 255, 255, 0.5);
 }
 
 .overlay-sub {
   font-size: 0.95rem;
-  color: var(--c-accent2);
-  opacity: 0.9;
+  color: rgba(255, 255, 255, 0.75);
+  opacity: 1;
 }
 
 .overlay-new-high {
   font-size: 1.15rem;
   font-weight: 800;
-  color: var(--c-warn);
+  color: #fbbf24;
   text-shadow: 0 0 14px #f59e0b;
   animation: combo-pop 0.35s ease-out;
 }
@@ -442,15 +455,15 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
   margin-top: 0.75rem;
   padding: 0.5rem 1.6rem;
   border-radius: var(--radius);
-  border: 1px solid rgba(0, 229, 255, 0.7);
-  background: rgba(0, 229, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.12);
   color: #fff;
   font-size: 0.9rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   transition: background 0.15s;
 }
-.overlay-restart:hover { background: rgba(0, 229, 255, 0.25); }
+.overlay-restart:hover { background: rgba(255, 255, 255, 0.22); }
 
 /* ── Countdown ────────────────────────────────────────────────────────────── */
 .countdown-overlay { background: rgba(4, 5, 16, 0.82); }
@@ -763,7 +776,7 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
     display: flex;
     flex-direction: column;
     height: var(--app-height, 100svh);
-    /* Prevent content from hiding behind Android gesture/nav bar in PWA standalone */
+    /* Android gesture/nav bar */
     padding-bottom: env(safe-area-inset-bottom, 0px);
     overflow: hidden;
     width: 100%;
@@ -955,7 +968,8 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
   /* util row: 3-button spans 2 cols, 4-button spans full width; theme spans 2 cols */
   .pt-panel .ls-util   { grid-column: 1 / 3; }
   .pt-panel .ls-util-4 { grid-column: 1 / -1; }
-  .pt-panel .ls-theme  { grid-column: 3 / 5; display: flex; align-items: center; justify-content: center; }
+  /* Theme switcher: full width, centered */
+  .pt-panel .ls-theme  { grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; }
 
   /* mode grid spans full width — 6 buttons already in 2-col layout */
   .pt-panel .ls-modes  { grid-column: 1 / -1; }
@@ -973,6 +987,54 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
   .control-button { min-height: 3.6rem; font-size: 1.2rem; }
 
   .mobile-canvas-wrap .overlay { border-radius: 0; }
+
+  /* ── Fullscreen mini HUD (shown when UI is hidden) ── */
+  .fullscreen-mini-hud {
+    position: absolute;
+    top: 0.4rem;
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.3rem 0.25rem;
+    background: rgba(0, 0, 0, 0.38);
+    border-radius: 6px 0 0 6px;
+    pointer-events: none;
+    z-index: 15;
+  }
+  .fmh-label {
+    font-size: 0.38rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.55);
+    line-height: 1;
+  }
+  .fmh-hold, .fmh-next {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.1rem;
+  }
+  .fmh-zone-wrap {
+    width: 6px;
+    height: 52px;
+    background: rgba(255,255,255,0.10);
+    border-radius: 3px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    margin: 0.15rem 0;
+  }
+  .fmh-zone-bar {
+    width: 100%;
+    background: var(--c-zone, #00e5ff);
+    transition: height 0.3s ease;
+    border-radius: 3px;
+  }
+  .fmh-zone-bar.zone-ready { background: var(--c-zone, #00e5ff); box-shadow: 0 0 6px var(--c-zone, #00e5ff); }
+  .fmh-zone-bar.zone-active { background: #ffd700; box-shadow: 0 0 8px #ffd700; }
 
   /* ── Mobile versus (bot view at top) ── */
   .mobile-versus-layout {
@@ -1802,6 +1864,63 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
 }
 .about-stack-dot { opacity: 0.4; }
 
+/* Controls reference */
+.about-controls {
+  background: var(--c-glass);
+  border: 1px solid var(--c-border2);
+  border-radius: 12px;
+  padding: 0.75rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.about-controls-title {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: var(--c-text);
+  letter-spacing: 0.06em;
+}
+.about-controls-cols {
+  display: flex;
+  gap: 0.75rem;
+}
+.about-controls-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.about-controls-subtitle {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--c-accent);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 0.1rem;
+}
+.about-controls-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+.about-controls-table td {
+  font-size: 0.72rem;
+  color: var(--c-muted);
+  padding: 0.12rem 0;
+  line-height: 1.45;
+}
+.about-controls-table .ctrl-key {
+  font-family: ui-monospace, 'Cascadia Code', monospace;
+  font-size: 0.65rem;
+  color: var(--c-text);
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--c-border2);
+  border-radius: 4px;
+  padding: 0.05rem 0.3rem;
+  white-space: nowrap;
+  padding-right: 0.5rem;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    PWA STANDALONE FULLSCREEN (portrait only: hide bottom panel)
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -1909,4 +2028,212 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
   background: rgba(0, 229, 255, 0.1);
   text-shadow: 0 0 8px var(--c-accent);
 }
+
+.settings-version {
+  text-align: center;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--c-muted);
+  letter-spacing: 0.06em;
+  opacity: 0.6;
+  padding: 0.6rem 0 0.2rem;
+}
+
+.settings-version-ultra {
+  font-size: 0.48rem;
+  vertical-align: super;
+  opacity: 0.8;
+}
+
+/* Touch controls reference grid in Settings */
+.touch-controls-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.45rem;
+}
+
+.touch-ctrl-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.18rem;
+  padding: 0.55rem 0.3rem 0.45rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--c-border2);
+  border-radius: 10px;
+  text-align: center;
+  transition: border-color 0.15s;
+}
+
+.touch-ctrl-card--accent {
+  border-color: var(--c-accent);
+  background: rgba(0, 229, 255, 0.06);
+  box-shadow: 0 0 10px rgba(0, 229, 255, 0.10);
+}
+
+.touch-ctrl-icon {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.touch-ctrl-action {
+  font-size: 0.64rem;
+  font-weight: 800;
+  color: var(--c-text);
+  letter-spacing: 0.03em;
+  line-height: 1.2;
+}
+
+.touch-ctrl-desc {
+  font-size: 0.58rem;
+  color: var(--c-muted);
+  line-height: 1.2;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   LOADING SCREEN — mock terminal
+   ══════════════════════════════════════════════════════════════════════════════ */
+.loading-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #05060d;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: none;
+}
+.loading-screen.loading-exit {
+  animation: loading-fade-out 0.42s ease forwards;
+}
+@keyframes loading-fade-out {
+  to { opacity: 0; pointer-events: none; }
+}
+
+.loading-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.8rem;
+}
+
+.terminal-window {
+  width: min(420px, 92vw);
+  background: #0c0d16;
+  border: 1px solid rgba(0,229,255,0.22);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 0 40px rgba(0,229,255,0.10), 0 8px 40px rgba(0,0,0,0.7);
+}
+
+.terminal-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 0.85rem;
+  background: #141521;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.tb-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.tb-red    { background: #ff5f56; }
+.tb-yellow { background: #ffbd2e; }
+.tb-green  { background: #27c93f; }
+.tb-title {
+  margin-left: 0.5rem;
+  font-size: 0.72rem;
+  color: rgba(200,218,255,0.55);
+  font-family: ui-monospace, monospace;
+  letter-spacing: 0.03em;
+}
+
+.terminal-body {
+  padding: 1rem 1.1rem 1.2rem;
+  min-height: 120px;
+  font-family: ui-monospace, 'Courier New', monospace;
+  font-size: 0.78rem;
+  line-height: 1.7;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.tl {
+  animation: tl-appear 0.15s ease both;
+}
+@keyframes tl-appear {
+  from { opacity: 0; transform: translateX(-4px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.tl-cmd      { color: #e2e8f0; }
+.tl-cmd::before { content: ''; }
+.tl-out      { color: rgba(200,218,255,0.60); }
+.tl-progress { color: #00e5ff; letter-spacing: 0.01em; }
+.tl-success  { color: #34d399; font-weight: 700; }
+.tl-cursor   { color: rgba(200,218,255,0.40); }
+
+.loading-app-name {
+  font-family: 'Exo 2', system-ui, sans-serif;
+  font-size: 1.6rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #fff;
+  text-shadow: 0 0 24px #00e5ff, 0 0 48px #00e5ff;
+  animation: name-pulse 1.8s ease-in-out infinite alternate;
+}
+.loading-app-name .lname-overflow {
+  color: #00e5ff;
+}
+.loading-app-name .lname-ultra {
+  font-size: 0.5em;
+  color: #a78bfa;
+  text-shadow: 0 0 12px #a78bfa, 0 0 24px #a78bfa;
+  vertical-align: super;
+  margin-left: 0.05em;
+  text-transform: none;
+  letter-spacing: 0.04em;
+}
+@keyframes name-pulse {
+  from { text-shadow: 0 0 24px #00e5ff, 0 0 48px #00e5ff; }
+  to   { text-shadow: 0 0 40px #00e5ff, 0 0 80px #00e5ff, 0 0 120px #00a8ff; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   GLITCH CODE OVERLAY — Ultimate mode
+   ══════════════════════════════════════════════════════════════════════════════ */
+.glitch-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.glitch-snippet {
+  position: absolute;
+  font-family: ui-monospace, 'Courier New', monospace;
+  font-size: 0.55rem;
+  line-height: 1.5;
+  white-space: pre;
+  opacity: 0;
+  animation: glitch-drift var(--dur, 4s) var(--delay, 0s) ease-in-out forwards;
+  color: var(--gc, rgba(255,80,80,0.55));
+  text-shadow: 0 0 6px var(--gc, rgba(255,80,80,0.35));
+  filter: blur(0.3px);
+}
+
+@keyframes glitch-drift {
+  0%   { opacity: 0;    transform: translateY(0)   skewX(0deg); }
+  8%   { opacity: 0.85; transform: translateY(-4px) skewX(-1deg); }
+  50%  { opacity: 0.6;  transform: translateY(-18px) skewX(0.5deg); }
+  92%  { opacity: 0.4;  transform: translateY(-30px) skewX(-0.5deg); }
+  100% { opacity: 0;    transform: translateY(-40px); }
+}
+
 
