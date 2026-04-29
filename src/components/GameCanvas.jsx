@@ -57,14 +57,15 @@ const HARD_DROP_VEL_PX_MS = 0.45 // px/ms threshold for hard-drop vs soft-drop
 
 // drawCell is defined per-frame inside the useEffect as a theme-aware closure
 
-export default function GameCanvas({ state, onTap, onTripleTap, onDragBegin, onDragEnd, onHardDrop }) {
+export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, onDragEnd, onHardDrop }) {
   const { theme, colorMode } = useTheme()
   const canvasRef = useRef(null)
   const touchRef = useRef(null)
   const pulseRef = useRef(0)
   const tapCountRef = useRef(0)
   const tapTimerRef = useRef(null)
-  const TAP_TRIPLE_WINDOW_MS = 420
+  const activePointersRef = useRef(new Map())
+  const TAP_MULTI_WINDOW_MS = 420
 
   // ── Touch constants ──────────────────────────────────────────────────────────
   // (DRAG_START_PX, TAP_MAX_PX, HARD_DROP_VEL_PX_MS defined at module level)
@@ -195,7 +196,7 @@ export default function GameCanvas({ state, onTap, onTripleTap, onDragBegin, onD
           break
         case 'sketch':
           ctx.globalAlpha = 0.35; ctx.setLineDash([3, 2])
-          ctx.strokeStyle = 'rgba(60,40,10,0.45)'; ctx.lineWidth = 1.2
+          ctx.strokeStyle = 'rgba(117, 111, 102, 0.91)'; ctx.lineWidth = 1.2
           ctx.strokeRect(x + 3, y + 3, CELL_SIZE - 6, CELL_SIZE - 6)
           ctx.setLineDash([])
           break
@@ -217,7 +218,7 @@ export default function GameCanvas({ state, onTap, onTripleTap, onDragBegin, onD
         }
         case 'wood':
           ctx.globalAlpha = 0.30; ctx.setLineDash([3, 3])
-          ctx.strokeStyle = adjustHex(color, -30); ctx.lineWidth = 1
+          ctx.strokeStyle = color; ctx.lineWidth = 1
           ctx.strokeRect(x + 1, y + 1, CELL_SIZE - 2, CELL_SIZE - 2)
           ctx.setLineDash([])
           break
@@ -410,6 +411,16 @@ export default function GameCanvas({ state, onTap, onTripleTap, onDragBegin, onD
   const handlePointerDown = (event) => {
     event.preventDefault()
     event.currentTarget.setPointerCapture(event.pointerId)
+    // Register pointer for multi-finger detection
+    if (event.pointerType === "touch") {
+      activePointersRef.current.set(event.pointerId, performance.now())
+      if (activePointersRef.current.size === 2) {
+        const times = Array.from(activePointersRef.current.values())
+        if (Math.abs(times[0] - times[1]) < TAP_MULTI_WINDOW_MS) {
+          setTimeout(() => onTwoFingerTap?.(), 0)
+        }
+      }
+    }
     touchRef.current = {
       x: event.clientX,
       y: event.clientY,
@@ -432,25 +443,18 @@ export default function GameCanvas({ state, onTap, onTripleTap, onDragBegin, onD
   }
 
   const handlePointerUp = (event) => {
+    activePointersRef.current.delete(event.pointerId)
     const start = touchRef.current
     touchRef.current = null
     if (!start) return
 
     if (start.dir === null) {
-      // Finger barely moved — treat as tap
+      // Single-finger tap (rotate)
       const dx = event.clientX - start.x
       const dy = event.clientY - start.y
       if (Math.abs(dx) < TAP_MAX_PX && Math.abs(dy) < TAP_MAX_PX) {
-        onTap()
-        tapCountRef.current += 1
-        clearTimeout(tapTimerRef.current)
-        if (tapCountRef.current >= 3) {
-          tapCountRef.current = 0
-          onTripleTap?.()
-        } else {
-          tapTimerRef.current = setTimeout(() => { tapCountRef.current = 0 }, TAP_TRIPLE_WINDOW_MS)
+        onTap?.()
         }
-      }
       return
     }
 

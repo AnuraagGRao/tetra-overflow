@@ -763,8 +763,8 @@ export class TetrisEngine {
     // In Zone: gravity stops; manual drop only
     if (this.zoneActive) return 0
     if (this.mode === GAME_MODE.MASTER) return Math.min(20, 1.2 + this.level * 0.35)
-    // Exponential scaling: ~0.8 G/s at Lv1 → ~4 at Lv10 → ~11 at Lv15 → capped at 20
-    const base = 0.8 * Math.pow(1.22, this.level - 1)
+    // Exponential scaling: ~0.6 G/s at Lv1 → ~3 at Lv10 → ~9 at Lv15 → capped at 20
+    const base = 0.6 * Math.pow(1.22, this.level - 1)
     if (this.mode === GAME_MODE.BLITZ) return Math.min(20, base * 1.25)
     if (this.mode === GAME_MODE.ULTIMATE) return Math.min(20, base * 1.15)
     return Math.min(20, base)

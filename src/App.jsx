@@ -88,160 +88,833 @@ const playNoise = (lpFreq, gain, dur, offset = 0) => {
 
 // Move SFX — subtle, rate-limited so DAS doesn't spam it
 let _lastMoveBeep = 0
-const playMoveSFX = () => {
-  const now = performance.now(); if (now - _lastMoveBeep < 75) return
-  _lastMoveBeep = now
-  playNote(380, 0.022, 0.07, 'triangle')
-}
-
-const playTapSFX = () => {
-  playNote(1200, 0.028, 0.055, 'sine')
-}
-
-const playSwipeSFX = (dir) => {
-  // Left/right: quick lateral tick; up: rising pip; down: falling pip
-  if (dir === 'left' || dir === 'right') {
-    playNote(dir === 'left' ? 520 : 620, 0.030, 0.06, 'triangle')
-  } else if (dir === 'up') {
-    playNote(700, 0.025, 0.06, 'triangle')
-    playNote(900, 0.022, 0.05, 'triangle', 0.018)
-  } else if (dir === 'down') {
-    playNote(600, 0.025, 0.06, 'triangle')
-    playNote(420, 0.022, 0.05, 'triangle', 0.018)
+const playMoveSFX = (theme = 'classic') => {
+  const now = performance.now();
+  if (now - _lastMoveBeep < 75) return;
+  _lastMoveBeep = now;
+  switch (theme) {
+    case 'sketch':
+      // Even louder
+      playNoise(2200, 0.36, 0.045); // was 0.21, now 0.36
+      playNoise(4000, 0.18, 0.020, 0.009); // was 0.09, now 0.18
+      playNote(310, 0.03, 0.04, 'triangle', 0.006); // was 0.02, now 0.04
+      break;
+    case 'blueprint':
+      playNote(910, 0.018, 0.32, 'triangle');
+      playNoise(2700, 0.11, 0.020, 0.005);
+      break;
+    case 'stone':
+      playNote(120, 0.10, 0.28, 'triangle');
+      playNoise(280, 0.13, 0.025);
+      break;
+    case 'wood':
+      playNote(270, 0.065, 0.36, 'triangle');
+      playNoise(820, 0.07, 0.023, 0.009);
+      break;
+    case 'bauhaus':
+      playNote(600, 0.06, 0.36, 'square');
+      playNoise(1100, 0.13, 0.018, 0.004);
+      break;
+    case 'dmg':
+      playNote(330, 0.026, 0.25, 'triangle');
+      break;
+    default:
+      playNote(380, 0.022, 0.26, 'triangle');
+      break;
   }
-}
+};
 
-const playRotateSFX = () => {
-  playNote(1100, 0.032, 0.10, 'triangle')
-  playNote(750,  0.022, 0.07, 'sine', 0.010)
-}
+const playTapSFX = (theme = 'classic') => {
+  switch (theme) {
+    case 'sketch':
+      playNoise(3200, 0.24, 0.022);
+      playNote(1250, 0.023, 0.10, 'triangle', 0.006);
+      break;
+    case 'stone':
+      playNote(420, 0.029, 0.18, 'triangle');
+      break;
+    case 'wood':
+      playNote(640, 0.021, 0.19, 'triangle');
+      playNote(1200, 0.013, 0.10, 'triangle', 0.008);
+      break;
+    case 'bauhaus':
+      playNote(880, 0.025, 0.20, 'square');
+      break;
+    case 'blueprint':
+      playNote(1200, 0.022, 0.15, 'triangle');
+      playNote(1800, 0.011, 0.07, 'triangle', 0.009);
+      break;
+    case 'dmg':
+      playNote(1200, 0.025, 0.13, 'triangle');
+      break;
+    default:
+      playNote(1200, 0.028, 0.15, 'sine');
+      break;
+  }
+};
 
-const playLockSFX = () => {
-  // Soft low thud for gravity/soft-drop locks
-  const ctx = getAudioCtx(); if (!ctx) return
-  const osc = ctx.createOscillator(); const g = ctx.createGain()
-  osc.connect(g); g.connect(ctx.destination)
-  osc.type = 'sine'
-  const t = ctx.currentTime
-  osc.frequency.setValueAtTime(110, t)
-  osc.frequency.exponentialRampToValueAtTime(52, t + 0.07)
-  g.gain.setValueAtTime(0.13 * _sfxVol, t)
-  g.gain.exponentialRampToValueAtTime(0.001, t + 0.10)
-  osc.start(t); osc.stop(t + 0.11)
-}
+const playSwipeSFX = (dir, theme = 'classic') => {
+  switch (theme) {
+    case 'sketch':
+      // Papery swish: short, wideband noise for left/right, higher for up/down
+      if (dir === 'left' || dir === 'right') {
+        playNoise(3300, 0.47, 0.026); // bold paper air
+      } else if (dir === 'up') {
+        playNoise(4400, 0.33, 0.029);
+      } else if (dir === 'down') {
+        playNoise(4200, 0.38, 0.019);
+      }
+      break;
+    case 'stone':
+      if (dir === 'left' || dir === 'right') {
+        playNote(160, 0.03, 0.29, 'triangle');
+      } else if (dir === 'up') {
+        playNote(320, 0.024, 0.24, 'triangle');
+      } else if (dir === 'down') {
+        playNote(220, 0.041, 0.22, 'triangle');
+      }
+      break;
+    case 'wood':
+      if (dir === 'left' || dir === 'right') {
+        playNote(330, 0.038, 0.24, 'triangle');
+        playNoise(800, 0.13, 0.011, 0.009);
+      } else {
+        playNote(210, 0.052, 0.21, 'triangle');
+        playNoise(700, 0.14, 0.017, 0.012);
+      }
+      break;
+    case 'bauhaus':
+      playNote(dir === 'right' ? 770 : 440, 0.025, 0.18, 'square');
+      break;
+    case 'blueprint':
+      playNote(dir === 'right' ? 1760 : 1098, 0.021, 0.17, 'triangle');
+      playNoise(3000, 0.06, 0.013, 0.006);
+      break;
+    case 'dmg':
+      playNote(dir === 'right' ? 880 : 520, 0.031, 0.15, 'triangle');
+      break;
+    default:
+      if (dir === 'left' || dir === 'right') {
+        playNote(dir === 'left' ? 520 : 620, 0.040, 0.15, 'triangle');
+      } else if (dir === 'up') {
+        playNote(700, 0.025, 0.18, 'triangle');
+        playNote(900, 0.022, 0.09, 'triangle', 0.018);
+      } else if (dir === 'down') {
+        playNote(600, 0.025, 0.18, 'triangle');
+        playNote(420, 0.022, 0.09, 'triangle', 0.018);
+      }
+      break;
+  }
+};
 
-const playHardDropSFX = () => {
-  // Deep bass thud + high click + noise
-  playNote(75, 0.18, 0.22, 'sine')
-  playNote(280, 0.06, 0.14, 'square', 0.006)
-  playNoise(600, 0.14, 0.10, 0.006)
-}
+const playRotateSFX = (theme = 'classic') => {
+  switch (theme) {
+    case 'sketch':
+      // Pencil twist: short burst noise + mild note
+      playNoise(3400, 0.14, 0.022);
+      playNote(620, 0.043, 0.06, 'triangle'); // papery "scuff"
+      break;
+    case 'stone':
+      // Heavy clack
+      playNote(100, 0.09, 0.16, 'triangle');
+      playNoise(200, 0.08, 0.021, 0.003);
+      break;
+    case 'wood':
+      // Hollow wood snap
+      playNote(320, 0.048, 0.17, 'triangle');
+      playNote(640, 0.019, 0.06, 'triangle', 0.018);
+      break;
+    case 'bauhaus':
+      playNote(680, 0.036, 0.18, 'square');
+      break;
+    case 'blueprint':
+      playNote(1450, 0.013, 0.19, 'triangle');
+      playNoise(4400, 0.02, 0.012, 0.008);
+      break;
+    case 'dmg':
+      playNote(1200, 0.025, 0.15, 'triangle');
+      break;
+    default:
+      playNote(1100, 0.032, 0.24, 'triangle');
+      playNote(750,  0.022, 0.18, 'sine', 0.010);
+      break;
+  }
+};
 
-const playLineClearSFX = () => {
-  playNoise(9000, 0.10, 0.08)
-  arp([392, 523, 659, 784], 0.095, 0.12, 'sine')
-}
+const playLockSFX = (theme = 'classic') => {
+  switch (theme) {
+    case 'sketch':
+      // Paper tap + pencil flick
+      playNoise(1600, 0.17, 0.017);
+      playNote(240, 0.036, 0.11, 'triangle', 0.004);
+      break;
+    case 'stone':
+      // Heavy stone thunk
+      playNote(52, 0.11, 0.22, 'sine');
+      playNoise(250, 0.14, 0.018);
+      break;
+    case 'wood':
+      // Wood on wood
+      playNote(410, 0.036, 0.18, 'triangle');
+      playNote(840, 0.018, 0.10, 'triangle', 0.008);
+      break;
+    case 'bauhaus':
+      playNote(260, 0.038, 0.23, 'square');
+      break;
+    case 'blueprint':
+      playNote(970, 0.023, 0.14, 'triangle');
+      playNoise(2800, 0.06, 0.016, 0.003);
+      break;
+    case 'dmg':
+      playNote(220, 0.03, 0.16, 'triangle');
+      break;
+    default: {
+      // Classic fallback (oscillator thud)
+      const ctx = getAudioCtx(); if (!ctx) return;
+      const osc = ctx.createOscillator(), g = ctx.createGain();
+      osc.connect(g); g.connect(ctx.destination);
+      osc.type = 'sine';
+      const t = ctx.currentTime;
+      osc.frequency.setValueAtTime(110, t);
+      osc.frequency.exponentialRampToValueAtTime(52, t + 0.07);
+      g.gain.setValueAtTime(0.18 * _sfxVol, t); // louder than before
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.10);
+      osc.start(t); osc.stop(t + 0.11);
+      break;
+    }
+  }
+};
 
-const playTSpinSFX = () => {
-  arp([330, 415, 523, 659, 784], 0.10, 0.13, 'triangle')
-  playNote(330, 0.20, 0.06, 'sine', 0.06)
-}
+const playHardDropSFX = (theme = 'classic') => {
+  switch (theme) {
+    case 'sketch':
+      // Loud paper slam: wideband noise + low triangle blop
+      playNoise(2500, 0.38, 0.055);
+      playNote(103,  0.19, 0.23, 'triangle');
+      break;
+    case 'stone':
+      // Stone THUD + high-pitched chisel
+      playNote(54,  0.22, 0.35, 'sine');      // bottom stone impact
+      playNoise(400, 0.18, 0.12);
+      playNote(311, 0.03, 0.09, 'square', 0.021); // chisel scrape
+      break;
+    case 'wood':
+      // Firm wood slam + knock
+      playNote(176, 0.12, 0.32, 'triangle');
+      playNote(660, 0.025, 0.17, 'triangle', 0.012);
+      playNoise(900, 0.09, 0.04, 0.008);
+      break;
+    case 'bauhaus':
+      // Heavy block plop
+      playNote(440, 0.22, 0.29, 'square');
+      playNoise(2200, 0.13, 0.042, 0.006);
+      break;
+    case 'blueprint':
+      // Blueprint: high/low beep + staple
+      playNote(1260, 0.018, 0.25, 'triangle');
+      playNote(80,   0.21, 0.17, 'triangle');
+      playNoise(4100, 0.09, 0.025, 0.005);
+      break;
+    case 'dmg':
+      playNote(247, 0.14, 0.25, 'triangle');
+      playNote(82, 0.22, 0.19, 'sine');
+      break;
+    default:
+      // Classic – deep thud, medium click, short noise
+      playNote(75, 0.18, 0.44, 'sine');
+      playNote(410, 0.06, 0.14, 'triangle', 0.010);
+      playNoise(900, 0.18, 0.06, 0.012);
+      break;
+  }
+};
 
-const playTetrisSFX = () => {
-  arp([262, 330, 392, 523, 659, 784, 1047], 0.09, 0.14, 'sine')
-  playNote(131, 0.35, 0.11, 'sine', 0.12)
-}
+const playLineClearSFX = (theme = 'classic') => {
+  switch (theme) {
+    case 'sketch':
+      // Paper scrap: sharp filtered noise and soft "bristle" tap
+      playNoise(3400, 0.29, 0.11);
+      playNote(470, 0.07, 0.06, 'triangle', 0.012);
+      break;
+    case 'stone':
+      // Cracking rock burst
+      playNoise(1600, 0.24, 0.10);
+      playNote(90, 0.25, 0.12, 'triangle', 0.018);
+      playNote(390, 0.048, 0.05, 'triangle', 0.020);
+      break;
+    case 'wood':
+      // Snapping branch + knock
+      playNote(250, 0.115, 0.15, 'triangle', 0.03);
+      playNoise(620, 0.17, 0.058);
+      break;
+    case 'bauhaus':
+      // Playful percussive riff
+      arp([330, 392, 523, 784, 1100], 0.061, 0.17, 'square');
+      playNoise(2100, 0.07, 0.04, 0.009);
+      break;
+    case 'blueprint':
+      playNote(990, 0.035, 0.21, 'triangle');
+      playNoise(2900, 0.09, 0.024, 0.006);
+      break;
+    case 'dmg':
+      playNote(590, 0.042, 0.15, 'triangle');
+      arp([392, 659, 784], 0.083, 0.11, 'sine');
+      break;
+    default:
+      playNoise(9000, 0.18, 0.11);
+      arp([392, 523, 659, 784], 0.095, 0.18, 'sine');
+      break;
+  }
+};
 
-const playAllClearSFX = () => {
-  // Full chromatic sweep + bass boom
-  const fs = [262,294,330,349,392,440,494,523,587,659,698,784,880,988,1047,1319]
-  fs.forEach((f, i) => playNote(f, 0.14, 0.13, 'sine', i * 0.038))
-  playNote(65,  0.45, 0.16, 'sine', 0.22)
-  playNote(131, 0.30, 0.14, 'sine', 0.22)
-  playNoise(10000, 0.15, 0.22, 0.12)
-}
+const playTSpinSFX = (theme = 'classic') => {
+  switch (theme) {
+    case 'sketch':
+      // Squeaky pencil scratch + short noise
+      playNote(710, 0.055, 0.19, 'triangle');
+      playNote(1319, 0.088, 0.13, 'triangle', 0.022);
+      playNoise(2600, 0.14, 0.038, 0.009);
+      break;
+    case 'stone':
+      // "Chink" and bold clack
+      playNote(230, 0.15, 0.20, 'triangle');
+      playNote(784, 0.09, 0.13, 'triangle', 0.01);
+      playNoise(500, 0.11, 0.022, 0.006);
+      break;
+    case 'wood':
+      // Sharp wooden click
+      playNote(523, 0.12, 0.21, 'triangle');
+      playNote(987, 0.04, 0.12, 'sine', 0.042);
+      playNoise(1200, 0.09, 0.013, 0.007);
+      break;
+    case 'bauhaus':
+      // Boop x2
+      playNote(1308, 0.054, 0.22, 'square');
+      playNote(784, 0.062, 0.14, 'square', 0.013);
+      break;
+    case 'blueprint':
+      playNote(2048, 0.023, 0.19, 'triangle');
+      playNote(1047, 0.053, 0.13, 'triangle', 0.02);
+      playNoise(3700, 0.07, 0.014, 0.01);
+      break;
+    case 'dmg':
+      playNote(784, 0.18, 0.14, 'triangle');
+      playNote(988, 0.11, 0.07, 'triangle', 0.012);
+      break;
+    default:
+      // Classic: arpeggio blast + twinkle
+      arp([330, 415, 523, 659, 784, 988, 1047], 0.08, 0.22, 'triangle');
+      playNote(330, 0.20, 0.13, 'sine', 0.06);
+      break;
+  }
+};
 
-const playB2BSFX = () => arp([1047, 1319, 1568], 0.065, 0.12, 'sine')
+const playTetrisSFX = (theme = 'classic') => {
+  switch (theme) {
+    case 'sketch':
+      // Ripping paper & celebratory "clap"
+      playNoise(3300, 0.42, 0.12);
+      playNote(675, 0.045, 0.12, 'triangle', 0.015);
+      playNote(940, 0.037, 0.11, 'triangle', 0.06);
+      break;
+    case 'stone':
+      // Giant rock rumble + "crack"
+      playNoise(420, 0.45, 0.16);
+      playNote(64, 0.3, 0.39, 'triangle');
+      playNote(220, 0.041, 0.12, 'square', 0.076);
+      break;
+    case 'wood':
+      // Dense hollow multi-knock
+      playNote(130, 0.15, 0.18, 'triangle');
+      playNote(370, 0.07, 0.14, 'triangle', 0.019);
+      playNote(900, 0.03, 0.14, 'triangle', 0.038);
+      playNoise(1000, 0.29, 0.059, 0.033);
+      break;
+    case 'bauhaus':
+      // Stuttering percussive scale
+      arp([494, 587, 784, 988, 1175], 0.082, 0.24, 'square');
+      playNoise(3000, 0.10, 0.08, 0.010);
+      break;
+    case 'blueprint':
+      // Metallic beep cascade + sharp noise
+      playNote(1840, 0.025, 0.27, 'triangle');
+      arp([932, 1245, 1480], 0.032, 0.18, 'triangle');
+      playNoise(4500, 0.19, 0.034, 0.011);
+      break;
+    case 'dmg':
+      playNote(523, 0.052, 0.21, 'triangle');
+      playNote(1047, 0.041, 0.13, 'triangle', 0.035);
+      playNoise(3600, 0.08, 0.06, 0.022);
+      break;
+    default:
+      // Classic: celebratory sweep + bass slap
+      arp([262, 330, 392, 523, 659, 784, 1047, 1319], 0.11, 0.18, 'sine');
+      playNote(131, 0.41, 0.34, 'triangle', 0.13);
+      playNoise(1900, 0.25, 0.18, 0.027);
+      break;
+  }
+};
 
-const playLevelUpSFX = () => arp([261.6, 329.6, 392.0, 523.3], 0.10, 0.20, 'triangle')
+const playAllClearSFX = (theme = 'classic') => {
+  switch (theme) {
+    case 'sketch':
+      // Great sweep, paper-air fanfare, bright paper shimmer
+      arp([523, 659, 784, 987, 1175, 1397], 0.13, 0.19, 'triangle');
+      playNoise(4400, 0.27, 0.12, 0.017);
+      playNote(2300, 0.03, 0.20, 'triangle', 0.08);
+      break;
+    case 'stone':
+      // Rock crumbles + rumble blast
+      playNote(148, 0.21, 0.34, 'triangle');
+      playNoise(880, 0.23, 0.16, 0.014);
+      arp([123, 330, 494, 740], 0.09, 0.18, 'triangle');
+      break;
+    case 'wood':
+      // Wooden chime + celebratory knock
+      playNote(987, 0.05, 0.22, 'triangle');
+      arp([248, 364, 523, 740, 1100], 0.088, 0.21, 'triangle');
+      playNoise(2400, 0.09, 0.04, 0.037);
+      break;
+    case 'bauhaus':
+      // Rapid square arpeggio, bright, "confetti" feel
+      arp([393, 587, 784, 1175, 1568, 2349, 3136, 3951], 0.07, 0.25, 'square');
+      playNote(784, 0.07, 0.16, 'square', 0.06);
+      break;
+    case 'blueprint':
+      // Big metallic fanfare
+      arp([1245, 1661, 2093, 2489], 0.068, 0.20, 'triangle');
+      playNote(880, 0.21, 0.19, 'triangle', 0.04);
+      playNoise(3400, 0.24, 0.036, 0.027);
+      break;
+    case 'dmg':
+      arp([262, 330, 392, 523, 659, 784, 1047], 0.11, 0.15, 'triangle');
+      playNote(392, 0.15, 0.15, 'triangle', 0.1);
+      break;
+    default:
+      // Classic: full chromatic sweep + bass boom
+      const fs = [262,294,330,349,392,440,494,523,587,659,698,784,880,988,1047,1319];
+      fs.forEach((f, i) => playNote(f, 0.14, 0.18, 'sine', i * 0.038));
+      playNote(65,  0.45, 0.21, 'sine', 0.22);
+      playNote(131, 0.30, 0.19, 'sine', 0.22);
+      playNoise(10000, 0.23, 0.22, 0.12);
+      break;
+  }
+};
 
-const playZoneActivateSFX = () => {
-  arp([131, 165, 196, 262, 330, 392, 523, 784], 0.13, 0.13, 'triangle')
-  playNoise(2500, 0.12, 0.16, 0.06)
-}
+const playB2BSFX = (theme = 'classic') => {
+  switch (theme) {
+    case 'sketch':
+      // Double pencil tap and paper flick
+      playNote(1190, 0.038, 0.17, 'triangle');
+      playNoise(2450, 0.12, 0.012, 0.011);
+      playNote(2050, 0.030, 0.13, 'triangle', 0.012);
+      break;
+    case 'stone':
+      // Consecutive rock strikes
+      playNote(82, 0.025, 0.31, 'triangle');
+      playNote(246, 0.021, 0.13, 'triangle', 0.011);
+      playNoise(340, 0.13, 0.016, 0.012);
+      break;
+    case 'wood':
+      // Thumping double knock
+      playNote(440, 0.048, 0.22, 'triangle');
+      playNote(760, 0.016, 0.21, 'triangle', 0.010);
+      playNote(1380, 0.012, 0.10, 'triangle', 0.024);
+      break;
+    case 'bauhaus':
+      playNote(1070, 0.041, 0.28, 'square');
+      playNote(1840, 0.021, 0.14, 'square', 0.013);
+      break;
+    case 'blueprint':
+      // Quick ascending trio
+      playNote(1319, 0.012, 0.23, 'triangle');
+      playNote(1480, 0.019, 0.19, 'triangle', 0.012);
+      playNoise(2700, 0.11, 0.009, 0.011);
+      break;
+    case 'dmg':
+      playNote(988, 0.063, 0.23, 'triangle');
+      playNote(523, 0.061, 0.19, 'triangle', 0.012);
+      break;
+    default:
+      arp([1047, 1319, 1568], 0.038, 0.22, 'sine');
+      break;
+  }
+};
 
-const playGameOverSFX = () => {
+const playLevelUpSFX = (theme = 'classic') => {
+  switch (theme) {
+    case 'sketch':
+      arp([262, 330, 392, 660, 1230], 0.10, 0.20, 'triangle');
+      playNoise(2700, 0.15, 0.022, 0.023);
+      break;
+    case 'stone':
+      arp([220, 230, 330, 392], 0.09, 0.21, 'triangle');
+      playNote(82, 0.09, 0.21, 'triangle', 0.067);
+      break;
+    case 'wood':
+      arp([330, 392, 523, 784], 0.11, 0.18, 'triangle');
+      playNote(900, 0.027, 0.17, 'triangle', 0.021);
+      break;
+    case 'bauhaus':
+      arp([330, 392, 523, 784, 988], 0.07, 0.22, 'square');
+      break;
+    case 'blueprint':
+      arp([523, 659, 1108, 1450], 0.083, 0.19, 'triangle');
+      break;
+    case 'dmg':
+      arp([294, 392, 523, 784], 0.09, 0.17, 'triangle');
+      break;
+    default:
+      arp([261.6, 329.6, 392.0, 523.3], 0.10, 0.20, 'triangle');
+      break;
+  }
+};
+
+const playZoneActivateSFX = (theme = 'classic') => {
+  switch (theme) {
+    case 'sketch':
+      // Dramatic big paper whip + rising clarity
+      playNoise(3500, 0.31, 0.20, 0);
+      arp([294, 523, 1047, 1500, 1850, 2047], 0.065, 0.19, 'triangle');
+      playNote(1660, 0.05, 0.22, 'triangle', 0.15);
+      break;
+    case 'stone':
+      // Asteroid impact: thud, low tremble, and sparkle
+      playNote(88, 0.22, 0.32, 'sine');
+      playNoise(1100, 0.23, 0.23, 0.01);
+      playNote(1760, 0.04, 0.13, 'triangle', 0.16);
+      break;
+    case 'wood':
+      // Wooden chime/twinkle + pop
+      arp([330, 392, 523, 660, 1047, 1200], 0.052, 0.17, 'triangle');
+      playNote(2047, 0.03, 0.18, 'triangle', 0.13);
+      break;
+    case 'bauhaus':
+      // Staggered square pulse
+      arp([523, 784, 1097, 1568, 2000], 0.068, 0.23, 'square');
+      playNoise(2100, 0.14, 0.07, 0.05);
+      break;
+    case 'blueprint':
+      // Ascending metallic shimmer + staple
+      arp([740, 990, 1480, 2047], 0.046, 0.20, 'triangle');
+      playNoise(4000, 0.13, 0.045, 0.08);
+      break;
+    case 'dmg':
+      arp([392, 523, 659, 784, 988], 0.090, 0.14, 'triangle');
+      playNote(1047, 0.05, 0.13, 'triangle', 0.12);
+      break;
+    default:
+      arp([131, 165, 196, 262, 330, 392, 523, 784], 0.13, 0.20, 'triangle');
+      playNoise(2500, 0.24, 0.16, 0.06);
+      break;
+  }
+};
+
+const playGameOverSFX = (theme = 'classic') => {
   arp([523, 466, 415, 370, 330, 294, 262, 233, 220], 0.12, 0.16, 'sawtooth')
   playNote(55, 0.5, 0.14, 'sine', 0.12)
   playNoise(700, 0.10, 0.4, 0.06)
 }
 
-const playComboSFX = (c) => {
-  const base = Math.min(440 + c * 80, 1400)
-  playNote(base, 0.09, 0.13, 'triangle')
-  if (c >= 3) playNote(base * 1.26, 0.07, 0.11, 'triangle', 0.022)
-  if (c >= 5) playNote(base * 1.5,  0.06, 0.09, 'sine',     0.044)
-}
-
-const playZenResetSFX = () => arp([784, 880, 1047, 1319], 0.20, 0.08, 'sine')
-
-const playPauseSFX = () => {
-  playNote(440, 0.06, 0.09, 'triangle')
-  playNote(330, 0.05, 0.09, 'triangle', 0.055)
-}
-
-const playResumeSFX = () => {
-  playNote(330, 0.05, 0.10, 'triangle')
-  playNote(440, 0.06, 0.12, 'triangle', 0.055)
-  playNote(523, 0.06, 0.14, 'triangle', 0.110)
-}
-
-const playInfectionSFX = () => {
-  // Creeping infection: eerie detuned oscillator pulse + low organic hum + subtle noise
-  const ctx = getAudioCtx(); if (!ctx) return
-  const t = ctx.currentTime
-
-  // Warbling, detuned low pulse — like something alive and wrong
-  const osc1 = ctx.createOscillator(); const g1 = ctx.createGain()
-  osc1.connect(g1); g1.connect(ctx.destination)
-  osc1.type = 'sawtooth'
-  osc1.frequency.setValueAtTime(82, t)
-  osc1.frequency.linearRampToValueAtTime(74, t + 0.18)
-  osc1.frequency.linearRampToValueAtTime(88, t + 0.36)
-  osc1.frequency.linearRampToValueAtTime(76, t + 0.55)
-  g1.gain.setValueAtTime(0.09 * _sfxVol, t)
-  g1.gain.linearRampToValueAtTime(0.06 * _sfxVol, t + 0.55)
-  g1.gain.exponentialRampToValueAtTime(0.001, t + 0.70)
-  osc1.start(t); osc1.stop(t + 0.71)
-
-  // High-pitched unsettling shimmer
-  const osc2 = ctx.createOscillator(); const g2 = ctx.createGain()
-  osc2.connect(g2); g2.connect(ctx.destination)
-  osc2.type = 'sine'
-  osc2.frequency.setValueAtTime(880, t + 0.05)
-  osc2.frequency.exponentialRampToValueAtTime(440, t + 0.55)
-  g2.gain.setValueAtTime(0.07 * _sfxVol, t + 0.05)
-  g2.gain.exponentialRampToValueAtTime(0.001, t + 0.65)
-  osc2.start(t + 0.05); osc2.stop(t + 0.66)
-
-  // Quiet organic crackle
-  playNoise(1200, 0.06, 0.5, 0.02)
-}
-
-const playHoldSFX = () => {
-  playNote(660, 0.045, 0.09, 'triangle')
-  playNote(990, 0.035, 0.07, 'triangle', 0.018)
-}
-
-const playZoneMeterMilestoneSFX = (tier) => {
-  // tier: 1 = 50%, 2 = 75%
-  if (tier === 2) {
-    playNote(880, 0.07, 0.14, 'triangle')
-    playNote(1320, 0.05, 0.11, 'triangle', 0.03)
-  } else {
-    playNote(660, 0.06, 0.11, 'triangle')
+const playComboSFX = (c, theme = 'classic') => {
+  const base = Math.min(440 + c * 80, 1600);
+  switch (theme) {
+    case 'sketch':
+      playNote(base, 0.08, 0.16, 'triangle');
+      playNoise(4000, 0.11, 0.023, 0.009);
+      if (c >= 3) playNote(base * 1.33, 0.07, 0.12, 'triangle', 0.020);
+      break;
+    case 'stone':
+      playNote(base / 2, 0.10, 0.18, 'triangle');
+      playNoise(800, 0.13, 0.022, 0.010);
+      if (c >= 3) playNote(base * 0.75, 0.06, 0.09, 'triangle', 0.02);
+      break;
+    case 'wood':
+      playNote(base, 0.08, 0.15, 'triangle');
+      playNote(base * 1.25, 0.07, 0.10, 'triangle', 0.013);
+      playNoise(1100, 0.08, 0.010, 0.014);
+      break;
+    case 'bauhaus':
+      playNote(base, 0.08, 0.21, 'square');
+      if (c >= 3) playNote(base * 1.15, 0.06, 0.13, 'square', 0.016);
+      break;
+    case 'blueprint':
+      playNote(base * 1.5, 0.03, 0.18, 'triangle');
+      playNoise(2800, 0.07, 0.019, 0.008);
+      break;
+    case 'dmg':
+      playNote(base * 0.7, 0.043, 0.16, 'triangle');
+      break;
+    default:
+      playNote(base, 0.09, 0.16, 'triangle');
+      if (c >= 3) playNote(base * 1.26, 0.06, 0.14, 'triangle', 0.022);
+      if (c >= 5) playNote(base * 1.5,  0.05, 0.13, 'sine', 0.044);
+      break;
   }
-}
+};
+
+const playZenResetSFX = (theme = 'classic') => {
+  switch (theme) {
+    case 'sketch':
+      // Gentle wind-brush and sweep
+      playNoise(2400, 0.19, 0.16, 0.01);
+      arp([784, 880, 1047, 1319, 1568, 1760], 0.14, 0.14, 'triangle');
+      break;
+    case 'stone':
+      // Deep low rumble + “reset” shimmer
+      playNote(49, 0.24, 0.17, 'triangle');
+      playNote(156, 0.16, 0.13, 'triangle');
+      arp([220, 330, 392], 0.12, 0.14, 'triangle');
+      playNoise(800, 0.15, 0.23, 0.04);
+      break;
+    case 'wood':
+      // Upward wood knocks & gentle bloom
+      playNote(392, 0.09, 0.21, 'triangle');
+      arp([392, 523, 784, 987], 0.11, 0.17, 'triangle');
+      playNoise(1500, 0.06, 0.08, 0.03);
+      break;
+    case 'bauhaus':
+      // Twinkling, musical color reset
+      arp([523, 659, 784, 987, 1175], 0.085, 0.19, 'square');
+      playNote(784, 0.08, 0.15, 'square', 0.031);
+      break;
+    case 'blueprint':
+      arp([930, 1100, 1480, 1960], 0.083, 0.20, 'triangle');
+      playNoise(2550, 0.14, 0.061, 0.014);
+      break;
+    case 'dmg':
+      arp([784, 880, 1047, 1319], 0.13, 0.13, 'triangle');
+      playNote(523, 0.14, 0.13, 'triangle', 0.09);
+      break;
+    default:
+      arp([784, 880, 1047, 1319], 0.20, 0.19, 'sine');
+      break;
+  }
+};
+
+const playPauseSFX = (theme = 'classic') => {
+  switch (theme) {
+    case 'sketch':
+      playNote(485, 0.08, 0.18, 'triangle');
+      playNoise(1200, 0.12, 0.016);
+      break;
+    case 'stone':
+      playNote(132, 0.08, 0.20, 'triangle');
+      playNoise(500, 0.10, 0.014);
+      break;
+    case 'wood':
+      playNote(480, 0.07, 0.21, 'triangle');
+      playNote(710, 0.02, 0.12, 'triangle', 0.026);
+      break;
+    case 'bauhaus':
+      playNote(550, 0.04, 0.21, 'square');
+      playNote(330, 0.06, 0.13, 'square', 0.05);
+      break;
+    case 'blueprint':
+      playNote(1180, 0.03, 0.13, 'triangle');
+      playNoise(3100, 0.09, 0.013, 0.008);
+      break;
+    case 'dmg':
+      playNote(880, 0.048, 0.13, 'triangle');
+      break;
+    default:
+      playNote(440, 0.06, 0.13, 'triangle');
+      playNote(330, 0.05, 0.13, 'triangle', 0.055);
+      break;
+  }
+};
+
+const playResumeSFX = (theme = 'classic') => {
+  switch (theme) {
+    case 'sketch':
+      playNote(660, 0.045, 0.19, 'triangle');
+      playNote(840, 0.041, 0.15, 'triangle', 0.06);
+      playNoise(2100, 0.09, 0.012, 0.013);
+      break;
+    case 'stone':
+      playNote(240, 0.058, 0.19, 'triangle');
+      playNote(392, 0.046, 0.19, 'triangle', 0.05);
+      playNoise(700, 0.09, 0.015, 0.01);
+      break;
+    case 'wood':
+      playNote(540, 0.053, 0.16, 'triangle');
+      playNote(1400, 0.031, 0.09, 'triangle', 0.055);
+      break;
+    case 'bauhaus':
+      playNote(990, 0.047, 0.19, 'square');
+      playNote(784, 0.061, 0.12, 'square', 0.052);
+      break;
+    case 'blueprint':
+      playNote(1500, 0.025, 0.11, 'triangle');
+      playNote(860, 0.055, 0.12, 'triangle', 0.02);
+      playNoise(3900, 0.08, 0.018, 0.008);
+      break;
+    case 'dmg':
+      playNote(1320, 0.038, 0.13, 'triangle');
+      playNote(880, 0.048, 0.16, 'triangle', 0.022);
+      break;
+    default:
+      playNote(330, 0.05, 0.13, 'triangle');
+      playNote(440, 0.06, 0.15, 'triangle', 0.055);
+      playNote(523, 0.06, 0.15, 'triangle', 0.110);
+      break;
+  }
+};
+
+const playInfectionSFX = (theme = 'classic') => {
+  switch (theme) {
+    case 'sketch':
+      // Paper-rip + pencil scratch (unsettling)
+      playNoise(1800, 0.23, 0.14);
+      playNote(210, 0.61, 0.06, 'triangle', 0.17);
+      playNoise(4500, 0.10, 0.040, 0.06);
+      break;
+    case 'stone':
+      // Jagged "shatter"
+      playNoise(900, 0.20, 0.23);
+      playNote(49, 0.45, 0.15, 'triangle', 0.16);
+      break;
+    case 'wood':
+      playNoise(1500, 0.18, 0.19);
+      playNote(220, 0.33, 0.09, 'triangle', 0.13);
+      break;
+    case 'bauhaus':
+      playNoise(1100, 0.21, 0.12);
+      playNote(1000, 0.08, 0.17, 'square', 0.12);
+      break;
+    case 'blueprint':
+      playNote(1600, 0.07, 0.13, 'triangle');
+      playNoise(4100, 0.14, 0.048, 0.07);
+      break;
+    case 'dmg':
+      playNote(82, 0.45, 0.12, 'triangle');
+      playNote(104, 0.33, 0.14, 'triangle', 0.17);
+      break;
+    default: {
+      // OG/creepy: detuned oscillator, shimmer, crackle
+      const ctx = getAudioCtx(); if (!ctx) return;
+      const t = ctx.currentTime;
+      // Warble low
+      const osc1 = ctx.createOscillator(), g1 = ctx.createGain();
+      osc1.connect(g1); g1.connect(ctx.destination);
+      osc1.type = 'sawtooth';
+      osc1.frequency.setValueAtTime(82, t);
+      osc1.frequency.linearRampToValueAtTime(74, t + 0.18);
+      osc1.frequency.linearRampToValueAtTime(88, t + 0.36);
+      osc1.frequency.linearRampToValueAtTime(76, t + 0.55);
+      g1.gain.setValueAtTime(0.14 * _sfxVol, t);
+      g1.gain.linearRampToValueAtTime(0.11 * _sfxVol, t + 0.55);
+      g1.gain.exponentialRampToValueAtTime(0.001, t + 0.70);
+      osc1.start(t); osc1.stop(t + 0.71);
+      // Shimmer
+      const osc2 = ctx.createOscillator(), g2 = ctx.createGain();
+      osc2.connect(g2); g2.connect(ctx.destination);
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(880, t + 0.05);
+      osc2.frequency.exponentialRampToValueAtTime(440, t + 0.55);
+      g2.gain.setValueAtTime(0.12 * _sfxVol, t + 0.05);
+      g2.gain.exponentialRampToValueAtTime(0.001, t + 0.65);
+      osc2.start(t + 0.05); osc2.stop(t + 0.66);
+      // Crackle
+      playNoise(1200, 0.11, 0.5, 0.02);
+      break;
+    }
+  }
+};
+
+const playHoldSFX = (theme = 'classic') => {
+  switch (theme) {
+    case 'sketch':
+      // Quick "flip" with pencil tap
+      playNoise(3200, 0.18, 0.018);
+      playNote(890, 0.025, 0.12, 'triangle', 0.006);
+      break;
+    case 'stone':
+      // Chipped rock tap
+      playNote(210, 0.035, 0.22, 'triangle');
+      playNoise(200, 0.07, 0.012);
+      break;
+    case 'wood':
+      playNote(440, 0.027, 0.21, 'triangle');
+      playNote(990, 0.013, 0.12, 'triangle', 0.010);
+      break;
+    case 'bauhaus':
+      playNote(1288, 0.021, 0.17, 'square');
+      break;
+    case 'blueprint':
+      playNote(1110, 0.019, 0.14, 'triangle');
+      playNoise(2400, 0.06, 0.008, 0.009);
+      break;
+    case 'dmg':
+      playNote(350, 0.035, 0.13, 'triangle');
+      break;
+    default:
+      playNote(660, 0.045, 0.21, 'triangle');
+      playNote(990, 0.035, 0.17, 'triangle', 0.018);
+      break;
+  }
+};
+
+const playZoneMeterMilestoneSFX = (tier, theme = 'classic') => {
+  // tier: 1 = 50%, 2 = 75%
+  switch (theme) {
+    case 'sketch':
+      if (tier === 2) {
+        playNoise(2800, 0.19, 0.13);
+        playNote(1190, 0.031, 0.13, 'triangle', 0.05);
+      } else {
+        playNoise(3200, 0.17, 0.09);
+      }
+      break;
+    case 'stone':
+      if (tier === 2) {
+        playNote(440, 0.12, 0.18, 'triangle');
+        playNoise(900, 0.16, 0.028, 0.018);
+      } else {
+        playNote(280, 0.08, 0.13, 'triangle');
+      }
+      break;
+    case 'wood':
+      if (tier === 2) {
+        playNote(900, 0.09, 0.16, 'triangle');
+        playNoise(1100, 0.15, 0.021, 0.015);
+      } else {
+        playNote(523, 0.08, 0.13, 'triangle');
+        playNoise(600, 0.07, 0.018);
+      }
+      break;
+    case 'bauhaus':
+      if (tier === 2) {
+        arp([392, 784, 1097], 0.06, 0.22, 'square');
+      } else {
+        playNote(784, 0.07, 0.12, 'square');
+      }
+      break;
+    case 'blueprint':
+      if (tier === 2) {
+        arp([990, 1480], 0.07, 0.13, 'triangle');
+        playNoise(2400, 0.09, 0.022, 0.014);
+      } else {
+        playNote(740, 0.09, 0.12, 'triangle');
+      }
+      break;
+    case 'dmg':
+      if (tier === 2) {
+        playNote(988, 0.09, 0.14, 'triangle');
+        playNote(784, 0.10, 0.09, 'triangle', 0.025);
+      } else {
+        playNote(784, 0.08, 0.13, 'triangle');
+      }
+      break;
+    default:
+      if (tier === 2) {
+        playNote(880, 0.07, 0.14, 'triangle');
+        playNote(1320, 0.05, 0.11, 'triangle', 0.03);
+      } else {
+        playNote(660, 0.06, 0.11, 'triangle');
+      }
+      break;
+  }
+};
 
 const playLineClearHaptic = (lines) => {
   if (lines >= 4) return [20, 5, 20, 5, 20, 5, 60]
@@ -250,16 +923,66 @@ const playLineClearHaptic = (lines) => {
   return [10]
 }
 
-const playCountdownTickSFX = (second) => {
-  // Rising pitch + urgency as it counts down to 1
-  const freq = 660 + (10 - second) * 55
-  playNote(freq, 0.07, 0.12, 'square')
-  if (second <= 3) playNote(freq * 1.5, 0.05, 0.06, 'sine', 0.028)
-}
+const playCountdownTickSFX = (second, theme = 'classic') => {
+  // Rising pitch/urgency as count approaches 0
+  switch (theme) {
+    case 'sketch': {
+      // Loud paper snap + sharp click, higher pitch/urgency late
+      const f = 610 + (10 - second) * 70;
+      playNoise(3200, 0.16 + 0.012 * (11 - second), 0.03 + 0.007 * (11 - second));
+      playNote(f, 0.06, 0.15, 'triangle');
+      if (second <= 3) playNote(f * 1.35, 0.045, 0.07, 'triangle', 0.02);
+      break;
+    }
+    case 'stone': {
+      // Stone tick + echo
+      const f = 340 + (10 - second) * 60;
+      playNote(f, 0.07, 0.17, 'triangle');
+      if (second <= 3) playNote(1100, 0.07, 0.13, 'triangle', 0.012);
+      break;
+    }
+    case 'wood': {
+      // Knock and woody tick, sharp up high
+      const f = 390 + (10 - second) * 65;
+      playNote(f, 0.07, 0.16, 'triangle');
+      playNote(f * 1.15, 0.032, 0.09, 'triangle', 0.041);
+      if (second <= 3) playNoise(1100, 0.09, 0.017, 0.025);
+      break;
+    }
+    case 'bauhaus': {
+      // Square click with arpeggio urgency late
+      const f = 520 + (10 - second) * 60;
+      playNote(f, 0.06, 0.19, 'square');
+      if (second <= 3) arp([f * 1.1, f * 1.23], 0.031, 0.15, 'square');
+      break;
+    }
+    case 'blueprint': {
+      // Metallic rapid beep, arpeggio at the end
+      const f = 690 + (10 - second) * 80;
+      playNote(f, 0.05, 0.13, 'triangle');
+      if (second <= 3) arp([f, f * 1.4], 0.027, 0.09, 'triangle');
+      break;
+    }
+    case 'dmg': {
+      // Chiptune chirp; arpeggiate at last 3 seconds
+      const f = 880 + (10 - second) * 60;
+      playNote(f, 0.045, 0.14, 'triangle');
+      if (second <= 3) arp([f * 0.8, f], 0.021, 0.07, 'triangle');
+      break;
+    }
+    default: {
+      // Classic—sharper "tick" and double-pulse late
+      const freq = 660 + (10 - second) * 55;
+      playNote(freq, 0.07, 0.12, 'square');
+      if (second <= 3) playNote(freq * 1.5, 0.05, 0.06, 'sine', 0.028);
+      break;
+    }
+  }
+};
 
 // ─── Config / settings storage ───────────────────────────────────────────────
 const CONFIG_KEY = 'tetris-config'
-const DEFAULT_CONFIG = { sfxEnabled: true, hapticEnabled: true, musicVolume: 1.0, sfxVolume: 1.0, das: 110, arr: 25 }
+const DEFAULT_CONFIG = { sfxEnabled: true, hapticEnabled: true, musicVolume: 1.0, sfxVolume: 2.0, das: 110, arr: 25 }
 const loadConfig = () => {
   try { return { ...DEFAULT_CONFIG, ...JSON.parse(localStorage.getItem(CONFIG_KEY) ?? '{}') } }
   catch (e) { console.warn('Failed to load config:', e); return { ...DEFAULT_CONFIG } }
@@ -316,6 +1039,7 @@ function PiecePreview({ type, small = false }) {
 // ─── App ──────────────────────────────────────────────────────────────────────
 export default function App() {
   const { setTheme } = useTheme()
+  const { theme } = useTheme();
   const engine  = useMemo(() => new TetrisEngine(), [])
 
   const [isLoading, setIsLoading] = useState(true)
@@ -489,7 +1213,7 @@ export default function App() {
     if (zenResettingRef.current) return
     zenResettingRef.current = true
     setZenResetting(true)
-    playZenResetSFX()
+    playZenResetSFX(theme)
     engine.zenClearBoard()
     setState(engine.getState())
     setTimeout(() => {
@@ -577,46 +1301,46 @@ export default function App() {
       const doVibrate = (pattern) => { if (hapticOn) navigator.vibrate?.(pattern) }
 
       if (ns.hardDropped) {
-        if (sfxOn) playHardDropSFX()
+        if (sfxOn) playHardDropSFX(theme)
         doVibrate([25, 50, 25])
       } else if (ns.pieceLocked) {
-        if (sfxOn) playLockSFX()
+        if (sfxOn) playLockSFX(theme)
         doVibrate(25)
       }
       if (ns.pieceHeld) {
-        if (sfxOn) playHoldSFX()
+        if (sfxOn) playHoldSFX(theme)
         doVibrate(25)
       }
       if (ns.infectionAdded) {
-        if (sfxOn) playInfectionSFX()
+        if (sfxOn) playInfectionSFX(theme)
         doVibrate([30, 15, 30, 15, 40])
       }
       if (ns.ultimateGarbageAdded) {
-        if (sfxOn) playInfectionSFX()  // reuse chaos SFX
+        if (sfxOn) playInfectionSFX(theme)  // reuse chaos SFX
         doVibrate([80, 30, 80])
       }
-      if (ns.lastCombo > 0 && sfxOn) playComboSFX(ns.lastCombo)
+      if (ns.lastCombo > 0 && sfxOn) playComboSFX(ns.lastCombo, theme)
       if (ns.lastClear) {
         const { spinType, lines, isAllClear } = ns.lastClear
         if (isAllClear) {
-          if (sfxOn) playAllClearSFX()
+          if (sfxOn) playAllClearSFX(theme)
           doVibrate([30, 10, 30, 10, 30, 10, 80])
         } else if (spinType === 'tSpin' || spinType === 'allSpin') {
-          if (sfxOn) playTSpinSFX()
+          if (sfxOn) playTSpinSFX(theme)
           doVibrate([20, 15, 40])
         } else if (lines === 4) {
-          if (sfxOn) playTetrisSFX()
+          if (sfxOn) playTetrisSFX(theme)
           doVibrate([30, 10, 30, 10, 30, 10, 80])
         } else if (lines > 0) {
-          if (sfxOn) playLineClearSFX()
+          if (sfxOn) playLineClearSFX(theme)
           doVibrate(playLineClearHaptic(lines))
         }
       }
       // B2B streak start
-      if (ns.backToBack && !prevBackToBackRef.current && sfxOn) playB2BSFX()
+      if (ns.backToBack && !prevBackToBackRef.current && sfxOn) playB2BSFX(theme)
       prevBackToBackRef.current = ns.backToBack
       // Level up
-      if (ns.level > prevLevelRef.current && sfxOn) playLevelUpSFX()
+      if (ns.level > prevLevelRef.current && sfxOn) playLevelUpSFX(theme)
       prevLevelRef.current = ns.level
       // Zone meter milestones (50%, 75%) + zone ready (100%)
       const prevMeter = prevZoneMeterRef.current
@@ -625,10 +1349,10 @@ export default function App() {
           musicManager?.playZoneReady?.()
           doVibrate([20, 15, 20, 15, 40])
         } else if (ns.zoneMeter >= 75 && prevMeter < 75) {
-          if (sfxOn) playZoneMeterMilestoneSFX(2)
+          if (sfxOn) playZoneMeterMilestoneSFX(2, theme)
           doVibrate([15, 12, 25])
         } else if (ns.zoneMeter >= 50 && prevMeter < 50) {
-          if (sfxOn) playZoneMeterMilestoneSFX(1)
+          if (sfxOn) playZoneMeterMilestoneSFX(1, theme)
           doVibrate(25)
         }
       }
@@ -652,7 +1376,7 @@ export default function App() {
         if (ns.mode === GAME_MODE.BLITZ && ns.blitzTimer > 0 && ns.blitzTimer <= 10000) {
           const sec = Math.ceil(ns.blitzTimer / 1000)
           if (prevBlitzSecRef.current !== null && sec !== prevBlitzSecRef.current) {
-            if (sfxOn) playCountdownTickSFX(sec)
+            if (sfxOn) playCountdownTickSFX(sec, theme)
           }
           prevBlitzSecRef.current = sec
         } else {
@@ -661,7 +1385,7 @@ export default function App() {
         if (ns.mode === GAME_MODE.PURIFY && ns.purifyTimer > 0 && ns.purifyTimer <= 10000) {
           const sec = Math.ceil(ns.purifyTimer / 1000)
           if (prevPurifySecRef.current !== null && sec !== prevPurifySecRef.current) {
-            if (sfxOn) playCountdownTickSFX(sec)
+            if (sfxOn) playCountdownTickSFX(sec, theme)
           }
           prevPurifySecRef.current = sec
         } else {
@@ -670,7 +1394,7 @@ export default function App() {
       }
 
       if (ns.gameOver && !prevGameOverRef.current && gameModeRef.current !== GAME_MODE.ZEN) {
-        if (sfxOn) playGameOverSFX()
+        if (sfxOn) playGameOverSFX(theme)
         doVibrate([100, 50, 100, 50, 100])
         if (musicOnRef.current) { musicManager?.stop(); musicOnRef.current = false; setMusicOn(false) }
         const hs = loadHighScores(), key = gameModeRef.current
@@ -696,17 +1420,17 @@ export default function App() {
       ev.preventDefault(); if (ev.repeat) return
       if (b.held) {
         heldRef.current[b.held] = true
-        if ((b.held === 'left' || b.held === 'right') && sfxOn) playMoveSFX()
+        if ((b.held === 'left' || b.held === 'right') && sfxOn) playMoveSFX(theme)
       }
       if (b.action) {
         if (countdownActiveRef.current && b.action !== 'pause') return
         actionRef.current[b.action] = true
-        if ((b.action === 'rotateCW' || b.action === 'rotateCCW' || b.action === 'rotate180') && sfxOn) playRotateSFX()
+        if ((b.action === 'rotateCW' || b.action === 'rotateCCW' || b.action === 'rotate180') && sfxOn) playRotateSFX(theme)
         if (b.action === 'activateZone') {
-          if (sfxOn) playZoneActivateSFX()
+          if (sfxOn) playZoneActivateSFX(theme)
           if (configRef.current.hapticEnabled) navigator.vibrate?.([20, 10, 40])
         }
-        if (b.action === 'hardDrop' && sfxOn) playHardDropSFX()
+        if (b.action === 'hardDrop' && sfxOn) playHardDropSFX(theme)
         if (b.action === 'pause') handlePauseToggle()
       }
     }
@@ -726,25 +1450,26 @@ export default function App() {
     const sfxOn = configRef.current.sfxEnabled
     const hapticOn = configRef.current.hapticEnabled
     if (action === 'rotateCW' || action === 'rotateCCW' || action === 'rotate180') {
-      if (sfxOn) playRotateSFX()
+      if (sfxOn) playRotateSFX(theme)
       if (hapticOn) navigator.vibrate?.(20)
     } else if (action === 'hardDrop') {
-      if (sfxOn) playHardDropSFX()
+      if (sfxOn) playHardDropSFX(theme)
       if (hapticOn) navigator.vibrate?.([25, 50, 25])
     } else if (action === 'activateZone') {
-      if (sfxOn) playZoneActivateSFX()
+      if (sfxOn) playZoneActivateSFX(theme)
       if (hapticOn) navigator.vibrate?.([30, 15, 50])
     } else if (action === 'hold') {
-      if (sfxOn) playHoldSFX()
+      if (sfxOn) playHoldSFX(theme)
       if (hapticOn) navigator.vibrate?.(25)
     }
   }
-  const handlePress   = (key, hold) => {
+
+  const handlePress  = (key, hold) => {
     const sfxOn = configRef.current.sfxEnabled
     const hapticOn = configRef.current.hapticEnabled
     if (hold) {
       heldRef.current[key] = true
-      if (key === 'left' || key === 'right') { if (sfxOn) playMoveSFX(); if (hapticOn) navigator.vibrate?.(20) }
+      if (key === 'left' || key === 'right') { if (sfxOn) playMoveSFX(theme); if (hapticOn) navigator.vibrate?.(20) }
       else if (key === 'softDrop' && hapticOn) navigator.vibrate?.(15)
     } else {
       triggerAction(key)
@@ -755,12 +1480,12 @@ export default function App() {
     const sfxOn = configRef.current.sfxEnabled
     if (dir === 'left' || dir === 'right') {
       heldRef.current[dir] = true
-      if (sfxOn) playSwipeSFX(dir)
+      if (sfxOn) playSwipeSFX(dir, theme)
     } else if (dir === 'down') {
       heldRef.current.softDrop = true
-      if (sfxOn) playSwipeSFX('down')
+      if (sfxOn) playSwipeSFX('down', theme)
     } else if (dir === 'up') {
-      if (sfxOn) playSwipeSFX('up')
+      if (sfxOn) playSwipeSFX('up', theme)
       triggerAction('hold')
     }
   }
@@ -772,7 +1497,7 @@ export default function App() {
     if (!countdownActiveRef.current) {
       heldRef.current.softDrop = false
       actionRef.current.hardDrop = true
-      if (configRef.current.sfxEnabled) playHardDropSFX()
+      if (configRef.current.sfxEnabled) playHardDropSFX(theme)
       if (configRef.current.hapticEnabled) navigator.vibrate?.([25, 50, 25])
     }
   }
@@ -833,19 +1558,19 @@ export default function App() {
                 const s = engine.getState(); setState(s)
                 const sfxOn = configRef.current.sfxEnabled
                 if (s.paused) {
-                  if (sfxOn) playPauseSFX()
+                  if (sfxOn) playPauseSFX(theme)
                   if (musicOnRef.current) musicManager?.pause()
                 } else {
-                  if (sfxOn) playResumeSFX()
+                  if (sfxOn) playResumeSFX(theme)
                   if (musicOnRef.current) musicManager?.resume()
                 }
               } else if (!countdownActiveRef.current) {
                 actionRef.current[action] = true
                 const sfxOn = configRef.current.sfxEnabled
-                if ((action === 'rotateCW' || action === 'rotateCCW' || action === 'rotate180') && sfxOn) playRotateSFX()
-                else if (action === 'hardDrop' && sfxOn) playHardDropSFX()
+                if ((action === 'rotateCW' || action === 'rotateCCW' || action === 'rotate180') && sfxOn) playRotateSFX(theme)
+                else if (action === 'hardDrop' && sfxOn) playHardDropSFX(theme)
                 else if (action === 'activateZone') {
-                  if (sfxOn) playZoneActivateSFX()
+                  if (sfxOn) playZoneActivateSFX(theme)
                   if (configRef.current.hapticEnabled) navigator.vibrate?.([30, 15, 50])
                 }
               }
@@ -868,10 +1593,10 @@ export default function App() {
     const s = engine.getState(); setState(s)
     const sfxOn = configRef.current.sfxEnabled
     if (s.paused) {
-      if (sfxOn) playPauseSFX()
+      if (sfxOn) playPauseSFX(theme)
       if (musicOnRef.current) musicManager?.pause()
     } else {
-      if (sfxOn) playResumeSFX()
+      if (sfxOn) playResumeSFX(theme)
       if (musicOnRef.current) musicManager?.resume()
     }
   }
@@ -1169,7 +1894,7 @@ export default function App() {
       {!isPurify && state.backToBack && <div className="b2b-badge">🔥 B2B{state.b2bCount > 1 ? ` x${state.b2bCount}` : ''}</div>}
             <div className={`game-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`}>
               <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
-                onTripleTap={() => triggerAction('activateZone')}
+                onTwoFingerTap={() => triggerAction('activateZone')}
                 onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop} />
               <GlitchOverlay active={glitchActive} />
               {renderOverlay(state, false)}
@@ -1261,7 +1986,7 @@ export default function App() {
         {/* board */}
         <div className={`ls-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`}>
           <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
-            onTripleTap={() => triggerAction('activateZone')}
+            onTwoFingerTap={() => triggerAction('activateZone')}
             onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop} />
           {renderOverlay(state, false)}
           {renderPauseOverlay(state)}
@@ -1379,7 +2104,7 @@ export default function App() {
       )}
       <div className={`mobile-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`}>
         <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
-          onTripleTap={() => triggerAction('activateZone')}
+          onTwoFingerTap={() => triggerAction('activateZone')}
           onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop} />
         <GlitchOverlay active={glitchActive} />
         {renderOverlay(state, false)}

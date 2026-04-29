@@ -122,8 +122,8 @@ export default function SettingsPage({ config, onConfig, onClose }) {
               <span className="touch-ctrl-desc">Rotate CW</span>
             </div>
             <div className="touch-ctrl-card touch-ctrl-card--accent">
-              <span className="touch-ctrl-icon">👆×3</span>
-              <span className="touch-ctrl-action">Triple Tap</span>
+              <span className="touch-ctrl-icon">👆👆</span>
+              <span className="touch-ctrl-action">Two-Finger Tap</span>
               <span className="touch-ctrl-desc">Activate Zone</span>
             </div>
             <div className="touch-ctrl-card">
