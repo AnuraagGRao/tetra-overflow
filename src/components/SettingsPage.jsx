@@ -106,6 +106,17 @@ export default function SettingsPage({ config, onConfig, onClose }) {
               />
             </div>
           </div>
+
+          <div className="settings-row">
+            <span className="settings-label">On-Screen Buttons</span>
+            <button
+              type="button"
+              className={`settings-toggle${config.showOnScreenControls ? ' on' : ''}`}
+              onClick={() => set('showOnScreenControls', !config.showOnScreenControls)}
+            >
+              {config.showOnScreenControls ? 'ON' : 'OFF'}
+            </button>
+          </div>
         </div>
 
         <button type="button" className="about-install-btn" onClick={onClose}>

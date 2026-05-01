@@ -2,11 +2,24 @@ import { createBag } from './randomBag'
 import { I_KICKS, JLSTZ_KICKS } from './srs'
 import { BOARD_HEIGHT, BOARD_WIDTH, PIECES } from './tetrominoes'
 
-export const GAME_MODE = { NORMAL: 'normal', SPRINT: 'sprint', BLITZ: 'blitz', MASTER: 'master', PURIFY: 'purify', VERSUS: 'versus', ZEN: 'zen', ULTIMATE: 'ultimate' }
+export const GAME_MODE = { NORMAL: 'normal', SPRINT: 'sprint', BLITZ: 'blitz', MASTER: 'master', PURIFY: 'purify', VERSUS: 'versus', ZEN: 'zen', ULTIMATE: 'ultimate', TOWER: 'tower' }
 export const PURIFY_DURATION_MS = 180000
 export const BLITZ_DURATION_MS  = 120000
 export const SPRINT_LINES       = 40
-export const ULTIMATE_GARBAGE_INTERVAL_MS = 8000  // Random garbage every ~8s
+// Ultimate base garbage interval is randomized per run between 10–20s
+export const ULTIMATE_BASE_MIN_MS = 14000
+export const ULTIMATE_BASE_MAX_MS = 26000
+export const ULTIMATE_MIN_GARBAGE_MS     = 3800   // Floor for chaos interval (slower than before)
+export const ULTIMATE_GARBAGE_ACCEL      = 0.96   // gentler ramp (was 0.92)
+export const ULTIMATE_ACCEL_STEP_MS      = 26000  // ramp less frequently
+
+// ── Tower Climb constants ─────────────────────────────────────────────────────
+export const TOWER_LINES_PER_FLOOR   = 6    // lines needed to advance one floor (increases with floors)
+export const TOWER_PREFILL_ROWS      = 5    // garbage rows added at game start (reduced)
+export const TOWER_INIT_GARBAGE_MS   = 11000 // initial garbage interval (ms)
+export const TOWER_MIN_GARBAGE_MS    = 2800  // minimum garbage interval
+export const TOWER_GARBAGE_ACCEL     = 0.91  // interval multiplier per floor (≈9% faster each floor)
+export const TOWER_FLOOR_SCORE_BONUS = 500   // score bonus per floor cleared
 
 const SCORE_BY_CLEAR = [0, 100, 300, 500, 800]
 const T_SPIN_SCORE = [400, 800, 1200, 1600]
@@ -32,7 +45,8 @@ export const ZONE_MIN_METER = 25
 
 // Garbage lines sent per clear type in Versus mode
 const GARBAGE_BY_LINES = [0, 0, 1, 2, 4]          // 0/1/2/3/4 lines
-const TSPIN_GARBAGE    = [2, 2, 4, 6]              // tspin 0/1/2/3 lines (double=4, triple=6)
+// Revised Versus attack table
+const TSPIN_GARBAGE    = [0, 2, 4, 6]              // tspin 0/1/2/3 lines (double=4, triple=6)
 const ALL_CLEAR_GARBAGE = 10                        // All Clear sends 10 lines
 const COMBO_GARBAGE    = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 4, 5]
 
@@ -230,6 +244,16 @@ export class TetrisEngine {
       this.board = createEmptyBoard()
       this.infectedCols = []
     }
+    // Tower Climb: pre-fill bottom rows with garbage (also used in Ultimate after merge)
+    if (mode === GAME_MODE.TOWER || mode === GAME_MODE.ULTIMATE) {
+      for (let r = 0; r < TOWER_PREFILL_ROWS; r++) {
+        const gapCol = Math.floor(Math.random() * BOARD_WIDTH)
+        const row = Array(BOARD_WIDTH).fill('GBG')
+        row[gapCol] = null
+        // place at bottom, stack upward
+        this.board[BOARD_HEIGHT - 1 - r] = row
+      }
+    }
     this.bag = createBag()
     this.queue = []
     this.hold = null
@@ -272,11 +296,23 @@ export class TetrisEngine {
     const baseInfTimer = (PURIFY_INFECTION_TIMERS[purifyDifficulty] ?? 8000) * this.touchMultiplier
     this.infectionTimer = baseInfTimer + Math.random() * 2000
     // Ultimate mode: random garbage timer + meme chaos flag
-    this.ultimateGarbageTimer = ULTIMATE_GARBAGE_INTERVAL_MS * (0.7 + Math.random() * 0.6)
+    this.ultimateGarbageInterval = ULTIMATE_BASE_MIN_MS + Math.random() * (ULTIMATE_BASE_MAX_MS - ULTIMATE_BASE_MIN_MS)
+    this.ultimateGarbageTimer = this.ultimateGarbageInterval
+    this.ultimateGarbagePeriod = this.ultimateGarbageTimer
     this.ultimateGarbageAdded = false
+    this.ultimateChaosTimer = ULTIMATE_ACCEL_STEP_MS
     this.useMemeBlocks = false  // set to true externally once cat image is loaded
+    // Tower Climb state
+    this.towerFloor        = 1
+    this.towerFloorLines   = 0   // lines cleared toward next floor
+    this.towerFloorTarget  = TOWER_LINES_PER_FLOOR
+    this.towerGarbageTimer = TOWER_INIT_GARBAGE_MS
+    this.towerGarbageInterval = TOWER_INIT_GARBAGE_MS
+    this.towerFloorAdvance = false  // single-frame flag: floor just advanced
     // Versus / garbage
-    this.pendingGarbage = 0
+    this.pendingGarbage = 0 // legacy immediate-applied path
+    this.incomingGarbage = 0
+    this.incomingDelayLocks = 0
     this.lastGarbage = 0
     // Zone floor (lines captured during Zone sitting at the bottom)
     this.zoneFloor = 0
@@ -514,6 +550,23 @@ export class TetrisEngine {
       }
       this.level = Math.floor(this.lines / 10) + 1
 
+      // Tower Climb: track floor progress (also when merged into Ultimate)
+      if ((this.mode === GAME_MODE.TOWER || this.mode === GAME_MODE.ULTIMATE) && cleared > 0) {
+        this.towerFloorLines += cleared
+        if (this.towerFloorLines >= this.towerFloorTarget) {
+          this.towerFloorLines -= this.towerFloorTarget
+          this.towerFloor += 1
+          this.towerFloorAdvance = true
+          // Escalate target
+          this.towerFloorTarget = this.towerFloor <= 5 ? 5 : this.towerFloor <= 10 ? 6 : this.towerFloor <= 20 ? 7 : 8
+          // Speed up garbage interval
+          this.towerGarbageInterval = Math.max(TOWER_MIN_GARBAGE_MS, Math.floor(this.towerGarbageInterval * TOWER_GARBAGE_ACCEL))
+          this.towerGarbageTimer = Math.min(this.towerGarbageTimer, this.towerGarbageInterval)
+          // Bonus score per floor
+          this.score += TOWER_FLOOR_SCORE_BONUS * this.towerFloor
+        }
+      }
+
       // Combo
       this.combo += 1
       this.lastCombo = this.combo
@@ -532,6 +585,16 @@ export class TetrisEngine {
       } else {
         const fill = ZONE_FILL[Math.min(cleared, ZONE_FILL.length - 1)]
         this.zoneMeter = Math.min(100, this.zoneMeter + fill)
+      }
+
+      // Ultimate: special clears push back the next chaos wave a bit
+      if (this.mode === GAME_MODE.ULTIMATE) {
+        const special = isAllClear || spinType === 'tSpin' || spinType === 'allSpin' || cleared >= 4
+        if (special) {
+          const delay = isAllClear ? 5000 : cleared >= 4 ? 4000 : 2500
+          this.ultimateGarbageTimer += delay
+          this.floatingTexts.push({ text: '😼 CHAOS DELAY', x: 1, y: 7, ttl: 900, maxTtl: 900 })
+        }
       }
 
       const label = getSpinLabel(spinType, cleared, prevB2B && isSpecialClear)
@@ -559,7 +622,7 @@ export class TetrisEngine {
       this.lastClear = { spinType, lines: cleared, backToBack: prevB2B && isSpecialClear, isAllClear }
       this.spawnEnhancedParticles(rows, boardSnapshot)
 
-      // Versus mode: compute outgoing garbage
+      // Versus mode: compute outgoing garbage (supports garbage cancel)
       if (this.mode === GAME_MODE.VERSUS) {
         let garbage = 0
         if (isAllClear) {
@@ -569,8 +632,18 @@ export class TetrisEngine {
         } else {
           garbage = GARBAGE_BY_LINES[Math.min(cleared, GARBAGE_BY_LINES.length - 1)]
         }
-        if (prevB2B && isSpecialClear) garbage += 1
+        // Back-to-back bonus grows with chain up to +2 (e.g., 4 tetrises → 4 + 5 + 6 + 6 = 21)
+        if (prevB2B && isSpecialClear) {
+          const b2bBonus = Math.min(2, Math.max(1, this.b2bCount))
+          garbage += b2bBonus
+        }
         garbage += COMBO_GARBAGE[Math.min(this.combo, COMBO_GARBAGE.length - 1)]
+        // Cancel against queued incoming garbage before sending
+        if ((this.incomingGarbage ?? 0) > 0 && garbage > 0) {
+          const used = Math.min(garbage, this.incomingGarbage)
+          this.incomingGarbage -= used
+          garbage -= used
+        }
         this.lastGarbage = garbage
       }
     } else if (spinType === 'tSpin') {
@@ -618,8 +691,16 @@ export class TetrisEngine {
       }
     }
 
-    // Apply received garbage just before the new piece appears (Versus mode)
-    if (this.pendingGarbage > 0) {
+    // Apply received garbage after a 2-lock delay in Versus
+    if (this.mode === GAME_MODE.VERSUS) {
+      if ((this.incomingDelayLocks ?? 0) > 0) {
+        this.incomingDelayLocks -= 1
+      } else if ((this.incomingGarbage ?? 0) > 0) {
+        this._applyGarbage(this.incomingGarbage)
+        this.incomingGarbage = 0
+      }
+    } else if (this.pendingGarbage > 0) {
+      // Legacy path for single-player modes that may use receiveGarbage
       this._applyGarbage(this.pendingGarbage)
       this.pendingGarbage = 0
     }
@@ -726,7 +807,8 @@ export class TetrisEngine {
 
   // Versus: receive garbage from opponent
   receiveGarbage(lines) {
-    this.pendingGarbage += lines
+    this.incomingGarbage = (this.incomingGarbage ?? 0) + Math.max(0, lines | 0)
+    this.incomingDelayLocks = 2
   }
 
   _applyGarbage(lines) {
@@ -766,7 +848,7 @@ export class TetrisEngine {
     // Exponential scaling: ~0.6 G/s at Lv1 → ~3 at Lv10 → ~9 at Lv15 → capped at 20
     const base = 0.6 * Math.pow(1.22, this.level - 1)
     if (this.mode === GAME_MODE.BLITZ) return Math.min(20, base * 1.25)
-    if (this.mode === GAME_MODE.ULTIMATE) return Math.min(20, base * 1.15)
+    if (this.mode === GAME_MODE.ULTIMATE) return Math.min(20, base * 1.05)
     return Math.min(20, base)
   }
 
@@ -863,17 +945,47 @@ export class TetrisEngine {
     if (this.mode === GAME_MODE.ULTIMATE) {
       this.ultimateGarbageTimer -= dt
       if (this.ultimateGarbageTimer <= 0) {
-        const lines = 2 + Math.floor(Math.random() * 2)  // 2 or 3 lines
+        const lines = 1 + Math.floor(Math.random() * 2)  // 1 or 2 lines
         this._applyGarbage(lines)
         this.ultimateGarbageAdded = true
         this.shake = Math.max(this.shake, 5)
         this.floatingTexts.push({
-          text: ['🐱 OIIA!', '😂 CHAOS!', '🎵 VIBE!', '💥 REKT!', '🤣 LOL!'][Math.floor(Math.random() * 5)],
+          text: [
+            '🐱 OIIA!', '😂 CHAOS!', '🎵 VIBE!', '💥 REKT!', '🤣 LOL!',
+            '💫 HYPER!', '🚀 BOOST!', '🌀 SPIN!', '🐾 MEOW!', '✨ WOW!',
+            '🔥 MADNESS!', '🌌 COSMIC!', '💣 BOOM!', '🔊 OIIA!!!', '🎉 PARTY!'
+          ][Math.floor(Math.random() * 15)],
           x: 1, y: 8,
-          ttl: 1200, maxTtl: 1200,
+          ttl: 2200, maxTtl: 3800,
           big: true,
+          huge: true,
         })
-        this.ultimateGarbageTimer = ULTIMATE_GARBAGE_INTERVAL_MS * (0.6 + Math.random() * 0.8)
+        // Next wave based on current interval (store chosen period for HUD)
+        this.ultimateGarbageTimer = this.ultimateGarbageInterval * (0.6 + Math.random() * 0.8)
+        this.ultimateGarbagePeriod = this.ultimateGarbageTimer
+      }
+      // Chaos ramps up over time by shrinking the base interval
+      this.ultimateChaosTimer -= dt
+      if (this.ultimateChaosTimer <= 0) {
+        this.ultimateChaosTimer = ULTIMATE_ACCEL_STEP_MS
+        this.ultimateGarbageInterval = Math.max(ULTIMATE_MIN_GARBAGE_MS, Math.floor(this.ultimateGarbageInterval * ULTIMATE_GARBAGE_ACCEL))
+        // Nudge the active timer down if it's now longer than the new interval
+        this.ultimateGarbageTimer = Math.min(this.ultimateGarbageTimer, this.ultimateGarbageInterval)
+        this.floatingTexts.push({
+          text: '⚡ CHAOS RISING', x: 0, y: 9, ttl: 1800, maxTtl: 3600,
+        })
+      }
+    }
+
+    // Tower Climb: escalating garbage pressure
+    if (this.mode === GAME_MODE.TOWER) {
+      this.towerFloorAdvance = false
+      this.towerGarbageTimer -= dt
+      if (this.towerGarbageTimer <= 0) {
+        const garbageAmt = this.towerFloor <= 5 ? 1 : this.towerFloor <= 15 ? 2 : 3
+        this._applyGarbage(garbageAmt)
+        this.shake = Math.max(this.shake, 3)
+        this.towerGarbageTimer = this.towerGarbageInterval
       }
     }
 
@@ -975,7 +1087,7 @@ export class TetrisEngine {
       infectedCols: this.infectedCols,
       zoneFloor: this.zoneFloor,
       lastGarbage: this.lastGarbage,
-      pendingGarbage: this.pendingGarbage,
+      pendingGarbage: this.mode === GAME_MODE.VERSUS ? (this.incomingGarbage ?? 0) : this.pendingGarbage,
       zoneMeter: this.zoneMeter,
       zoneActive: this.zoneActive,
       zoneDuration: this.zoneDuration,
@@ -993,7 +1105,15 @@ export class TetrisEngine {
       b2bCount: this.b2bCount,
       infectionAdded: this.infectionAdded,
       ultimateGarbageAdded: this.ultimateGarbageAdded,
+      ultimateTimer: this.ultimateGarbageTimer,
+      ultimatePeriod: this.ultimateGarbagePeriod,
+      ultimateInterval: this.ultimateGarbageInterval,
       useMemeBlocks: this.useMemeBlocks,
+      towerFloor: this.towerFloor,
+      towerFloorLines: this.towerFloorLines,
+      towerFloorTarget: this.towerFloorTarget,
+      towerFloorAdvance: this.towerFloorAdvance,
+      towerGarbageInterval: this.towerGarbageInterval,
     }
   }
 }

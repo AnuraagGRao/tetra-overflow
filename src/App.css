@@ -795,6 +795,8 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
     overflow: hidden;
     max-height: 120px;
     opacity: 1;
+    position: relative;
+    z-index: 2; /* Keep above fixed backgrounds */
     transition: max-height 0.35s ease, opacity 0.3s ease;
   }
 
@@ -844,6 +846,7 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
     background: rgba(20, 30, 70, 0.8);
     flex-shrink: 0;
     position: relative;
+    z-index: 2; /* Keep above fixed backgrounds */
     overflow: hidden;
     max-height: 8px;
     opacity: 1;
@@ -906,6 +909,8 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
     scrollbar-width: none;
     max-height: min(600px, 46svh);
     opacity: 1;
+    position: relative;
+    z-index: 2; /* Ensure above world background overlays */
     transition: max-height 0.4s ease, opacity 0.3s ease;
   }
   .pt-panel::-webkit-scrollbar { display: none; }

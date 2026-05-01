@@ -1,55 +1,50 @@
-# Copilot Reference — tetris-mobile-clone
+# Copilot Reference — Tetra Overflow Ultra
 
-> Quick-reference for AI assistants to understand the codebase and avoid re-discovery overhead.
+Quick-reference for AI assistants to navigate this codebase fast.
 
 ---
 
 ## Project Overview
 
-Mobile-first Tetris PWA built with **React 18 + Vite**. Deployed as a PWA with fullscreen mode on Android.
+Mobile-first Tetris PWA built with **React 19 + Vite 6**. Canvas 2D renderer, synthesized SFX, and MP3 BGM. PWA-ready.
 
-- Base URL: `/tetris-mobile-clone/`
-- `manifest.json`: `"display": "fullscreen"`, `"orientation": "any"`
-- Service worker: `public/sw.js`
-- Build: `npm run dev` / `npm run build`
+- Base URL: `/tetra-overflow/` (keep in sync across `vite.config.js`, `public/manifest.json`, and `public/sw.js`)
+- Build/dev: `npm install` · `npm run dev` · `npm run build` · `npm run preview`
+- Service worker: `public/sw.js` (cache version must be bumped after production changes)
+- Security: Vite 6 (patched esbuild). Firestore rules in `/firestore.rules`.
 
 ---
 
-## File Structure
+## File Structure (key)
 
 ```
 src/
-  App.jsx               — Main component: all game state, game loop, UI rendering
-  App.css               — Layout, component styles
-  index.css             — Global resets, CSS variables
-  main.jsx              — React root mount
+  App.jsx                — Monolithic: game loop, UI, SFX, input
+  App.css                — Layout and component styles
+  index.css, main.jsx    — App bootstrapping
   audio/
-    musicManager.js     — BGM manager (MP3-based, Web Audio API)
-    Full_Throttle_Logic.mp3
-    Gravity_s_Last_Descent.mp3
-    Perfect_Rotation.mp3
-    The_Last_Key.mp3
-    The_Winning_Move.mp3
+    musicManager.js      — BGM manager (Web Audio API + <audio>)
   components/
-    GameCanvas.jsx      — Canvas renderer for board, pieces, ghost
-    TouchControls.jsx   — On-screen touch buttons (mobile portrait)
-    ThemeSwitcher.jsx   — Theme picker UI
-    AboutPage.jsx       — Info overlay
-    SettingsPage.jsx    — Settings overlay (ghost, DAS, vibration, zoom)
+    GameCanvas.jsx       — Canvas renderer + multi-touch
+    TouchControls.jsx    — Mobile portrait controls
+    ThemeSwitcher.jsx    — Minor UI
+    AboutPage.jsx        — In-game modal (legacy)
   contexts/
-    ThemeContext.jsx     — React context for current theme string
+    ThemeContext.jsx     — Theme, color-mode, bgTheme, favorites
   logic/
-    gameEngine.js       — TetrisEngine class (pure JS, no React)
-    randomBag.js        — 7-bag random piece generator
-    srs.js              — SRS rotation system + wall kick tables
-    tetrominoes.js      — PIECES shape/color data
-    tetrisBot.js        — Bot AI (unused in UI, kept for reference)
+    gameEngine.js        — Pure JS engine; safe to unit test
+    randomBag.js, srs.js, tetrominoes.js, tetrisBot.js
+    themeMappings.js     — BG→piece theme mapping (shared)
+  pages/
+    ThemePage.jsx        — Locks, purchases, favorites strip
+    StorePage.jsx        — Store filtering (excludes story-unlocks)
+    StoryLevelPage.jsx   — Story mode UI (uses theme override)
+    ArtworkPage.jsx      — MP4 gallery + full-screen detail view + voting
+    InfoPage.jsx         — Standalone info/support page
   styles/
-    themes.css          — CSS variable themes
+    themes.css           — 20+ visual themes via CSS variables
 public/
-  manifest.json
-  sw.js
-  icons/
+  manifest.json, sw.js, icons/
 ```
 
 ---
@@ -65,7 +60,7 @@ Active modes (shown in UI):
 | `GAME_MODE.PURIFY` | Purify | Clear infected rows; infection spreads on a timer |
 | `GAME_MODE.ZEN` | Zen | No game-over; endless relaxed play |
 
-Removed from UI (still in engine constants): `GAME_MODE.MASTER`, `GAME_MODE.VERSUS`
+Also available: `TOWER` (escalating garbage, floors), `ULTIMATE` (internal), Story chapters.
 
 ---
 
@@ -89,7 +84,7 @@ Key state fields (from `getState()`):
 - `purifyTimer`, `infectedRows`, `infectionAdded` ← set each tick when infection was added
 - `mode`, `elapsedMs`, `pendingGarbage`
 
-Gravity formula: `0.8 * Math.pow(1.22, level - 1)` cells/second, capped at 20.
+Gravity: `0.8 * 1.22^(level-1)` cells/sec (cap 20). Lock delay 450ms, up to 15 reset moves.
 
 ---
 
@@ -113,9 +108,11 @@ Key functions:
 - Various SFX functions: `playLineClearSFX`, `playTetrisSFX`, `playPauseSFX`, `playResumeSFX`, `playInfectionSFX`, etc.
 
 Rendering:
-- Desktop: `renderDesktop()` — left flank + game area + right flank
-- Mobile portrait: `renderMobileNormal()` — HUD + board + `TouchControls`
-- Mobile landscape: `renderMobileLandscape()` — side stats + board + buttons (swipe/gamepad only)
+- Desktop: `renderDesktop()` — side flanks + board + controls
+- Mobile portrait: `renderMobileNormal()` — HUD + board + `TouchControls` + bottom panel
+- Mobile landscape: `renderMobileLandscape()` — condensed HUD + board + buttons
+
+Solo bottom panel CSS selector: `.pt-panel` (uses `var(--c-panel)` colors). Stacking is `z-index: 2` so it sits above world backgrounds.
 
 ---
 
@@ -136,7 +133,7 @@ musicManager.playZoneReady()
 musicManager.playZoneEnd(lines)
 ```
 
-Tracks and their per-track gain values:
+Tracks and gains:
 ```js
 { url: 'Full_Throttle_Logic.mp3',    gain: 0.85 }
 { url: 'Gravity_s_Last_Descent.mp3', gain: 0.75 }
@@ -158,7 +155,7 @@ playNote(freq, vol, dur, type, delay?)  // oscillator note
 playNoise(cutoff, vol, dur, delay?)     // filtered white noise
 ```
 
-Defined SFX functions (all in App.jsx):
+Defined SFX functions (subset):
 - `playLineClearSFX(lines, isTSpin, isAllClear)`
 - `playTetrisSFX()`
 - `playLevelUpSFX()`
@@ -191,10 +188,38 @@ try { navigator.vibrate?.(duration) } catch {}
 
 ---
 
-## Known Architecture Decisions (from session)
+## Theme System (critical)
+
+- ThemeContext values: `{ theme, setTheme, colorMode, setColorMode, bgTheme, setBgTheme, favThemes, setFavThemes }`
+- Piece (board) theming is handled inside `GameCanvas.jsx` using `PIECE_COLOR_MAPS`.
+- World backgrounds use `BackgroundCanvas` and are controlled via `bgTheme`.
+- Story Mode uses a BG→piece theme mapping to keep art coherent.
+
+Shared mapping: `src/logic/themeMappings.js` exports `BG_TYPE_TO_PIECE_THEME`.
+
+- Solo/Casual mode: when `bgTheme` is active, pieces automatically adopt the mapped piece theme (unless `themeOverride` is explicitly provided). This is done inside `GameCanvas.jsx`.
+- Previews (hold/next) also mirror this mapping in `App.jsx` `PiecePreview`.
+- Favorites strip (ThemePage/CasualGamePage):
+  - Favorite entries can be a piece theme id (e.g. `terracotta`) or a background id (e.g. `bg_forest`).
+  - Clicking a background favorite sets `bgTheme` (and pieces follow the mapping).
+  - Clicking a piece theme favorite sets `theme` and clears `bgTheme`.
+
+Add/adjust piece colors in `PIECE_COLOR_MAPS` (exported by `GameCanvas.jsx`). When adding a visual theme, ensure:
+- CSS variables for panels in `src/styles/themes.css` (look for `[data-theme="NAME"]` blocks)
+- Piece color map in `PIECE_COLOR_MAPS.NAME`
+- Optional custom draw strokes in `drawCell` switch in `GameCanvas.jsx`
+
+## Known Architecture Decisions
 
 1. **MASTER/VERSUS removed from UI** — constants still exist in `gameEngine.js` but removed from all `MODES` arrays and render functions
 2. **TetrisBot imported but unused** — `tetrisBot.js` kept, import removed from `App.jsx`
-3. **musicManager pause ≠ stop** — always use `pause()`/`resume()` for game pause, `stop()` only on quit
-4. **Gravity is exponential** — changed from linear in a session to give proper speed-up at higher levels
-5. **Purify difficulty** — was easy/normal/hard, now always `'easy'` passed to `engine.reset()`
+3. **musicManager pause ≠ stop** — use `pause()`/`resume()` for pause; `stop()` only on quit
+4. **Vite glob** — use `import.meta.glob('.../*.mp4', { eager: true, query: '?url', import: 'default' })`
+5. **Service worker** — bump cache version in `public/sw.js` after prod build changes
+6. **Firestore rules** — see `/firestore.rules`; deploy with `firebase deploy --only firestore:rules`
+
+## Troubleshooting quick hits
+
+- Bottom panel invisible on mobile: check that `data-theme` is set and `themes.css` has a `[data-theme] .pt-panel` block. `.pt-panel` has `z-index: 2` to avoid background overlap.
+- Pieces not using theme colors: confirm `themeOverride` or `bgTheme` mapping path, and ensure `PIECE_COLOR_MAPS[theme][type]` exists.
+- Artwork page builds: use Vite 6 glob format with `query: '?url', import: 'default'`.

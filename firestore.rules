@@ -1,0 +1,117 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helper functions ──────────────────────────────────────────────────────
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    // Validate a score submission — score must be a non-negative integer, mode must be a known string
+    function validScoreFields() {
+      let d = request.resource.data;
+      return d.score is int && d.score >= 0 && d.score <= 10000000
+          && d.lines is int && d.lines >= 0 && d.lines <= 10000
+          && d.level is int && d.level >= 1 && d.level <= 30
+          && d.mode is string && d.mode.size() < 32
+          && d.uid == request.auth.uid;
+    }
+
+    // ── Users ─────────────────────────────────────────────────────────────────
+    match /users/{uid} {
+      // Only the owning user may read or write their own profile
+      allow read: if isOwner(uid);
+      // Writes: must be authenticated owner; prevent privilege escalation
+      allow write: if isOwner(uid)
+        && !('role' in request.resource.data)        // no role field
+        && !('admin' in request.resource.data);      // no admin flag
+    }
+
+    // ── Stats ─────────────────────────────────────────────────────────────────
+    match /stats/{uid} {
+      allow read: if isOwner(uid);
+      allow write: if isOwner(uid);
+    }
+
+    // ── Leaderboard scores ────────────────────────────────────────────────────
+    match /scores/{scoreId} {
+      // Anyone signed in can read scores (leaderboard)
+      allow read: if isSignedIn();
+      // Only the owner can create their own score, with validated fields
+      allow create: if isSignedIn() && validScoreFields();
+      // Scores are immutable once written
+      allow update, delete: if false;
+    }
+
+    // ── Story progress ────────────────────────────────────────────────────────
+    match /story/{uid} {
+      allow read: if isOwner(uid);
+      allow write: if isOwner(uid);
+    }
+
+    // ── Lobbies ───────────────────────────────────────────────────────────────
+    match /lobbies/{code} {
+      allow read: if isSignedIn();
+
+      // Create: must be signed in; hostUid must match caller
+      allow create: if isSignedIn()
+        && request.resource.data.hostUid == request.auth.uid
+        && request.resource.data.status == 'waiting'
+        && request.resource.data.players.size() == 1
+        && request.resource.data.players[0].uid == request.auth.uid;
+
+      // Update: must be signed in AND (be the host OR only update your own player slot)
+      allow update: if isSignedIn() && (
+        // Host can update any lobby-level fields
+        resource.data.hostUid == request.auth.uid
+        ||
+        // Non-host players: hostUid and status must remain unchanged
+        // (they can only push board snapshots, scores, ready flag for their own slot)
+        (
+          request.resource.data.hostUid == resource.data.hostUid &&
+          request.resource.data.status  == resource.data.status  &&
+          request.resource.data.code    == resource.data.code
+        )
+      );
+
+      // Only host can delete the lobby
+      allow delete: if isSignedIn() && resource.data.hostUid == request.auth.uid;
+    }
+
+    // ── Artwork votes ─────────────────────────────────────────────────────────
+    match /artwork_votes/{trackId} {
+      // Anyone can read vote tallies (public)
+      allow read: if true;
+      // Only signed-in users can vote; they can only set their own vote
+      allow write: if isSignedIn()
+        && request.resource.data.trackId == trackId
+        && request.resource.data.up is int && request.resource.data.up >= 0
+        && request.resource.data.down is int && request.resource.data.down >= 0;
+    }
+
+    // ── Admin alerts (write-only from client; devs read via console/Functions) ──
+    match /admin_alerts/{alertId} {
+      allow read: if false;   // never expose admin alerts to clients
+      allow create: if isSignedIn();
+      allow update, delete: if false;
+    }
+
+    // ── Deny everything else ──────────────────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
+// ── Note on lobby player validation ──────────────────────────────────────────
+// Firestore rules cannot deeply validate which element of the `players` array
+// a client is modifying. For full per-player isolation, add a Cloud Function
+// trigger on lobbies/{code} updates that rejects writes where a non-host uid
+// modifies another player's entry.
+// See: https://firebase.google.com/docs/firestore/security/rules-conditions

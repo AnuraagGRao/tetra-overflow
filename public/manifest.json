@@ -1,9 +1,12 @@
 {
   "name": "Tetra Overflow Ultra",
-  "short_name": "TetraUltra",
+  "short_name": "Tetra Over-Ultra",
   "description": "Mobile-first PWA block-stacking game with Ultimate mode, Zone mechanic, and glitch effects.",
   "start_url": "/tetra-overflow/",
   "scope": "/tetra-overflow/",
+  "id": "/tetra-overflow/",
+  "capture_links": "existing-client",
+  "launch_handler": { "client_mode": "focus-existing" },
   "display": "fullscreen",
   "background_color": "#05060d",
   "theme_color": "#05060d",

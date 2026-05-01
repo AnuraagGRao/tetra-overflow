@@ -1,12 +1,22 @@
 // Background music using pre-recorded MP3 tracks + Web Audio one-shot SFX.
-// Per-track gain — adjust these values if a track sounds louder/quieter than the rest.
-const TRACKS = [
-  { url: new URL('./Full_Throttle_Logic.mp3',    import.meta.url).href, gain: 0.85 },
-  { url: new URL('./Gravity_s_Last_Descent.mp3', import.meta.url).href, gain: 0.75 },
-  { url: new URL('./Perfect_Rotation.mp3',       import.meta.url).href, gain: 0.90 },
-  { url: new URL('./The_Last_Key.mp3',           import.meta.url).href, gain: 0.80 },
-  { url: new URL('./The_Winning_Move.mp3',       import.meta.url).href, gain: 0.85 },
-]
+// Auto-discover all mp3s in this folder via Vite's glob import, and apply
+// gentle normalisation per track with optional filename-based overrides.
+const MODULES = import.meta.glob('./*.mp3', { eager: true, import: 'default' })
+const DEFAULT_GAIN = 0.85
+const GAIN_OVERRIDES = {
+  'Full_Throttle_Logic': 0.85,
+  'Gravity_s_Last_Descent': 0.75,
+  'Perfect_Rotation': 0.90,
+  'The_Last_Key': 0.80,
+  'The_Winning_Move': 0.85,
+}
+const TRACKS = Object.entries(MODULES)
+  .map(([path, url]) => {
+    const name = path.split('/').pop().replace(/\.mp3$/, '')
+    const gain = GAIN_OVERRIDES[name] ?? DEFAULT_GAIN
+    return { url, gain, name }
+  })
+  .sort((a, b) => a.name.localeCompare(b.name))
 
 export class MusicManager {
   constructor(audioCtx) {
@@ -17,9 +27,8 @@ export class MusicManager {
     this._trackGain = null   // per-track normalisation GainNode
     this._buffers   = new Array(TRACKS.length).fill(null)
     this._loaded    = new Array(TRACKS.length).fill(false)
-    this._targetVol = 0.9   // master volume target while playing
-    this._repeatCount = 0   // how many times current track has played
-    this._maxRepeats  = 2   // play each track 2–3 times (randomised per track)
+    this._targetVol    = 0.9  // master volume target while playing
+    this._shuffleQueue = []    // shuffle-without-replacement track queue
 
     // Audio graph: trackGain -> masterGain -> lpf -> volumeGain -> destination
     this.masterGain = audioCtx.createGain()
@@ -38,6 +47,10 @@ export class MusicManager {
     this.volumeGain.connect(audioCtx.destination)
 
     this._loadAll()
+  }
+
+  _dbg(msg) {
+    try { if (typeof window !== 'undefined' && window.__sfxDebug) console.log(`[BGM] ${msg} @ ${Math.round(performance.now())}`) } catch {}
   }
 
   // -- Asset loading ----------------------------------------------------------
@@ -93,19 +106,8 @@ export class MusicManager {
     src.connect(tg)
     src.onended = () => {
       if (!this.playing) return
-      this._repeatCount++
-      if (this._repeatCount < this._maxRepeats) {
-        // Play the same track again
-        this._playIndex(index)
-      } else {
-        // Enough repeats — pick a new random track
-        this._repeatCount = 0
-        this._maxRepeats  = 2 + Math.floor(Math.random() * 2)  // 2 or 3 next time
-        let next
-        do { next = Math.floor(Math.random() * TRACKS.length) } while (next === index && TRACKS.length > 1)
-        this.trackIndex = next
-        this._playIndex(this.trackIndex)
-      }
+      this.trackIndex = this._nextTrackIndex()
+      this._playIndex(this.trackIndex)
     }
     src.start()
     this._source = src
@@ -113,15 +115,26 @@ export class MusicManager {
 
   // -- Public API -------------------------------------------------------------
 
+  /** Play every track once (shuffled) before any repeats. */
+  _nextTrackIndex() {
+    if (this._shuffleQueue.length === 0) {
+      const arr = Array.from({ length: TRACKS.length }, (_, i) => i)
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1))
+        ;[arr[i], arr[j]] = [arr[j], arr[i]]
+      }
+      this._shuffleQueue = arr
+    }
+    return this._shuffleQueue.shift()
+  }
+
   /** Start BGM (call from user-gesture handler). */
   start() {
+    this._dbg('start')
     if (this.playing) return
     if (this.ctx.state === 'suspended') this.ctx.resume()
-    this.playing = true
-    // Start from a random track each session
-    this.trackIndex   = Math.floor(Math.random() * TRACKS.length)
-    this._repeatCount = 0
-    this._maxRepeats  = 2 + Math.floor(Math.random() * 2)
+    this.playing    = true
+    this.trackIndex = this._nextTrackIndex()
     const t = this.ctx.currentTime
     this.masterGain.gain.cancelScheduledValues(t)
     this.masterGain.gain.setValueAtTime(0, t)
@@ -131,6 +144,7 @@ export class MusicManager {
 
   /** Fully stop BGM (game over / quitting). */
   stop() {
+    this._dbg('stop')
     if (!this.playing) return
     this.playing = false
     const t = this.ctx.currentTime
@@ -146,6 +160,7 @@ export class MusicManager {
 
   /** Mute BGM without stopping playback (game paused). */
   pause() {
+    this._dbg('pause')
     const t = this.ctx.currentTime
     this.masterGain.gain.cancelScheduledValues(t)
     this.masterGain.gain.setValueAtTime(this.masterGain.gain.value, t)
@@ -154,6 +169,7 @@ export class MusicManager {
 
   /** Restore BGM after a game-pause. */
   resume() {
+    this._dbg('resume')
     if (!this.playing) return
     if (this.ctx.state === 'suspended') this.ctx.resume()
     const t = this.ctx.currentTime
@@ -176,6 +192,7 @@ export class MusicManager {
 
   /** Zone low-pass + volume duck effect. */
   setZoneFx(on) {
+    this._dbg(on ? 'zoneFx:on' : 'zoneFx:off')
     if (!this.ctx) return
     const t = this.ctx.currentTime
     const targetFreq = on ? 900 : 18000
@@ -201,6 +218,7 @@ export class MusicManager {
   }
 
   playCountdownBeep(n) {
+    this._dbg(`countdown:${n}`)
     if (!this.ctx) return
     if (this.ctx.state === 'suspended') this.ctx.resume()
     if (n > 0) {
@@ -214,6 +232,7 @@ export class MusicManager {
   }
 
   playZoneReady() {
+    this._dbg('zoneReady')
     if (!this.ctx) return
     if (this.ctx.state === 'suspended') this.ctx.resume()
     ;[784.0, 1046.5].forEach((hz, i) =>
@@ -221,6 +240,7 @@ export class MusicManager {
   }
 
   playZoneEnd(lines = 0) {
+    this._dbg(`zoneEnd:${lines}`)
     if (!this.ctx) return
     if (this.ctx.state === 'suspended') this.ctx.resume()
     const base = lines >= 8

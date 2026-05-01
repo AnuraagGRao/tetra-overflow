@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import './App.css'
-import GameCanvas from './components/GameCanvas'
+import GameCanvas, { PIECE_COLOR_MAPS } from './components/GameCanvas'
+import { BG_TYPE_TO_PIECE_THEME } from './logic/themeMappings'
 import TouchControls from './components/TouchControls'
 import ThemeSwitcher from './components/ThemeSwitcher'
 import AboutPage from './components/AboutPage'
@@ -12,9 +13,16 @@ import { useTheme } from './contexts/ThemeContext'
 import { MusicManager } from './audio/musicManager'
 import catImageUrl from './meme/oiia_cat_assets_by_awesomeconsoles7_djwlgwe-fullview.png'
 import catMusicUrl from './meme/YTDown_YouTube_OIIAOIIA-CAT-but-in-4K-Not-Actually_Media_ZHgyQGoeaB0_009_128k.mp3'
+import horror1Url from './meme/horror1.jpg'
+import horror2Url from './meme/horror2.jpg'
+import horror3Url from './meme/horror3.jpg'
+import eerie1Url from './meme/horror1.mp3'
+import eerie2Url from './meme/horror2.mp3'
+import eerie3Url from './meme/horror3.mp3'
 import {
   BLITZ_DURATION_MS, GAME_MODE, PURIFY_DURATION_MS,
   SPRINT_LINES, TetrisEngine, ZONE_DURATION_MS, ZONE_MIN_METER,
+  TOWER_INIT_GARBAGE_MS,
 } from './logic/gameEngine'
 import { PIECES } from './logic/tetrominoes'
 
@@ -46,6 +54,33 @@ let musicManager
 // SFX master volume scale (0–1), updated from config
 let _sfxVol = 1.0
 const setSfxVolume = (v) => { _sfxVol = Math.max(0, Math.min(1, v)) }
+// Temporary ducking multiplier for SFX (0–1) — used during jumpscares etc.
+let _sfxDuck = 1.0
+const setSfxDuck = (v) => { _sfxDuck = Math.max(0, Math.min(1, v)) }
+
+// SFX anti-spam gate: prevents rapid-fire repeats that can sound like loops
+const _sfxGate = {}
+// Dev-only SFX logger. Enable in the console with: window.__sfxDebug = true
+// Logs in BOTH dev and prod when __sfxDebug is truthy.
+const sfxLog = (name, status = 'play') => {
+  try {
+    if (typeof window !== 'undefined' && window.__sfxDebug) {
+      console.log(`[SFX] ${name} ${status} @ ${Math.round(performance.now())}`)
+    }
+  } catch {}
+}
+const sfxPermit = (name, minGapMs = 60, windowMs = 800, maxPerWindow = 6) => {
+  const now = performance.now()
+  const g = _sfxGate[name] || { last: 0, hits: [] }
+  if (now - g.last < minGapMs) return false
+  g.last = now
+  g.hits = (g.hits || []).filter(t => now - t < windowMs)
+  if (g.hits.length >= maxPerWindow) { _sfxGate[name] = g; sfxLog(name, 'drop'); return false }
+  g.hits.push(now)
+  _sfxGate[name] = g
+  sfxLog(name, 'play')
+  return true
+}
 
 const getAudioCtx = () => {
   if (!ToneContext) return null
@@ -63,6 +98,7 @@ const playNote = (freq, duration, gain, type = 'sine', offset = 0) => {
   osc.type = type; osc.frequency.value = freq
   const t = ctx.currentTime + offset
   g.gain.setValueAtTime(gain * _sfxVol, t)
+  g.gain.setValueAtTime(gain * _sfxVol * _sfxDuck, t)
   g.gain.exponentialRampToValueAtTime(0.001, t + duration)
   osc.start(t); osc.stop(t + duration + 0.01)
 }
@@ -81,7 +117,7 @@ const playNoise = (lpFreq, gain, dur, offset = 0) => {
   const g = ctx.createGain()
   src.connect(flt); flt.connect(g); g.connect(ctx.destination)
   const t = ctx.currentTime + offset
-  g.gain.setValueAtTime(gain * _sfxVol, t)
+  g.gain.setValueAtTime(gain * _sfxVol * _sfxDuck, t)
   g.gain.exponentialRampToValueAtTime(0.001, t + dur)
   src.start(t); src.stop(t + dur + 0.01)
 }
@@ -89,6 +125,7 @@ const playNoise = (lpFreq, gain, dur, offset = 0) => {
 // Move SFX — subtle, rate-limited so DAS doesn't spam it
 let _lastMoveBeep = 0
 const playMoveSFX = (theme = 'classic') => {
+  sfxLog('move')
   const now = performance.now();
   if (now - _lastMoveBeep < 75) return;
   _lastMoveBeep = now;
@@ -125,6 +162,7 @@ const playMoveSFX = (theme = 'classic') => {
 };
 
 const playTapSFX = (theme = 'classic') => {
+  sfxLog('tap')
   switch (theme) {
     case 'sketch':
       playNoise(3200, 0.24, 0.022);
@@ -152,6 +190,18 @@ const playTapSFX = (theme = 'classic') => {
       break;
   }
 };
+
+// Softer chaos wave cue for Ultimate (replaces harsh infection SFX)
+let _lastChaosSfx = 0
+const playChaosWaveSFX = (theme = 'classic') => {
+  const now = performance.now()
+  // Rate-limit to avoid overlap if waves get very close together
+  if (now - _lastChaosSfx < 1200) return
+  _lastChaosSfx = now
+  // Gentle whoosh + low thump, both obey global SFX duck
+  playNoise(2200, 0.18, 0.055)
+  playNote(110, 0.10, 0.11, 'sine', 0.01)
+}
 
 const playSwipeSFX = (dir, theme = 'classic') => {
   switch (theme) {
@@ -208,6 +258,7 @@ const playSwipeSFX = (dir, theme = 'classic') => {
 };
 
 const playRotateSFX = (theme = 'classic') => {
+  if (!sfxPermit('rotate', 30, 400, 10)) return
   switch (theme) {
     case 'sketch':
       // Pencil twist: short burst noise + mild note
@@ -242,6 +293,7 @@ const playRotateSFX = (theme = 'classic') => {
 };
 
 const playLockSFX = (theme = 'classic') => {
+  if (!sfxPermit('lock', 45, 600, 8)) return
   switch (theme) {
     case 'sketch':
       // Paper tap + pencil flick
@@ -286,6 +338,7 @@ const playLockSFX = (theme = 'classic') => {
 };
 
 const playHardDropSFX = (theme = 'classic') => {
+  if (!sfxPermit('hardDrop', 80, 600, 6)) return
   switch (theme) {
     case 'sketch':
       // Loud paper slam: wideband noise + low triangle blop
@@ -329,6 +382,7 @@ const playHardDropSFX = (theme = 'classic') => {
 };
 
 const playLineClearSFX = (theme = 'classic') => {
+  if (!sfxPermit('lineClear', 70, 800, 6)) return
   switch (theme) {
     case 'sketch':
       // Paper scrap: sharp filtered noise and soft "bristle" tap
@@ -367,6 +421,7 @@ const playLineClearSFX = (theme = 'classic') => {
 };
 
 const playTSpinSFX = (theme = 'classic') => {
+  if (!sfxPermit('tspin', 100, 800, 4)) return
   switch (theme) {
     case 'sketch':
       // Squeaky pencil scratch + short noise
@@ -409,6 +464,7 @@ const playTSpinSFX = (theme = 'classic') => {
 };
 
 const playTetrisSFX = (theme = 'classic') => {
+  if (!sfxPermit('tetris', 120, 1000, 3)) return
   switch (theme) {
     case 'sketch':
       // Ripping paper & celebratory "clap"
@@ -455,6 +511,7 @@ const playTetrisSFX = (theme = 'classic') => {
 };
 
 const playAllClearSFX = (theme = 'classic') => {
+  if (!sfxPermit('allclear', 200, 1500, 2)) return
   switch (theme) {
     case 'sketch':
       // Great sweep, paper-air fanfare, bright paper shimmer
@@ -501,6 +558,7 @@ const playAllClearSFX = (theme = 'classic') => {
 };
 
 const playB2BSFX = (theme = 'classic') => {
+  if (!sfxPermit('b2b', 200, 1200, 2)) return
   switch (theme) {
     case 'sketch':
       // Double pencil tap and paper flick
@@ -540,7 +598,16 @@ const playB2BSFX = (theme = 'classic') => {
   }
 };
 
+// Softer floor-advance fanfare (separate from 'tetris' cue)
+const playFloorFanfareSFX = (theme = 'classic') => {
+  if (!sfxPermit('floor', 250, 1500, 2)) return
+  // short celebratory gliss + tiny whoosh
+  arp([392, 523, 659], 0.06, 0.14, 'triangle')
+  playNoise(2600, 0.08, 0.025, 0.06)
+}
+
 const playLevelUpSFX = (theme = 'classic') => {
+  if (!sfxPermit('levelup', 250, 1500, 2)) return
   switch (theme) {
     case 'sketch':
       arp([262, 330, 392, 660, 1230], 0.10, 0.20, 'triangle');
@@ -570,6 +637,7 @@ const playLevelUpSFX = (theme = 'classic') => {
 };
 
 const playZoneActivateSFX = (theme = 'classic') => {
+  if (!sfxPermit('zoneActivate', 250, 2000, 2)) return
   switch (theme) {
     case 'sketch':
       // Dramatic big paper whip + rising clarity
@@ -982,7 +1050,7 @@ const playCountdownTickSFX = (second, theme = 'classic') => {
 
 // ─── Config / settings storage ───────────────────────────────────────────────
 const CONFIG_KEY = 'tetris-config'
-const DEFAULT_CONFIG = { sfxEnabled: true, hapticEnabled: true, musicVolume: 1.0, sfxVolume: 2.0, das: 110, arr: 25 }
+const DEFAULT_CONFIG = { sfxEnabled: true, hapticEnabled: true, musicVolume: 1.0, sfxVolume: 2.0, das: 110, arr: 25, showOnScreenControls: false }
 const loadConfig = () => {
   try { return { ...DEFAULT_CONFIG, ...JSON.parse(localStorage.getItem(CONFIG_KEY) ?? '{}') } }
   catch (e) { console.warn('Failed to load config:', e); return { ...DEFAULT_CONFIG } }
@@ -1001,6 +1069,10 @@ const PREV_ROWS = 2
 
 function PiecePreview({ type, small = false }) {
   const canvasRef = useRef(null)
+  // When a world background is active in Solo mode, mirror story behaviour and
+  // show previews using the mapped piece theme.
+  const { theme, bgTheme } = useTheme()
+  const previewTheme = bgTheme ? (BG_TYPE_TO_PIECE_THEME[bgTheme] ?? theme) : theme
   const cell = small ? 8 : PREV_CELL
 
   useEffect(() => {
@@ -1008,7 +1080,8 @@ function PiecePreview({ type, small = false }) {
     const ctx = canvas.getContext('2d')
     ctx.clearRect(0, 0, canvas.width, canvas.height)
     if (!type) return
-    const { matrix, color } = PIECES[type]
+    const { matrix } = PIECES[type]
+    const color = (PIECE_COLOR_MAPS[previewTheme]?.[type]) ?? PIECES[type].color
     const filled = matrix.filter(r => r.some(Boolean))
     const colMin = Math.min(...filled.map(r => r.findIndex(Boolean)))
     const colMax = Math.max(...filled.map(r => r.length - 1 - [...r].reverse().findIndex(Boolean)))
@@ -1024,7 +1097,7 @@ function PiecePreview({ type, small = false }) {
         ctx.restore()
       }
     })
-  }, [type, cell])
+  }, [type, cell, previewTheme])
 
   const w = PREV_COLS * cell, h = PREV_ROWS * cell
   return (
@@ -1089,12 +1162,82 @@ export default function App() {
 
   // ─── Ultimate cat music (separate Audio element) ─────────────────────────
   const catAudioRef = useRef(null)
+  const isCatRunRef = useRef(false)
+  const catFadeTimerRef = useRef(null)
+  const catRunEndAtRef = useRef(0)
+  const eerieAudiosRef = useRef([])
+  const eerieCurrentRef = useRef(null)
+  const eerieFadeTimerRef = useRef(null)
+  const [jumpscare, setJumpscare] = useState(null) // { src, until }
+  const lastJumpscareRef = useRef(0)
+  const jumpscareAllowedAfterRef = useRef(0)
+  const jumpscareCooldownRef = useRef(60000)
+  const sfxDuckTimerRef = useRef(null)
+  const chaosSfxLastRef = useRef(0)
+  const chaosSfxMutedUntilRef = useRef(0)
+  const chaosCueEndAtRef = useRef(0)
+  const [floorFx, setFloorFx] = useState(null) // { until, floor, burstCat }
   useEffect(() => {
     const el = new Audio(catMusicUrl)
-    el.loop = true
+    el.loop = false
     el.volume = 0.70
     catAudioRef.current = el
     return () => { el.pause(); el.src = '' }
+  }, [])
+
+  useEffect(() => {
+    const urls = [eerie1Url, eerie2Url, eerie3Url].filter(Boolean)
+    const els = urls.map(u => { const a = new Audio(u); a.loop = false; a.volume = 0.3; return a })
+    eerieAudiosRef.current = els
+    return () => { els.forEach(a => { try { a.pause(); a.src = '' } catch {} }) }
+  }, [])
+
+  const stopEerie = useCallback(() => {
+    try {
+      if (eerieFadeTimerRef.current) { clearInterval(eerieFadeTimerRef.current); eerieFadeTimerRef.current = null }
+      const cur = eerieCurrentRef.current
+      if (cur) { cur.pause(); cur.currentTime = 0; eerieCurrentRef.current = null }
+    } catch {}
+  }, [])
+
+  const fadeOutAndStopEerie = useCallback((audio, ms = 500) => {
+    try {
+      if (!audio) return
+      if (eerieFadeTimerRef.current) { clearInterval(eerieFadeTimerRef.current); eerieFadeTimerRef.current = null }
+      const steps = 10
+      const stepDur = Math.max(16, Math.floor(ms / steps))
+      let i = 0
+      eerieFadeTimerRef.current = setInterval(() => {
+        i += 1
+        const t = 1 - i / steps
+        audio.volume = Math.max(0, 0.3 * Math.max(0, t))
+        if (i >= steps) {
+          clearInterval(eerieFadeTimerRef.current); eerieFadeTimerRef.current = null
+          try { audio.pause(); audio.currentTime = 0 } catch {}
+          if (eerieCurrentRef.current === audio) eerieCurrentRef.current = null
+        }
+      }, stepDur)
+    } catch {}
+  }, [])
+
+  const fadeOutAndStopCat = useCallback((audio, ms = 1200) => {
+    try {
+      if (!audio) return
+      if (catFadeTimerRef.current) { clearInterval(catFadeTimerRef.current); catFadeTimerRef.current = null }
+      const startVol = Math.min(0.7, audio.volume || 0.7)
+      const steps = 12
+      const stepDur = Math.max(16, Math.floor(ms / steps))
+      let i = 0
+      catFadeTimerRef.current = setInterval(() => {
+        i += 1
+        const t = 1 - i / steps
+        audio.volume = Math.max(0, startVol * Math.max(0, t))
+        if (i >= steps) {
+          clearInterval(catFadeTimerRef.current); catFadeTimerRef.current = null
+          try { audio.pause(); audio.currentTime = 0 } catch {}
+        }
+      }, stepDur)
+    } catch {}
   }, [])
 
   // Persist config changes
@@ -1242,8 +1385,20 @@ export default function App() {
       setTheme('classic')
     } else if (mode === GAME_MODE.ULTIMATE) {
       engine.setTopOutHandler(null)
-      // Signal engine to use meme blocks (cat image)
-      engine.useMemeBlocks = true
+      // Sometimes enable cat run (music + cat blocks)
+      const isCat = Math.random() < 0.3
+      isCatRunRef.current = isCat
+      engine.useMemeBlocks = isCat
+      // Schedule when jumpscares are allowed to start (hidden window in minutes)
+      const now = performance.now()
+      const minDelay = 60_000  // 1 min
+      const maxDelay = 180_000 // 3 min
+      jumpscareAllowedAfterRef.current = now + (minDelay + Math.random() * (maxDelay - minDelay))
+      // Reset last and randomize an initial cooldown window (1–2 min)
+      lastJumpscareRef.current = 0
+      jumpscareCooldownRef.current = 60_000 + Math.random() * 60_000
+      // Fully disable chaos/"infection" cue after ~9s to ensure it never feels like a loop
+      chaosCueEndAtRef.current = now + 9_000
     } else {
       engine.setTopOutHandler(null)
       engine.useMemeBlocks = false
@@ -1262,9 +1417,19 @@ export default function App() {
       countdownActiveRef.current = false
       setCountdown(null)
       musicManager?.playCountdownBeep?.(0) // "GO!" fanfare
-      // Start music: Ultimate uses cat track, others use normal BGM
-      if (gameModeRef.current === GAME_MODE.ULTIMATE) {
-        catAudioRef.current?.play().catch(() => {})
+      // Start music: Ultimate may use cat track briefly, then fade it out
+      if (gameModeRef.current === GAME_MODE.ULTIMATE && isCatRunRef.current) {
+        const a = catAudioRef.current
+        if (a) {
+          a.currentTime = 0
+          a.volume = 0.65
+          a.play().catch(() => {})
+          const endAt = performance.now() + 15000 // play ~15s, then fade/stop
+          catRunEndAtRef.current = endAt
+          setTimeout(() => fadeOutAndStopCat(a, 1200), 15000)
+          // Also revert cat blocks/background after the same window
+          setTimeout(() => { try { engine.useMemeBlocks = false } catch {} }, 15050)
+        }
       } else if (musicOnRef.current) {
         musicManager?.start()
         musicManager?.setVolume(configRef.current.musicVolume)
@@ -1316,26 +1481,74 @@ export default function App() {
         doVibrate([30, 15, 30, 15, 40])
       }
       if (ns.ultimateGarbageAdded) {
-        if (sfxOn) playInfectionSFX(theme)  // reuse chaos SFX
-        doVibrate([80, 30, 80])
+          // Explicitly disable chaos/"infection" cue SFX (and vibration) in Ultimate.
+          // No-op by design per request.
+        // Randomized jumpscare trigger after a hidden initial delay and long cooldown
+        const jsNow = performance.now()
+        if (
+          isUltimate &&
+          jsNow >= (jumpscareAllowedAfterRef.current || 0) &&
+          jsNow - (lastJumpscareRef.current || 0) > (jumpscareCooldownRef.current || 0) &&
+          Math.random() < 0.25
+        ) {
+          const imgs = [horror1Url, horror2Url, horror3Url]
+          const src = imgs[Math.floor(Math.random() * imgs.length)]
+          lastJumpscareRef.current = jsNow
+          setJumpscare({ src, until: jsNow + 1600 })
+          try {
+            const arr = eerieAudiosRef.current || []
+            if (arr.length) {
+              stopEerie()
+              const a = arr[Math.floor(Math.random() * arr.length)]
+              a.currentTime = 0; a.volume = 0.28
+              eerieCurrentRef.current = a
+              a.play().catch(() => {})
+              // Auto fade-out and stop towards the end of the visual flash
+              setTimeout(() => fadeOutAndStopEerie(a, 600), 1000)
+            }
+          } catch {}
+          // Duck all other SFX while the jumpscare plays to avoid stacking loudness
+          try {
+            setSfxDuck(0.5)
+            if (sfxDuckTimerRef.current) clearTimeout(sfxDuckTimerRef.current)
+            sfxDuckTimerRef.current = setTimeout(() => setSfxDuck(1.0), 1700)
+          } catch {}
+          // Randomize next cooldown between 1–2 minutes to avoid predictability
+          jumpscareCooldownRef.current = 60_000 + Math.random() * 60_000
+          setTimeout(() => setJumpscare(null), 1650)
+        }
       }
-      if (ns.lastCombo > 0 && sfxOn) playComboSFX(ns.lastCombo, theme)
+      let playedClearCue = false
       if (ns.lastClear) {
         const { spinType, lines, isAllClear } = ns.lastClear
         if (isAllClear) {
           if (sfxOn) playAllClearSFX(theme)
           doVibrate([30, 10, 30, 10, 30, 10, 80])
+          playedClearCue = true
         } else if (spinType === 'tSpin' || spinType === 'allSpin') {
           if (sfxOn) playTSpinSFX(theme)
           doVibrate([20, 15, 40])
+          playedClearCue = true
         } else if (lines === 4) {
           if (sfxOn) playTetrisSFX(theme)
           doVibrate([30, 10, 30, 10, 30, 10, 80])
+          playedClearCue = true
         } else if (lines > 0) {
           if (sfxOn) playLineClearSFX(theme)
           doVibrate(playLineClearHaptic(lines))
+          playedClearCue = true
         }
       }
+      // After handling clear cues, play floor fanfare only if no clear SFX fired this frame
+      if (ns.towerFloorAdvance) {
+        if (sfxOn && !playedClearCue) playFloorFanfareSFX(theme)
+        doVibrate([20, 10, 30, 10, 60])
+        // Trigger brief visual floor FX overlay; occasional cat cameo like the meme
+        const burstCat = Math.random() < 0.35
+        setFloorFx({ until: performance.now() + 1600, floor: ns.towerFloor, burstCat })
+        setTimeout(() => setFloorFx(prev => (prev && performance.now() >= prev.until ? null : prev)), 1650)
+      }
+      if (ns.lastCombo > 0 && sfxOn) playComboSFX(ns.lastCombo, theme)
       // B2B streak start
       if (ns.backToBack && !prevBackToBackRef.current && sfxOn) playB2BSFX(theme)
       prevBackToBackRef.current = ns.backToBack
@@ -1397,6 +1610,9 @@ export default function App() {
         if (sfxOn) playGameOverSFX(theme)
         doVibrate([100, 50, 100, 50, 100])
         if (musicOnRef.current) { musicManager?.stop(); musicOnRef.current = false; setMusicOn(false) }
+        if (gameModeRef.current === GAME_MODE.ULTIMATE && isCatRunRef.current) { try { catAudioRef.current.pause(); catAudioRef.current.currentTime = 0 } catch {} }
+        stopEerie()
+        setSfxDuck(1.0)
         const hs = loadHighScores(), key = gameModeRef.current
         if (!hs[key] || ns.score > hs[key]) {
           hs[key] = ns.score
@@ -1595,9 +1811,19 @@ export default function App() {
     if (s.paused) {
       if (sfxOn) playPauseSFX(theme)
       if (musicOnRef.current) musicManager?.pause()
+      if (gameModeRef.current === GAME_MODE.ULTIMATE && isCatRunRef.current) catAudioRef.current?.pause()
+      // Ensure jumpscare audio stops when pausing
+      stopEerie()
+      setSfxDuck(1.0)
     } else {
       if (sfxOn) playResumeSFX(theme)
       if (musicOnRef.current) musicManager?.resume()
+      if (gameModeRef.current === GAME_MODE.ULTIMATE && isCatRunRef.current) {
+        // Only resume cat sound if we are still within its 10s window
+        if (performance.now() < (catRunEndAtRef.current || 0)) {
+          catAudioRef.current?.play().catch(() => {})
+        }
+      }
     }
   }
 
@@ -1633,12 +1859,13 @@ export default function App() {
   const isPurify   = state.mode === GAME_MODE.PURIFY
   const isUltimate = state.mode === GAME_MODE.ULTIMATE
   const isVersus   = state.mode === GAME_MODE.VERSUS
+  const isTower    = state.mode === GAME_MODE.TOWER || state.mode === GAME_MODE.ULTIMATE
   const showZone   = state.mode === GAME_MODE.NORMAL || state.mode === GAME_MODE.ULTIMATE
 
   // Glitch effect: active in Ultimate when stack reaches row 10 from top
   const glitchActive = isUltimate && (() => {
     if (!state.board) return false
-    for (let r = 0; r < 10; r++) {
+    for (let r = 0; r < 14; r++) {
       if (state.board[r]?.some(c => c !== null)) return true
     }
     return false
@@ -1669,6 +1896,7 @@ export default function App() {
         <div className="overlay-sub">Score: {s.score.toLocaleString()}</div>
         {s.mode === GAME_MODE.SPRINT && <div className="overlay-sub">Time: {fmtElapsed(s.elapsedTime)}</div>}
         {s.mode === GAME_MODE.PURIFY && <div className="overlay-sub">Purified: {s.blocksPurified} blocks</div>}
+        {s.mode === GAME_MODE.TOWER && <div className="overlay-sub">🗼 Floor {s.towerFloor} reached!</div>}
         <div className="overlay-sub">Lv {s.level} · {s.lines} lines</div>
         {!isP2 && <button type="button" className="overlay-restart" onClick={() => startGame(gameMode)}>Play Again</button>}
       </div>
@@ -1772,6 +2000,18 @@ export default function App() {
         )}
         {highScores[state.mode] != null && (
           <div className="high-score-line">Best: {highScores[state.mode].toLocaleString()}</div>
+        )}
+        {isTower && (
+          <>
+            <div className="stat-item" style={{ marginTop: '0.4rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '0.4rem' }}>
+              <span className="label">Floor</span>
+              <span className="value" style={{ color: '#fb923c', textShadow: '0 0 10px #fb923c88' }}>{state.towerFloor}</span>
+            </div>
+            <div style={{ width: '100%', height: 4, background: 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden', margin: '4px 0' }}>
+              <div style={{ height: '100%', background: '#fb923c', borderRadius: 2, transition: 'width 0.2s ease', width: `${Math.round(((state.towerFloorLines || 0) / (state.towerFloorTarget || 5)) * 100)}%` }} />
+            </div>
+            <div style={{ fontSize: '0.5rem', color: '#888', letterSpacing: '0.1em' }}>{state.towerFloorLines || 0}/{state.towerFloorTarget || 5} LINES</div>
+          </>
         )}
       </div>
 
@@ -1897,6 +2137,69 @@ export default function App() {
                 onTwoFingerTap={() => triggerAction('activateZone')}
                 onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop} />
               <GlitchOverlay active={glitchActive} />
+              {/* Floor FX overlay */}
+              <AnimatePresence>
+                {floorFx && (
+                  <motion.div
+                    key="floor-fx"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.18 }}
+                    style={{ position: 'absolute', inset: 0, zIndex: 48, pointerEvents: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    {floorFx.burstCat && (
+                      <motion.img
+                        src={catImageUrl}
+                        alt=""
+                        initial={{ scale: 1.2, opacity: 0.06 }}
+                        animate={{ rotate: [0, 360], opacity: [0.08, 0.12, 0.08], scale: [1.2, 1.0] }}
+                        transition={{ duration: 1.2, ease: 'linear' }}
+                        style={{ position: 'absolute', width: '140%', height: '140%', objectFit: 'cover', filter: 'contrast(110%) saturate(108%)' }}
+                      />
+                    )}
+                    {[0, 1, 2].map(i => (
+                      <motion.div
+                        key={i}
+                        initial={{ scale: 0.6, opacity: 0.35 }}
+                        animate={{ scale: 1.6 + i * 0.2, opacity: 0 }}
+                        transition={{ duration: 0.9 + i * 0.15, ease: 'easeOut' }}
+                        style={{ position: 'absolute', width: 220 + i * 30, height: 220 + i * 30, borderRadius: '50%', border: '2px solid #a855f7', boxShadow: '0 0 14px #a855f777 inset' }}
+                      />
+                    ))}
+                    <motion.div
+                      initial={{ y: 10, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      exit={{ y: -8, opacity: 0 }}
+                      transition={{ duration: 0.22 }}
+                      style={{ position: 'relative', zIndex: 2, padding: '0.35rem 0.7rem', borderRadius: 8, background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontWeight: 900, letterSpacing: '0.14em', fontSize: '0.9rem', textAlign: 'center' }}
+                    >
+                      FLOOR {state.towerFloor}
+                    </motion.div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+              <AnimatePresence>
+                {jumpscare && (
+                  <motion.div
+                    key="jumpscare"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.22 }}
+                    style={{ position: 'absolute', inset: 0, background: '#000', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <motion.img
+                      src={jumpscare.src}
+                      alt=""
+                      initial={{ scale: 1.02 }}
+                      animate={{ scale: 1, rotate: [-1.5, 1.5, -1.0] }}
+                      transition={{ duration: 1.4, ease: 'easeInOut' }}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'contrast(115%) saturate(108%)' }}
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
               {renderOverlay(state, false)}
               {renderPauseOverlay(state)}
               {renderZoneEnd(state)}
@@ -1914,7 +2217,17 @@ export default function App() {
                 )}
                 {state.zoneActive && <span style={{ color: 'var(--c-zone)', fontWeight: 700 }}>⚡ ZONE {Math.ceil(state.zoneTimer / 1000)}s</span>}
               </span>
-              <span />
+              <span style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                {isUltimate && !state.gameOver && (
+                  <div title="Next chaos wave" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: '0.72rem', color: '#889', letterSpacing: '0.08em' }}>CHAOS</span>
+                    <div style={{ width: 90, height: 6, background: 'rgba(255,255,255,0.08)', borderRadius: 3, overflow: 'hidden' }}>
+                      <div style={{ width: `${Math.round(Math.max(0, Math.min(1, 1 - (state.ultimateTimer / (state.ultimatePeriod || 1)))) * 100)}%`, height: '100%', background: 'linear-gradient(90deg,#a855f7,#22d3ee)', boxShadow: '0 0 10px #22d3ee66 inset' }} />
+                    </div>
+                    <span style={{ fontSize: '0.72rem', color: '#889', width: 28, textAlign: 'right' }}>{Math.ceil((state.ultimateTimer || 0)/1000)}s</span>
+                  </div>
+                )}
+              </span>
             </div>
           </div>
 
@@ -1982,6 +2295,12 @@ export default function App() {
               style={{ width: `${zoneFillPct}%` }} />
           </div>
         )}
+        {/* chaos bar (Ultimate) */}
+        {isUltimate && !state.gameOver && (
+          <div style={{ marginTop: 6, width: '100%', height: 6, background: 'rgba(255,255,255,0.08)', borderRadius: 3, overflow: 'hidden' }}>
+            <div style={{ width: `${Math.round(Math.max(0, Math.min(1, 1 - (state.ultimateTimer / (state.ultimatePeriod || 1)))) * 100)}%`, height: '100%', background: 'linear-gradient(90deg,#a855f7,#22d3ee)' }} />
+          </div>
+        )}
 
         {/* board */}
         <div className={`ls-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`}>
@@ -2023,11 +2342,10 @@ export default function App() {
         <div className="ls-util ls-util-3">
           <button type="button" className="ls-util-btn" onClick={() => setShowSettings(true)}>⚙</button>
         </div>
-        <div className="ls-theme"><ThemeSwitcher /></div>
 
         {/* mode selector */}
         <div className="ls-modes">
-          {[
+          {[ 
             { mode: GAME_MODE.NORMAL,  label: 'Normal'  },
             { mode: GAME_MODE.SPRINT,  label: 'Sprint'  },
             { mode: GAME_MODE.BLITZ,   label: 'Blitz'   },
@@ -2102,6 +2420,11 @@ export default function App() {
             style={{ width: `${zoneFillPct}%` }} />
         </div>
       )}
+      {isUltimate && !state.gameOver && (
+        <div style={{ marginTop: 6, width: '100%', height: 6, background: 'rgba(255,255,255,0.08)', borderRadius: 3, overflow: 'hidden' }}>
+          <div style={{ width: `${Math.round(Math.max(0, Math.min(1, 1 - (state.ultimateTimer / (state.ultimatePeriod || 1)))) * 100)}%`, height: '100%', background: 'linear-gradient(90deg,#a855f7,#22d3ee)' }} />
+        </div>
+      )}
       <div className={`mobile-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`}>
         <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
           onTwoFingerTap={() => triggerAction('activateZone')}
@@ -2159,11 +2482,10 @@ export default function App() {
           <button type="button" className="ls-util-btn" onClick={() => setShowAbout(true)}>ℹ</button>
           <button type="button" className="ls-util-btn" onClick={() => setShowSettings(true)}>⚙</button>
         </div>
-        <div className="ls-theme"><ThemeSwitcher /></div>
 
         {/* Mode grid */}
         <div className="ls-modes">
-          {[
+          {[ 
             { mode: GAME_MODE.NORMAL, label: 'Normal' },
             { mode: GAME_MODE.SPRINT, label: 'Sprint' },
             { mode: GAME_MODE.BLITZ,  label: 'Blitz'  },
