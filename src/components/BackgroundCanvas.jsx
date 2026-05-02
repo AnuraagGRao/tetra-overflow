@@ -9,6 +9,7 @@ const BG_BASE = {
   // New types
   forest:'#000802', glacier:'#000a18', volcano:'#150200',
   inferno:'#100000', aurora:'#000410', warp:'#000008', abyss:'#000000',
+  oiia:'#0a0010',
 }
 
 // ── Layer 1: Animated ambient gradient ───────────────────────────────────────
@@ -239,6 +240,14 @@ function drawAmbient(ctx, bgType, w, h, t) {
       g.addColorStop(0,'rgba(5,0,12,0.5)'); g.addColorStop(1,'rgba(0,0,0,0)')
       ctx.fillStyle = g; ctx.fillRect(0,0,w,h); break
     }
+    case 'oiia': {
+      // Pink/purple dreamy pulsing glow
+      const g = ctx.createRadialGradient(w*0.5+Math.sin(t*0.0006)*w*0.2, h*0.5+Math.cos(t*0.0008)*h*0.15, 0, w*0.5, h*0.5, h*0.8)
+      g.addColorStop(0,`hsla(${300+Math.sin(t*0.0007)*30},90%,28%,0.6)`)
+      g.addColorStop(0.5,`hsla(${330+Math.cos(t*0.0005)*20},80%,15%,0.4)`)
+      g.addColorStop(1,'rgba(10,0,16,0)')
+      ctx.fillStyle = g; ctx.fillRect(0,0,w,h); break
+    }
     default:
       ctx.fillStyle = BG_BASE[bgType]||'#000'; ctx.fillRect(0,0,w,h)
   }
@@ -285,6 +294,11 @@ function makeParticle(bgType, w, h, init=false) {
       return { x:w/2, y:h/2, angle, dist:Math.random()*25, speed:3+Math.random()*4, length:5+Math.random()*15, hue:200+Math.random()*60, life:1, decay:0 }
     }
     case 'abyss':  return { x, y:Math.random()*h, vx:(Math.random()-0.5)*0.08, vy:(Math.random()-0.5)*0.08, r:5+Math.random()*14, hue:260+Math.random()*80, life:Math.random(), decay:0.0015, growing:Math.random()<0.5 }
+    case 'oiia': {
+      // Spinning cat-colored stars
+      const angle = Math.random()*Math.PI*2
+      return { x:Math.random()*w, y:Math.random()*h, vx:(Math.random()-0.5)*0.3, vy:(Math.random()-0.5)*0.3, r:4+Math.random()*10, hue:300+Math.random()*60, life:Math.random(), decay:0.003+Math.random()*0.003, growing:Math.random()<0.5, rot:angle, rotSpeed:(Math.random()-0.5)*0.06 }
+    }
     default: return { x, y:Math.random()*h, vx:0, vy:0, r:1, hue:0, life:1, decay:0.001, glow:false }
   }
 }
@@ -334,6 +348,14 @@ function updateParticle(p, bgType, w, h, dt) {
     p.x += p.vx*s; p.y += p.vy*s
     if (p.growing) { p.life += 0.0018*s; if (p.life >= 0.9) p.growing=false }
     else { p.life -= 0.0018*s; if (p.life <= 0.05) p.growing=true }
+    if (p.x < -p.r*2) p.x=w+p.r*2; else if (p.x > w+p.r*2) p.x=-p.r*2
+    if (p.y < -p.r*2) p.y=h+p.r*2; else if (p.y > h+p.r*2) p.y=-p.r*2
+    return false
+  }
+  if (bgType === 'oiia') {
+    p.x += p.vx*s; p.y += p.vy*s
+    if (p.growing) { p.life += 0.0022*s; if (p.life >= 0.9) p.growing=false }
+    else { p.life -= 0.0022*s; if (p.life <= 0.05) p.growing=true }
     if (p.x < -p.r*2) p.x=w+p.r*2; else if (p.x > w+p.r*2) p.x=-p.r*2
     if (p.y < -p.r*2) p.y=h+p.r*2; else if (p.y > h+p.r*2) p.y=-p.r*2
     return false
@@ -434,6 +456,26 @@ function drawParticle(ctx, p, bgType, w, h, beat = 0) {
     gr.addColorStop(0,`hsla(${p.hue},40%,50%,1)`); gr.addColorStop(1,'rgba(0,0,0,0)')
     ctx.fillStyle=gr; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill()
     ctx.restore(); return
+  }
+
+  // OIIA spinning cat-paw star shapes
+  if (bgType==='oiia') {
+    if (p.rot!==undefined) p.rot += (p.rotSpeed||0.04)
+    const alpha = p.growing ? 0.06+p.life*0.18 : p.life*0.22
+    ctx.globalAlpha = Math.max(0, alpha * (1 + beat * 0.4))
+    ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot||0)
+    // Draw 5-pointed star
+    ctx.fillStyle = `hsl(${p.hue},90%,68%)`
+    ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 8 + p.r
+    ctx.beginPath()
+    for (let pt=0; pt<10; pt++) {
+      const a = (pt*Math.PI/5) - Math.PI/2
+      const radius = pt%2===0 ? p.r : p.r*0.45
+      if (pt===0) ctx.moveTo(Math.cos(a)*radius, Math.sin(a)*radius)
+      else ctx.lineTo(Math.cos(a)*radius, Math.sin(a)*radius)
+    }
+    ctx.closePath(); ctx.fill()
+    ctx.restore(); ctx.restore(); return
   }
 
   // Generic glow circle (lava, ember, crystal, ocean, nebula, blackhole, inferno, volcano, quake)
@@ -547,6 +589,13 @@ function drawForeground(ctx, bgType, w, h, t, beat = 0) {
       const ag=ctx.createRadialGradient(w*0.5,h*0.5,h*0.22,w*0.5,h*0.5,h*0.72)
       ag.addColorStop(0,'rgba(0,0,0,0)'); ag.addColorStop(1,`rgba(0,0,0,${breathe})`)
       ctx.fillStyle=ag; ctx.fillRect(0,0,w,h); break
+    }
+    case 'oiia': {
+      // Pulsing pink shimmer
+      const pulse=0.06+0.04*Math.sin(t*0.0022)
+      const og=ctx.createRadialGradient(w*0.5,h*0.5,h*0.1,w*0.5,h*0.5,h*0.8)
+      og.addColorStop(0,'rgba(255,110,180,0.14)'); og.addColorStop(0.5,`rgba(180,50,255,${pulse})`); og.addColorStop(1,'rgba(0,0,0,0)')
+      ctx.fillStyle=og; ctx.fillRect(0,0,w,h); break
     }
     default: break
   }

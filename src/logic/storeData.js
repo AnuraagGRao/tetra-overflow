@@ -97,6 +97,7 @@ export const STORE_ITEMS = [
   { id: 'bg_blackhole', type: 'bg', bgType: 'blackhole', name: 'BLACK HOLE', description: 'Accretion disk orbiting a singularity.',     price: 0, emoji: '🕳️', accent: '#a855f7', storyUnlock: true },
   { id: 'bg_abyss',     type: 'bg', bgType: 'abyss',     name: 'ABYSS',      description: 'Breathing darkness with ghost wisps.',       price: 0, emoji: '👁️', accent: '#6366f1', storyUnlock: true },
   { id: 'bg_matrix',    type: 'bg', bgType: 'matrix',    name: 'MATRIX',     description: 'Cascading katakana in the digital rain.',    price: 0, emoji: '🟩', accent: '#22c55e', storyUnlock: true },
+  { id: 'bg_oiia',      type: 'bg', bgType: 'oiia',      name: 'OIIA CAT',   description: 'OIIA OIIA spinning cats everywhere.',        price: 0, emoji: '🐱', accent: '#ff6eb4' },
 
   // ── Story Piece Themes (unlocked by completing specific levels) ───────────
   {

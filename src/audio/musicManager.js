@@ -29,6 +29,7 @@ export class MusicManager {
     this._loaded    = new Array(TRACKS.length).fill(false)
     this._targetVol    = 0.9  // master volume target while playing
     this._shuffleQueue = []    // shuffle-without-replacement track queue
+    this._muted        = false
 
     // Audio graph: trackGain -> masterGain -> lpf -> volumeGain -> destination
     this.masterGain = audioCtx.createGain()
@@ -140,6 +141,8 @@ export class MusicManager {
     this.masterGain.gain.setValueAtTime(0, t)
     this.masterGain.gain.linearRampToValueAtTime(this._targetVol, t + 0.6)
     this._playIndex(this.trackIndex)
+    // Apply current mute state to volume gain
+    this.setMuted(this._muted)
   }
 
   /** Fully stop BGM (game over / quitting). */
@@ -176,6 +179,8 @@ export class MusicManager {
     this.masterGain.gain.cancelScheduledValues(t)
     this.masterGain.gain.setValueAtTime(this.masterGain.gain.value, t)
     this.masterGain.gain.linearRampToValueAtTime(this._targetVol, t + 0.35)
+    // Keep muted state respected when resuming
+    if (this._muted) this.volumeGain.gain.setValueAtTime(0, t)
   }
 
   /** User-controlled master volume (0-1). */
@@ -248,5 +253,30 @@ export class MusicManager {
       : [392.0, 523.3, 659.3, 784.0, 1046.5]
     base.forEach((hz, i) =>
       this._sfxNote(hz, 0.16, 0.30, 'triangle', i * 0.06))
+  }
+
+  // -- Media controls / UI helpers -----------------------------------------
+  next() {
+    if (!this.playing) return
+    try { this._source?.stop() } catch {}
+    this.trackIndex = this._nextTrackIndex()
+    this._playIndex(this.trackIndex)
+  }
+  prev() {
+    if (!this.playing) return
+    // Restart current track (no full history available)
+    try { this._source?.stop() } catch {}
+    this._playIndex(this.trackIndex)
+  }
+  setMuted(on) {
+    this._muted = !!on
+    const t = this.ctx.currentTime
+    const target = this._muted ? 0 : this._targetVol
+    this.volumeGain.gain.setTargetAtTime(target, t, 0.05)
+  }
+  isMuted() { return !!this._muted }
+  getNowPlaying() {
+    const name = TRACKS[this.trackIndex]?.name || ''
+    return name.replace(/_/g,' ').replace(/\b(\w)/g, m=>m.toUpperCase())
   }
 }

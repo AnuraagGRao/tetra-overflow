@@ -161,6 +161,36 @@ function useStoryGameLoop(engine, targetLines, levelStartLinesRef, levelKey, onC
 // ─── Page ──────────────────────────────────────────────────────────────────────
 const PHASE = { STORY: 'story', GAME: 'game', TRANSITION: 'transition', COMPLETE: 'complete', FAIL: 'fail' }
 
+function MediaControls({ storyMusicRef, chapterColor }) {
+  const [bump, setBump] = useState(0)
+  const m = storyMusicRef?.current
+  const now = m?.getNowPlaying?.()
+  const shuffle = m?.getShuffleEachLoop?.() ?? true
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center', minWidth: 260 }}>
+      <div style={{ fontSize: '0.62rem', color: '#bbb', letterSpacing: '0.12em', textAlign: 'center', maxWidth: 320 }}>
+        Now Playing: <span style={{ color: chapterColor, fontWeight: 700 }}>{now?.title || '—'}</span>
+      </div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'center' }}>
+        <button onClick={() => { m?.prev?.(); setBump(x=>x+1) }} style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '6px 10px', fontSize: '0.75rem', cursor: 'pointer', fontFamily: 'inherit' }}>⏮</button>
+        <button onClick={() => m?.pause?.()} style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '6px 10px', fontSize: '0.75rem', cursor: 'pointer', fontFamily: 'inherit' }}>⏸</button>
+        <button onClick={() => m?.resume?.()} style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '6px 10px', fontSize: '0.75rem', cursor: 'pointer', fontFamily: 'inherit' }}>▶</button>
+        <button onClick={() => { m?.next?.(); setBump(x=>x+1) }} style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '6px 10px', fontSize: '0.75rem', cursor: 'pointer', fontFamily: 'inherit' }}>⏭</button>
+        <button onClick={() => { const on = !(m?.getShuffleEachLoop?.()); m?.setShuffleEachLoop?.(on); setBump(x=>x+1) }} style={{ background: shuffle ? 'rgba(0,212,255,0.10)' : 'rgba(255,255,255,0.07)', border: shuffle?`1px solid ${chapterColor}`:'1px solid rgba(255,255,255,0.18)', color: shuffle?chapterColor:'#ccc', borderRadius: 6, padding: '6px 10px', fontSize: '0.70rem', cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.06em' }}>
+          🔀 {shuffle ? 'Shuffle On' : 'Shuffle Off'}
+        </button>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+        <span style={{ fontSize: '0.60rem', color: '#777' }}>Xfade</span>
+        <input type="range" min={0.5} max={4} step={0.1}
+          onChange={(e) => m?.setCrossfadeSeconds?.(parseFloat(e.target.value))}
+          defaultValue={1.6}
+          style={{ width: 160 }} />
+      </div>
+    </div>
+  )
+}
+
 export default function StoryLevelPage() {
   const { chapterId, levelId } = useParams()
   const navigate = useNavigate()
@@ -177,6 +207,7 @@ export default function StoryLevelPage() {
   const [finalLines, setFinalLines] = useState(0)
   const [finalScore, setFinalScore] = useState(0)
   const [saving,     setSaving]     = useState(false)
+  const [storyCountdown, setStoryCountdown] = useState(null) // auto-begin countdown
 
   // Engine persists across seamless level transitions — never reset between levels
   const engine = useMemo(() => new TetrisEngine(), []) // eslint-disable-line
@@ -188,6 +219,7 @@ export default function StoryLevelPage() {
 
   const storyMusicRef = useRef(null)
   const beatRef       = useRef(0)
+  const [musicTick, setMusicTick] = useState(0) // force UI refresh on media actions
 
   // Apply DAS / ARR config
   useEffect(() => {
@@ -222,6 +254,23 @@ export default function StoryLevelPage() {
       engine.level = Math.max(3, Math.round(gm * 5 + 1))
     }
   }, [phase, engine, found])
+
+  // Story auto-begin: count down from 13 s and auto-start the game
+  useEffect(() => {
+    if (phase !== PHASE.STORY) { setStoryCountdown(null); return }
+    setStoryCountdown(13)
+    let remaining = 13
+    const id = setInterval(() => {
+      remaining -= 1
+      setStoryCountdown(remaining)
+      if (remaining <= 0) {
+        clearInterval(id)
+        pendingResetRef.current = true
+        setPhase(PHASE.GAME)
+      }
+    }, 1000)
+    return () => clearInterval(id)
+  }, [phase, currentChapterId, currentLevelId]) // reset timer on each new level story screen
 
   // Seamless transition: advance to next level after 2.5 s overlay
   useEffect(() => {
@@ -364,12 +413,18 @@ export default function StoryLevelPage() {
                     CLEAR {level.targetLines} LINES
                   </div>
                 )}
+                {/* Auto-begin progress bar */}
+                {storyCountdown !== null && storyCountdown > 0 && (
+                  <div style={{ width: 200, height: 3, background: 'rgba(255,255,255,0.08)', borderRadius: 2, overflow: 'hidden', marginBottom: 2 }}>
+                    <div style={{ height: '100%', background: chapter.color, borderRadius: 2, transition: 'width 0.9s linear', width: `${((13 - storyCountdown) / 13) * 100}%` }} />
+                  </div>
+                )}
                 <motion.button
                   whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
                   onClick={() => { pendingResetRef.current = true; setPhase(PHASE.GAME) }}
                   style={{ background: chapter.color, border: 'none', color: '#000', borderRadius: 8, padding: '11px 28px', fontSize: '0.82rem', fontWeight: 900, letterSpacing: '0.2em', cursor: 'pointer', fontFamily: 'inherit', textTransform: 'uppercase' }}
                 >
-                  BEGIN
+                  {storyCountdown !== null && storyCountdown > 0 ? `BEGIN (${storyCountdown}s)` : 'BEGIN'}
                 </motion.button>
                 <button onClick={() => navigate('/story', { replace: true })} style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: '0.65rem', letterSpacing: '0.12em', fontFamily: 'inherit', marginTop: 4 }}>
                   ← Back to map
@@ -413,30 +468,10 @@ export default function StoryLevelPage() {
             </div>
           )}
 
-          {/* Middle: hold | canvas | next */}
+          {/* Middle: slim-left | canvas | hold+zone+next-right */}
           <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'stretch' }}>
-            {/* Left strip: Hold + Zone */}
-            <div style={{ width: 56, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '10px 4px', gap: 6, background: 'rgba(0,0,0,0.28)' }}>
-              <div style={{ fontSize: '0.45rem', color: '#555', letterSpacing: '0.12em' }}>HOLD</div>
-              <PieceMini type={state.hold} pieceTheme={pieceTheme} size={10} />
-              <div style={{ flex: 1 }} />
-              <button
-                onClick={() => triggerAction('activateZone')}
-                disabled={state.zoneMeter < ZONE_MIN_METER || state.zoneActive}
-                style={{
-                  background: state.zoneActive ? 'rgba(0,229,255,0.18)' : state.zoneMeter >= ZONE_MIN_METER ? 'rgba(0,180,255,0.22)' : 'rgba(255,255,255,0.04)',
-                  border: `1px solid ${state.zoneActive ? '#00e5ff' : state.zoneMeter >= ZONE_MIN_METER ? '#00aaff' : 'rgba(255,255,255,0.1)'}`,
-                  color: state.zoneActive ? '#00e5ff' : state.zoneMeter >= ZONE_MIN_METER ? '#80d4ff' : '#444',
-                  borderRadius: 6, padding: '5px 6px', cursor: state.zoneMeter >= ZONE_MIN_METER && !state.zoneActive ? 'pointer' : 'default',
-                  fontSize: '0.55rem', letterSpacing: '0.08em', fontFamily: 'inherit', width: '100%', transition: 'all 0.2s',
-                }}
-              >
-                {state.zoneActive ? '◈ ON' : 'ZONE'}
-              </button>
-              <div style={{ width: 8, height: 60, background: 'rgba(255,255,255,0.06)', borderRadius: 4, overflow: 'hidden', position: 'relative' }}>
-                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: `${state.zoneMeter}%`, background: state.zoneActive ? '#00e5ff' : `hsl(${200 + state.zoneMeter * 0.4}, 90%, 60%)`, transition: 'height 0.15s ease' }} />
-              </div>
-            </div>
+            {/* Left strip: slim score / mode accent (no controls) */}
+            <div style={{ width: 6, flexShrink: 0, background: chapter.color, opacity: 0.25 }} />
 
             {/* Canvas */}
             <div className="mobile-canvas-wrap" style={{ background: 'transparent', flex: 1, minWidth: 0 }}>
@@ -453,9 +488,14 @@ export default function StoryLevelPage() {
                 />
                 {/* Pause overlay */}
                 {paused && (
-                  <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.82)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 14 }}>
+                  <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.82)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12 }}>
                     <div style={{ fontSize: '1.2rem', fontWeight: 900, letterSpacing: '0.2em', color: '#fff' }}>PAUSED</div>
                     <div style={{ fontSize: '0.58rem', color: chapter.color, letterSpacing: '0.22em' }}>{chapter.title} › {level.title}</div>
+                    <div style={{ fontSize: '0.56rem', color: '#555', letterSpacing: '0.14em' }}>
+                      Lv {state.level} · {linesThisLevel} / {level.targetLines || '∞'} lines
+                    </div>
+                    {/* Media player controls */}
+                    <MediaControls storyMusicRef={storyMusicRef} chapterColor={chapter.color} />
                     <motion.button
                       whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
                       onClick={togglePause}
@@ -480,11 +520,35 @@ export default function StoryLevelPage() {
               </div>
             </div>
 
-            {/* Right strip: Next 3 pieces */}
-            <div style={{ width: 56, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '10px 4px', gap: 6, background: 'rgba(0,0,0,0.28)' }}>
-              <div style={{ fontSize: '0.45rem', color: '#555', letterSpacing: '0.12em' }}>NEXT</div>
+            {/* Right strip: Hold + Zone + Next (all on right side) */}
+            <div style={{ width: 64, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '8px 4px', gap: 5, background: 'rgba(0,0,0,0.48)', borderLeft: '1px solid rgba(255,255,255,0.06)' }}>
+              <div style={{ fontSize: '0.42rem', color: '#555', letterSpacing: '0.12em' }}>HOLD</div>
+              <div style={{ background: 'rgba(5,7,18,0.85)', border: '1px solid rgba(80,130,200,0.18)', borderRadius: 6, padding: '3px', display: 'grid', placeItems: 'center', minHeight: '2.2rem', width: '100%' }}>
+                <PieceMini type={state.hold} pieceTheme={pieceTheme} size={9} />
+              </div>
+              <div style={{ width: '100%', height: 1, background: 'rgba(255,255,255,0.07)', marginTop: 2 }} />
+              <button
+                onClick={() => triggerAction('activateZone')}
+                disabled={state.zoneMeter < ZONE_MIN_METER || state.zoneActive}
+                style={{
+                  background: state.zoneActive ? 'rgba(0,229,255,0.18)' : state.zoneMeter >= ZONE_MIN_METER ? 'rgba(0,180,255,0.22)' : 'rgba(255,255,255,0.04)',
+                  border: `1px solid ${state.zoneActive ? '#00e5ff' : state.zoneMeter >= ZONE_MIN_METER ? '#00aaff' : 'rgba(255,255,255,0.1)'}`,
+                  color: state.zoneActive ? '#00e5ff' : state.zoneMeter >= ZONE_MIN_METER ? '#80d4ff' : '#444',
+                  borderRadius: 6, padding: '4px 4px', cursor: state.zoneMeter >= ZONE_MIN_METER && !state.zoneActive ? 'pointer' : 'default',
+                  fontSize: '0.5rem', letterSpacing: '0.06em', fontFamily: 'inherit', width: '100%', transition: 'all 0.2s',
+                }}
+              >
+                {state.zoneActive ? `⚡ ${Math.ceil(state.zoneTimer / 1000)}s` : `ZONE ${state.zoneMeter}%`}
+              </button>
+              <div style={{ width: '100%', height: 5, background: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${state.zoneMeter}%`, background: state.zoneActive ? '#00e5ff' : `hsl(${200 + state.zoneMeter * 0.4}, 90%, 60%)`, transition: 'width 0.15s ease', boxShadow: state.zoneActive ? '0 0 6px #00e5ff' : 'none' }} />
+              </div>
+              <div style={{ width: '100%', height: 1, background: 'rgba(255,255,255,0.07)', marginTop: 2 }} />
+              <div style={{ fontSize: '0.42rem', color: '#555', letterSpacing: '0.12em' }}>NEXT</div>
               {(state.queue ?? []).slice(0, 3).map((type, i) => (
-                <PieceMini key={i} type={type} pieceTheme={pieceTheme} size={i === 0 ? 10 : 8} />
+                <div key={i} style={{ background: 'rgba(5,7,18,0.85)', border: '1px solid rgba(80,130,200,0.18)', borderRadius: 5, padding: '2px', display: 'grid', placeItems: 'center', width: '100%' }}>
+                  <PieceMini type={type} pieceTheme={pieceTheme} size={i === 0 ? 9 : 7} />
+                </div>
               ))}
             </div>
           </div>

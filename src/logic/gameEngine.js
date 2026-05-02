@@ -2,7 +2,7 @@ import { createBag } from './randomBag'
 import { I_KICKS, JLSTZ_KICKS } from './srs'
 import { BOARD_HEIGHT, BOARD_WIDTH, PIECES } from './tetrominoes'
 
-export const GAME_MODE = { NORMAL: 'normal', SPRINT: 'sprint', BLITZ: 'blitz', MASTER: 'master', PURIFY: 'purify', VERSUS: 'versus', ZEN: 'zen', ULTIMATE: 'ultimate', TOWER: 'tower' }
+export const GAME_MODE = { NORMAL: 'normal', SPRINT: 'sprint', BLITZ: 'blitz', MASTER: 'master', PURIFY: 'purify', VERSUS: 'versus', ZEN: 'zen', ULTIMATE: 'ultimate' /*, TOWER: 'tower' — merged into ULTIMATE */ }
 export const PURIFY_DURATION_MS = 180000
 export const BLITZ_DURATION_MS  = 120000
 export const SPRINT_LINES       = 40
@@ -244,8 +244,8 @@ export class TetrisEngine {
       this.board = createEmptyBoard()
       this.infectedCols = []
     }
-    // Tower Climb: pre-fill bottom rows with garbage (also used in Ultimate after merge)
-    if (mode === GAME_MODE.TOWER || mode === GAME_MODE.ULTIMATE) {
+    // Tower Climb: pre-fill bottom rows with garbage (ULTIMATE only — TOWER merged)
+    if (mode === GAME_MODE.ULTIMATE) {
       for (let r = 0; r < TOWER_PREFILL_ROWS; r++) {
         const gapCol = Math.floor(Math.random() * BOARD_WIDTH)
         const row = Array(BOARD_WIDTH).fill('GBG')
@@ -551,7 +551,7 @@ export class TetrisEngine {
       this.level = Math.floor(this.lines / 10) + 1
 
       // Tower Climb: track floor progress (also when merged into Ultimate)
-      if ((this.mode === GAME_MODE.TOWER || this.mode === GAME_MODE.ULTIMATE) && cleared > 0) {
+      if (this.mode === GAME_MODE.ULTIMATE && cleared > 0) {
         this.towerFloorLines += cleared
         if (this.towerFloorLines >= this.towerFloorTarget) {
           this.towerFloorLines -= this.towerFloorTarget
@@ -978,8 +978,12 @@ export class TetrisEngine {
     }
 
     // Tower Climb: escalating garbage pressure
-    if (this.mode === GAME_MODE.TOWER) {
+    // Reset towerFloorAdvance single-frame flag each frame (ULTIMATE mode only)
+    if (this.mode === GAME_MODE.ULTIMATE) {
       this.towerFloorAdvance = false
+    }
+    /* TOWER-only garbage timer — TOWER mode removed, merged into ULTIMATE
+    if (this.mode === GAME_MODE.TOWER) {
       this.towerGarbageTimer -= dt
       if (this.towerGarbageTimer <= 0) {
         const garbageAmt = this.towerFloor <= 5 ? 1 : this.towerFloor <= 15 ? 2 : 3
@@ -987,7 +991,7 @@ export class TetrisEngine {
         this.shake = Math.max(this.shake, 3)
         this.towerGarbageTimer = this.towerGarbageInterval
       }
-    }
+    } */
 
     if (actions.hold) this.holdPiece()
     if (actions.rotateCW) this.tryRotate(1)

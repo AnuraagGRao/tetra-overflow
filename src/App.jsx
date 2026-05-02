@@ -10,7 +10,9 @@ import SettingsPage from './components/SettingsPage'
 import LoadingScreen from './components/LoadingScreen'
 import GlitchOverlay from './components/GlitchOverlay'
 import { useTheme } from './contexts/ThemeContext'
+import { useAuth } from './contexts/AuthContext'
 import { MusicManager } from './audio/musicManager'
+import { saveGameResult } from './firebase/db'
 import catImageUrl from './meme/oiia_cat_assets_by_awesomeconsoles7_djwlgwe-fullview.png'
 import catMusicUrl from './meme/YTDown_YouTube_OIIAOIIA-CAT-but-in-4K-Not-Actually_Media_ZHgyQGoeaB0_009_128k.mp3'
 import horror1Url from './meme/horror1.jpg'
@@ -598,12 +600,13 @@ const playB2BSFX = (theme = 'classic') => {
   }
 };
 
-// Softer floor-advance fanfare (separate from 'tetris' cue)
+// Softer floor-advance bell (separate from 'tetris' cue) — single resonant tone, not an arp
 const playFloorFanfareSFX = (theme = 'classic') => {
-  if (!sfxPermit('floor', 250, 1500, 2)) return
-  // short celebratory gliss + tiny whoosh
-  arp([392, 523, 659], 0.06, 0.14, 'triangle')
-  playNoise(2600, 0.08, 0.025, 0.06)
+  if (!sfxPermit('floor', 1200, 4000, 1)) return  // very restrictive — once per 1.2s, one per 4s window
+  // Resonant bell: distinct from any line-clear arp so it doesn't feel like a loop
+  playNote(1047, 0.28, 0.08, 'sine')
+  playNote(1568, 0.18, 0.05, 'sine', 0.07)
+  playNote(2093, 0.12, 0.03, 'sine', 0.14)
 }
 
 const playLevelUpSFX = (theme = 'classic') => {
@@ -1111,8 +1114,8 @@ function PiecePreview({ type, small = false }) {
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 export default function App() {
-  const { setTheme } = useTheme()
-  const { theme } = useTheme();
+  const { setTheme, theme, bgTheme } = useTheme()
+  const { user } = useAuth()
   const engine  = useMemo(() => new TetrisEngine(), [])
 
   const [isLoading, setIsLoading] = useState(true)
@@ -1553,7 +1556,8 @@ export default function App() {
       if (ns.backToBack && !prevBackToBackRef.current && sfxOn) playB2BSFX(theme)
       prevBackToBackRef.current = ns.backToBack
       // Level up
-      if (ns.level > prevLevelRef.current && sfxOn) playLevelUpSFX(theme)
+      // Suppress level-up SFX in Ultimate — level isn't meaningful there and the sound feels like a loop
+      if (ns.level > prevLevelRef.current && sfxOn && ns.mode !== GAME_MODE.ULTIMATE) playLevelUpSFX(theme)
       prevLevelRef.current = ns.level
       // Zone meter milestones (50%, 75%) + zone ready (100%)
       const prevMeter = prevZoneMeterRef.current
@@ -1618,6 +1622,12 @@ export default function App() {
           hs[key] = ns.score
           localStorage.setItem(HS_KEY, JSON.stringify(hs))
           setHighScores({ ...hs }); setNewHigh(true)
+        }
+        // Save to Firestore (coins = 1 per 1000 pts, best score updated, leaderboard)
+        if (user?.uid) {
+          saveGameResult(user.uid, gameModeRef.current, ns.score, {
+            lines: ns.lines, level: ns.level,
+          }).catch(() => {})
         }
       }
       prevGameOverRef.current = ns.gameOver
@@ -1859,7 +1869,7 @@ export default function App() {
   const isPurify   = state.mode === GAME_MODE.PURIFY
   const isUltimate = state.mode === GAME_MODE.ULTIMATE
   const isVersus   = state.mode === GAME_MODE.VERSUS
-  const isTower    = state.mode === GAME_MODE.TOWER || state.mode === GAME_MODE.ULTIMATE
+  const isTower    = state.mode === GAME_MODE.ULTIMATE  // TOWER merged into ULTIMATE
   const showZone   = state.mode === GAME_MODE.NORMAL || state.mode === GAME_MODE.ULTIMATE
 
   // Glitch effect: active in Ultimate when stack reaches row 10 from top
@@ -1896,7 +1906,7 @@ export default function App() {
         <div className="overlay-sub">Score: {s.score.toLocaleString()}</div>
         {s.mode === GAME_MODE.SPRINT && <div className="overlay-sub">Time: {fmtElapsed(s.elapsedTime)}</div>}
         {s.mode === GAME_MODE.PURIFY && <div className="overlay-sub">Purified: {s.blocksPurified} blocks</div>}
-        {s.mode === GAME_MODE.TOWER && <div className="overlay-sub">🗼 Floor {s.towerFloor} reached!</div>}
+        {s.mode === GAME_MODE.ULTIMATE && <div className="overlay-sub">🗼 Floor {s.towerFloor} reached!</div>}
         <div className="overlay-sub">Lv {s.level} · {s.lines} lines</div>
         {!isP2 && <button type="button" className="overlay-restart" onClick={() => startGame(gameMode)}>Play Again</button>}
       </div>
@@ -1906,7 +1916,42 @@ export default function App() {
   const renderPauseOverlay = (s) => s.paused && !s.gameOver ? (
     <div className="overlay">
       <div className="overlay-title">PAUSED</div>
-      <button type="button" className="overlay-restart" onClick={handlePauseToggle}>Resume</button>
+      <div style={{ fontSize: '0.62rem', color: '#666', letterSpacing: '0.16em', marginBottom: '0.6rem', textTransform: 'uppercase' }}>
+        {s.mode?.toUpperCase()} · Lv {s.level} · {s.lines} lines
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: '0.75rem', alignItems: 'center' }}>
+        <div style={{ fontSize: '0.62rem', color: '#bbb', letterSpacing: '0.12em' }}>
+          Now Playing: <span style={{ color: '#fff' }}>{musicManager?.getNowPlaying?.() || '—'}</span>
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+          <button type="button"
+            onClick={() => musicManager?.prev?.()}
+            style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '5px 12px', fontSize: '0.72rem', cursor: 'pointer', fontFamily: 'inherit' }}>⏮</button>
+          {musicOn ? (
+            <button type="button"
+              onClick={() => musicManager?.pause?.()}
+              style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '5px 12px', fontSize: '0.72rem', cursor: 'pointer', fontFamily: 'inherit' }}>⏸</button>
+          ) : (
+            <button type="button"
+              onClick={toggleMusic}
+              style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '5px 12px', fontSize: '0.72rem', cursor: 'pointer', fontFamily: 'inherit' }}>▶</button>
+          )}
+          <button type="button"
+            onClick={() => musicManager?.next?.()}
+            style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '5px 12px', fontSize: '0.72rem', cursor: 'pointer', fontFamily: 'inherit' }}>⏭</button>
+          <button type="button"
+            onClick={() => musicManager?.setMuted?.(!(musicManager?.isMuted?.()))}
+            style={{ background: musicManager?.isMuted?.() ? 'rgba(255,60,60,0.10)' : 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: musicManager?.isMuted?.() ? '#ff6666' : '#ccc', borderRadius: 6, padding: '5px 12px', fontSize: '0.72rem', cursor: 'pointer', fontFamily: 'inherit' }}>
+            {musicManager?.isMuted?.() ? '🔇 Muted' : '🔊 Mute'}
+          </button>
+          <button type="button"
+            onClick={() => setShowSettings(true)}
+            style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '5px 14px', fontSize: '0.72rem', cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.1em' }}>
+            ⚙ Settings
+          </button>
+        </div>
+      </div>
+      <button type="button" className="overlay-restart" onClick={handlePauseToggle}>▶ Resume</button>
     </div>
   ) : null
 
@@ -1967,14 +2012,9 @@ export default function App() {
     </>
   )
 
-  // ─── Left flank (desktop) ───────────────────────────────────────────────────
+  // ─── Left flank (desktop) — Stats only ──────────────────────────────────────
   const leftFlank = (
     <div className="flank flank-left">
-      <div>
-        <div className="flank-label">Hold</div>
-        <PiecePreview type={state.hold} />
-      </div>
-
       <div className="stat-block">
         <div className="stat-item">
           <span className="label">Score</span>
@@ -1982,9 +2022,7 @@ export default function App() {
         </div>
         <div className="stat-item">
           <span className="label">Level</span>
-          <span className="value">
-            {state.level}
-          </span>
+          <span className="value">{state.level}</span>
         </div>
         <div className="stat-item">
           <span className="label">Lines</span>
@@ -2013,36 +2051,58 @@ export default function App() {
             <div style={{ fontSize: '0.5rem', color: '#888', letterSpacing: '0.1em' }}>{state.towerFloorLines || 0}/{state.towerFloorTarget || 5} LINES</div>
           </>
         )}
+        {isPurify && (
+          <>
+            <div className="purify-timer-display" style={{ color: state.purifyTimer < 30000 ? '#f87171' : '#8b5cf6' }}>
+              {fmt(state.purifyTimer)}
+            </div>
+            <div className="purify-count-row">
+              <span>Purified</span>
+              <strong>{state.blocksPurified}</strong>
+            </div>
+          </>
+        )}
       </div>
 
-      {isPurify ? (
-        <div>
-          <div className="purify-timer-display" style={{ color: state.purifyTimer < 30000 ? '#f87171' : '#8b5cf6' }}>
-            {fmt(state.purifyTimer)}
-          </div>
-          <div className="purify-count-row">
-            <span>Purified</span>
-            <strong>{state.blocksPurified}</strong>
-          </div>
+      {state.combo > 1 && (
+        <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--c-warn)', textShadow: '0 0 10px #f59e0b' }}>
+          x{state.combo} COMBO
         </div>
-      ) : showZone ? (() => {
-        const R = 26, circ = 2 * Math.PI * R
-        const fillPct = state.zoneActive
-          ? (state.zoneTimer / (state.zoneDuration || ZONE_DURATION_MS))
-          : state.zoneMeter / 100
-        const offset = circ * (1 - fillPct)
-        const circClass = `zone-circle-fill${state.zoneActive ? ' zone-active' : ''}${zoneReady && !state.zoneActive ? ' zone-ready' : ''}`
-        return (
-          <div className="zone-block">
+      )}
+      {!isPurify && state.backToBack && (
+        <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#ffcc44', letterSpacing: '0.08em' }}>
+          🔥 B2B{state.b2bCount > 1 ? ` x${state.b2bCount}` : ''}
+        </div>
+      )}
+    </div>
+  )
+
+  // ─── Right flank (desktop) — Hold + Zone + Next ──────────────────────────────
+  const rightFlank = (() => {
+    const R = 26, circ = 2 * Math.PI * R
+    const fillPct = state.zoneActive
+      ? (state.zoneTimer / (state.zoneDuration || ZONE_DURATION_MS))
+      : state.zoneMeter / 100
+    const offset = circ * (1 - fillPct)
+    const circClass = `zone-circle-fill${state.zoneActive ? ' zone-active' : ''}${zoneReady && !state.zoneActive ? ' zone-ready' : ''}`
+    return (
+      <div className="flank flank-right">
+        <div>
+          <div className="flank-label">Hold</div>
+          <PiecePreview type={state.hold} />
+        </div>
+
+        {showZone && (
+          <div className="zone-block" style={{ marginTop: '0.4rem' }}>
             <div className="flank-label">Zone</div>
             <div className="zone-circle-wrap">
               <svg className="zone-circle-svg" width="64" height="64" viewBox="0 0 64 64">
                 <defs>
-                  <linearGradient id="zoneFillGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <linearGradient id="zoneFillGradR" x1="0%" y1="0%" x2="100%" y2="0%">
                     <stop offset="0%" stopColor="#1e90ff" />
                     <stop offset="100%" stopColor="#00cfff" />
                   </linearGradient>
-                  <linearGradient id="zoneActiveGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <linearGradient id="zoneActiveGradR" x1="0%" y1="0%" x2="100%" y2="0%">
                     <stop offset="0%" stopColor="#8844ff" />
                     <stop offset="100%" stopColor="#00cfff" />
                   </linearGradient>
@@ -2065,37 +2125,21 @@ export default function App() {
             )}
             {state.zoneActive && <div className="zone-status">Floor: {state.zoneFloor} rows</div>}
           </div>
-        )
-      })() : null}
+        )}
 
-      {state.combo > 1 && (
-        <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--c-warn)', textShadow: '0 0 10px #f59e0b' }}>
-          x{state.combo} COMBO
+        <div style={{ marginTop: '0.5rem' }}>
+          <div className="flank-label">Next</div>
+          <div className="queue-list">
+            {state.queue.slice(0, 5).map((type, i) => <PiecePreview key={`${type}-${i}`} type={type} />)}
+          </div>
         </div>
-      )}
-      {!isPurify && state.backToBack && (
-        <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#ffcc44', letterSpacing: '0.08em' }}>
-          🔥 B2B{state.b2bCount > 1 ? ` x${state.b2bCount}` : ''}
-        </div>
-      )}
-    </div>
-  )
 
-  // ─── Right flank (desktop) ──────────────────────────────────────────────────
-  const rightFlank = (
-    <div className="flank flank-right">
-      <div>
-        <div className="flank-label">Next</div>
-        <div className="queue-list">
-          {state.queue.slice(0, 5).map((type, i) => <PiecePreview key={`${type}-${i}`} type={type} />)}
+        <div style={{ marginTop: '0.5rem' }}>
+          <button type="button" className="icon-btn" style={{ width: '100%', justifyContent: 'center', fontSize: '0.72rem' }} onClick={() => setShowSettings(true)}>⚙ Settings</button>
         </div>
       </div>
-
-      <div style={{ marginTop: '0.5rem' }}>
-        <button type="button" className="icon-btn" style={{ width: '100%', justifyContent: 'center', fontSize: '0.72rem' }} onClick={() => setShowSettings(true)}>⚙ Settings</button>
-      </div>
-    </div>
-  )
+    )
+  })()
 
   // ─── Desktop render ─────────────────────────────────────────────────────────
   const renderDesktop = () => (
@@ -2135,7 +2179,8 @@ export default function App() {
             <div className={`game-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`}>
               <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
                 onTwoFingerTap={() => triggerAction('activateZone')}
-                onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop} />
+                onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop}
+                boardAlpha={bgTheme ? 0.42 : undefined} />
               <GlitchOverlay active={glitchActive} />
               {/* Floor FX overlay */}
               <AnimatePresence>
@@ -2306,7 +2351,8 @@ export default function App() {
         <div className={`ls-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`}>
           <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
             onTwoFingerTap={() => triggerAction('activateZone')}
-            onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop} />
+            onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop}
+            boardAlpha={bgTheme ? 0.42 : undefined} />
           {renderOverlay(state, false)}
           {renderPauseOverlay(state)}
           {renderZoneEnd(state)}
@@ -2428,7 +2474,8 @@ export default function App() {
       <div className={`mobile-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`}>
         <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
           onTwoFingerTap={() => triggerAction('activateZone')}
-          onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop} />
+          onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop}
+          boardAlpha={bgTheme ? 0.42 : undefined} />
         <GlitchOverlay active={glitchActive} />
         {renderOverlay(state, false)}
         {renderPauseOverlay(state)}

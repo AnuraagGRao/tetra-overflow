@@ -60,7 +60,7 @@ Active modes (shown in UI):
 | `GAME_MODE.PURIFY` | Purify | Clear infected rows; infection spreads on a timer |
 | `GAME_MODE.ZEN` | Zen | No game-over; endless relaxed play |
 
-Also available: `TOWER` (escalating garbage, floors), `ULTIMATE` (internal), Story chapters.
+`ULTIMATE` combines tower-climb floors + escalating garbage waves + chaos rising. `TOWER` mode was merged into `ULTIMATE` and no longer exists as a standalone mode.
 
 ---
 
