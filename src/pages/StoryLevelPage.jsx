@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
-import { saveStoryProgress, unlockItem } from '../firebase/db'
+import { saveStoryProgress, unlockItem, saveGameResult } from '../firebase/db'
+import SettingsPage from '../components/SettingsPage'
 import { findLevel, getNextLevel } from '../logic/storyData'
 import { PIECES } from '../logic/tetrominoes'
 import { TetrisEngine, GAME_MODE, ZONE_MIN_METER } from '../logic/gameEngine'
@@ -220,6 +221,7 @@ export default function StoryLevelPage() {
   const storyMusicRef = useRef(null)
   const beatRef       = useRef(0)
   const [musicTick, setMusicTick] = useState(0) // force UI refresh on media actions
+  const [showSettings, setShowSettings] = useState(false)
 
   // Apply DAS / ARR config
   useEffect(() => {
@@ -315,6 +317,11 @@ export default function StoryLevelPage() {
       if (found.level.themeUnlock) {
         unlocks.push(unlockItem(user.uid, found.level.themeUnlock))
       }
+      // Also record a score entry for overall totals/coins under 'story' mode
+      try {
+        const lv = engine.getState().level || 1
+        unlocks.push(saveGameResult(user.uid, 'story', score, { lines: lt, level: lv }))
+      } catch {}
       Promise.all(unlocks).finally(() => setSaving(false))
     }
 
@@ -496,6 +503,14 @@ export default function StoryLevelPage() {
                     </div>
                     {/* Media player controls */}
                     <MediaControls storyMusicRef={storyMusicRef} chapterColor={chapter.color} />
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+                      <button
+                        onClick={() => setShowSettings(true)}
+                        style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '6px 16px', cursor: 'pointer', fontSize: '0.72rem', letterSpacing: '0.1em', fontFamily: 'inherit' }}
+                      >
+                        ⚙ Settings
+                      </button>
+                    </div>
                     <motion.button
                       whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
                       onClick={togglePause}
@@ -595,6 +610,19 @@ export default function StoryLevelPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Settings overlay */}
+      {showSettings && (
+        <div style={{ position: 'absolute', inset: 0, zIndex: 120, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.2rem' }}>
+          <div style={{ position: 'relative', width: 'min(760px, 94vw)', maxHeight: '90vh', overflow: 'auto', background: 'rgba(10,12,22,0.95)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12, padding: '1rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <div style={{ fontSize: '0.8rem', letterSpacing: '0.16em', color: '#fff' }}>SETTINGS</div>
+              <button onClick={() => setShowSettings(false)} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontSize: '0.72rem', fontFamily: 'inherit' }}>✕ Close</button>
+            </div>
+            <SettingsPage inline />
+          </div>
+        </div>
+      )}
 
       {/* ── Completion / fail overlay ────────────────────────────────────── */}
       <AnimatePresence>

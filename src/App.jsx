@@ -1123,6 +1123,7 @@ export default function App() {
   const [config, setConfig] = useState(loadConfig)
   const [gameMode, setGameMode]   = useState(GAME_MODE.NORMAL)
   const [musicOn, setMusicOn]     = useState(false)
+  const [coinDelta, setCoinDelta] = useState(0)
   const [countdown, setCountdown] = useState(null)
   const [highScores, setHighScores] = useState(() => loadHighScores())
   const [newHigh, setNewHigh]     = useState(false)
@@ -1374,6 +1375,7 @@ export default function App() {
     setGameMode(mode); gameModeRef.current = mode
     engine.reset(mode, 'easy')
     setState(engine.getState())
+    setCoinDelta(0)
     prevGameOverRef.current = false
     prevLevelRef.current = 1; prevBackToBackRef.current = false; prevZoneMeterRef.current = 0; prevZoneActiveRef.current = false
     zenResettingRef.current = false
@@ -1627,7 +1629,7 @@ export default function App() {
         if (user?.uid) {
           saveGameResult(user.uid, gameModeRef.current, ns.score, {
             lines: ns.lines, level: ns.level,
-          }).catch(() => {})
+          }).then(res => setCoinDelta(res?.coinsEarned || 0)).catch(() => {})
         }
       }
       prevGameOverRef.current = ns.gameOver
@@ -1908,6 +1910,7 @@ export default function App() {
         {s.mode === GAME_MODE.PURIFY && <div className="overlay-sub">Purified: {s.blocksPurified} blocks</div>}
         {s.mode === GAME_MODE.ULTIMATE && <div className="overlay-sub">🗼 Floor {s.towerFloor} reached!</div>}
         <div className="overlay-sub">Lv {s.level} · {s.lines} lines</div>
+        {coinDelta > 0 && <div className="overlay-sub" style={{ color: '#eab308' }}>+{coinDelta} coins</div>}
         {!isP2 && <button type="button" className="overlay-restart" onClick={() => startGame(gameMode)}>Play Again</button>}
       </div>
     )
@@ -1949,6 +1952,13 @@ export default function App() {
             style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '5px 14px', fontSize: '0.72rem', cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.1em' }}>
             ⚙ Settings
           </button>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: '0.60rem', color: '#777' }}>Vol</span>
+          <input type="range" min={0} max={1} step={0.01}
+            value={config.musicVolume}
+            onChange={(e) => { const v = parseFloat(e.target.value); setConfig(prev => ({ ...prev, musicVolume: v })); musicManager?.setVolume?.(v) }}
+            style={{ width: 180 }} />
         </div>
       </div>
       <button type="button" className="overlay-restart" onClick={handlePauseToggle}>▶ Resume</button>
@@ -2007,7 +2017,12 @@ export default function App() {
     <>
       {MODES.map(({ mode, label }) => (
         <button key={mode} type="button" className={`mode-btn${gameMode === mode ? ' active' : ''}`}
-          onClick={() => startGame(mode)}>{label}</button>
+          onClick={() => startGame(mode)}>
+          <span>{label}</span>
+          {mode === GAME_MODE.ULTIMATE && (
+            <span style={{ marginLeft: 8, fontSize: '0.58rem', color: '#eab308', letterSpacing: '0.08em', border: '1px solid rgba(234,179,8,0.45)', borderRadius: 10, padding: '1px 6px', background: 'rgba(234,179,8,0.08)', textTransform: 'uppercase' }}>2× coins</span>
+          )}
+        </button>
       ))}
     </>
   )
@@ -2401,7 +2416,12 @@ export default function App() {
           ].map(({ mode, label }) => (
             <button key={mode} type="button"
               className={`ls-mode-btn${gameMode === mode ? ' active' : ''}`}
-              onClick={() => startGame(mode)}>{label}</button>
+              onClick={() => startGame(mode)}>
+              <span>{label}</span>
+              {mode === GAME_MODE.ULTIMATE && (
+                <span style={{ marginLeft: 6, fontSize: '0.5rem', color: '#eab308', border: '1px solid rgba(234,179,8,0.45)', borderRadius: 8, padding: '0 5px', background: 'rgba(234,179,8,0.08)', textTransform: 'uppercase' }}>2×</span>
+              )}
+            </button>
           ))}
         </div>
       </div>
@@ -2542,7 +2562,12 @@ export default function App() {
           ].map(({ mode, label }) => (
             <button key={mode} type="button"
               className={`ls-mode-btn${gameMode === mode ? ' active' : ''}`}
-              onClick={() => startGame(mode)}>{label}</button>
+              onClick={() => startGame(mode)}>
+              <span>{label}</span>
+              {mode === GAME_MODE.ULTIMATE && (
+                <span style={{ marginLeft: 6, fontSize: '0.5rem', color: '#eab308', border: '1px solid rgba(234,179,8,0.45)', borderRadius: 8, padding: '0 5px', background: 'rgba(234,179,8,0.08)', textTransform: 'uppercase' }}>2×</span>
+              )}
+            </button>
           ))}
         </div>
 

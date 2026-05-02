@@ -119,10 +119,6 @@ export default function SettingsPage({ config, onConfig, onClose }) {
           </div>
         </div>
 
-        <button type="button" className="about-install-btn" onClick={onClose}>
-          Done
-        </button>
-
         {/* Touch Controls Reference */}
         <div className="settings-section">
           <div className="settings-section-title">Touch Controls</div>
@@ -159,6 +155,12 @@ export default function SettingsPage({ config, onConfig, onClose }) {
             </div>
           </div>
         </div>
+
+        <button type="button" className="about-install-btn" onClick={onClose}>
+          Done
+        </button>
+
+
         <div className="settings-version">
           Tetra Overflow<sup className="settings-version-ultra">Ultra</sup> v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.0.0'}
         </div>

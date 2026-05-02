@@ -28,6 +28,34 @@ export const updateUserProfile = async (uid, data) => {
   await updateDoc(doc(db, 'users', uid), data)
 }
 
+// ─── Coins: ledger ──────────────────────────────────────────────────────────
+/** Append a coin ledger entry under users/{uid}/coin_ledger. */
+export const appendCoinLedger = async (uid, entry) => {
+  const ref = collection(db, 'users', uid, 'coin_ledger')
+  await addDoc(ref, { ...entry, createdAt: serverTimestamp() })
+}
+
+/** Atomic coin update with ledger; delta can be positive (earn) or negative (spend). */
+export const addCoinsWithLedger = async (uid, delta, context = {}) => {
+  if (!delta) return { balanceAfter: null }
+  const userRef = doc(db, 'users', uid)
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(userRef)
+    if (!snap.exists()) throw new Error('User not found')
+    const prev = snap.data().coins || 0
+    const next = prev + delta
+    tx.update(userRef, { coins: next })
+    const ledgerRef = doc(collection(db, 'users', uid, 'coin_ledger'))
+    tx.set(ledgerRef, {
+      type: delta >= 0 ? 'earn' : 'spend',
+      amount: Math.abs(delta),
+      balanceAfter: next,
+      ...context,
+      createdAt: serverTimestamp(),
+    })
+  })
+}
+
 // ─── Stats + scores ───────────────────────────────────────────────────────────
 export const saveGameResult = async (uid, mode, score, extra = {}) => {
   const statsRef = doc(db, 'stats', uid)
@@ -44,11 +72,10 @@ export const saveGameResult = async (uid, mode, score, extra = {}) => {
     lastPlayed: serverTimestamp(),
   }, { merge: true })
 
-  // Earn coins: 1 coin per 1000 score
-  const earned = Math.floor(score / 1000)
-  if (earned > 0) {
-    await updateDoc(doc(db, 'users', uid), { coins: increment(earned) })
-  }
+  // Earn coins: 1 coin per 1000 score; Ultimate bonus 2×
+  const rate = mode === 'ultimate' ? 2 : 1
+  const earned = Math.floor(score / 1000) * rate
+  if (earned > 0) await addCoinsWithLedger(uid, earned, { mode, score, lines: extra.lines || 0 })
 
   await addDoc(collection(db, 'scores'), {
     uid,
@@ -88,12 +115,23 @@ export const purchaseItem = async (uid, itemId, cost) => {
     const profile = snap.data()
     if ((profile.coins || 0) < cost) throw new Error('Not enough coins')
     if ((profile.inventory || []).includes(itemId)) throw new Error('Already owned')
-    tx.update(userRef, {
-      coins: increment(-cost),
-      inventory: [...(profile.inventory || []), itemId],
-    })
+    const next = (profile.coins || 0) - cost
+    tx.update(userRef, { coins: next, inventory: [...(profile.inventory || []), itemId] })
+    // Append spend entry in the same transaction
+    const ledgerRef = doc(collection(db, 'users', uid, 'coin_ledger'))
+    tx.set(ledgerRef, { type: 'spend', amount: cost, itemId, balanceAfter: next, createdAt: serverTimestamp() })
   })
 }
+
+/** Get latest N coin ledger entries (desc). */
+export const getCoinHistory = async (uid, lim = 20) => {
+  const q = query(collection(db, 'users', uid, 'coin_ledger'), orderBy('createdAt', 'desc'), limit(lim))
+  const snap = await getDocs(q)
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+}
+
+/** Admin/test: refund the last spend entry and record a refund entry. */
+// Admin refund API removed for production safety.
 
 // ─── Story progress ───────────────────────────────────────────────────────────
 export const saveStoryProgress = async (uid, chapterId, levelId, score, lines = 0) => {

@@ -112,12 +112,15 @@ function MenuCard({ item, index, onClick }) {
       }}
     >
       <div style={{ fontSize: '1.5rem', marginBottom: 6, color: item.color, lineHeight: 1 }}>{item.icon}</div>
-      <div style={{ fontSize: '1rem', fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: hovered ? item.color : '#eee', transition: 'color 0.18s' }}>
-        {item.label}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ fontSize: '1rem', fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: hovered ? item.color : '#eee', transition: 'color 0.18s' }}>
+          {item.label}
+        </div>
+        {item.label === 'SOLO' && (
+          <span style={{ fontSize: '0.58rem', color: '#eab308', letterSpacing: '0.08em', border: '1px solid rgba(234,179,8,0.45)', borderRadius: 10, padding: '1px 6px', background: 'rgba(234,179,8,0.08)', textTransform: 'uppercase' }}>2× coins</span>
+        )}
       </div>
-      <div style={{ fontSize: '0.62rem', color: '#555', letterSpacing: '0.18em', marginTop: 3, textTransform: 'uppercase' }}>
-        {item.sub}
-      </div>
+      <div style={{ fontSize: '0.62rem', color: '#555', letterSpacing: '0.18em', marginTop: 3, textTransform: 'uppercase' }}>{item.sub}</div>
     </motion.button>
   )
 }

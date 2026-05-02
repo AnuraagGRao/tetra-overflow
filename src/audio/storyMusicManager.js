@@ -86,8 +86,12 @@ export class StoryMusicManager {
     this.analyser.smoothingTimeConstant = 0.65  // moderate smoothing from Web Audio
     this._fftData = new Uint8Array(this.analyser.frequencyBinCount)
 
+    this.volumeGain = audioCtx.createGain()
+    this.volumeGain.gain.value = 1.0
+
     this.analyser.connect(this.masterGain)
-    this.masterGain.connect(audioCtx.destination)
+    this.masterGain.connect(this.volumeGain)
+    this.volumeGain.connect(audioCtx.destination)
 
     this._loadAll()
   }
@@ -320,6 +324,11 @@ export class StoryMusicManager {
   setShuffleEachLoop(v) { this._shuffleEachLoop = !!v }
   getShuffleEachLoop() { return !!this._shuffleEachLoop }
   setCrossfadeSeconds(sec) { this._xfadeSec = Math.max(0.2, Math.min(8, Number(sec)||0)) }
+  setVolume(vol) {
+    const v = Math.max(0, Math.min(1, Number(vol)||0))
+    this.volumeGain.gain.setTargetAtTime(v, this.ctx.currentTime, 0.05)
+  }
+  getVolume() { return this.volumeGain?.gain?.value ?? 1 }
   getNowPlaying() {
     const idx = this._currentIdx
     if (idx < 0) return null
