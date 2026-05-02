@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { BOARD_HEIGHT, BOARD_WIDTH, PIECES } from '../logic/tetrominoes'
-import { ZONE_DURATION_MS } from '../logic/gameEngine'
+import { ZONE_DURATION_MS, GAME_MODE } from '../logic/gameEngine'
 import { useTheme } from '../contexts/ThemeContext'
 import { BG_TYPE_TO_PIECE_THEME } from '../logic/themeMappings'
 import catImageUrl from '../meme/oiia_cat_assets_by_awesomeconsoles7_djwlgwe-fullview.png'
@@ -593,6 +593,7 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
 
     // Background — zone gradient (default) or flat theme colour
     const themeBg = (colorMode === 'light' ? CANVAS_BG_LIGHT : CANVAS_BG_DARK)[theme]
+    const isUltimateMode = state.mode === GAME_MODE.ULTIMATE
     if (boardAlpha !== undefined) {
       // Caller-provided alpha (story mode: beat-synced transparency)
       ctx.globalAlpha = boardAlpha
@@ -601,6 +602,12 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
       ctx.globalAlpha = 1
     } else if (bgTheme) {
       // Semi-transparent board when a world background is active
+      ctx.globalAlpha = 0.48
+      ctx.fillStyle = '#04060e'
+      ctx.fillRect(-20, -20, canvas.width + 40, canvas.height + 40)
+      ctx.globalAlpha = 1
+    } else if (isUltimateMode) {
+      // Ensure matrix transparency in Ultimate even without a bgTheme
       ctx.globalAlpha = 0.48
       ctx.fillStyle = '#04060e'
       ctx.fillRect(-20, -20, canvas.width + 40, canvas.height + 40)
@@ -643,6 +650,153 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
       try { ctx.drawImage(catImg, 0, 0, catImg.width, catImg.height, -size / 2, -size / 2, size, size) } catch {}
       ctx.restore()
       ctx.globalAlpha = 1
+    }
+
+    // Ultimate mode: animated floor indicator band behind the grid
+    if (state.mode === GAME_MODE.ULTIMATE && !state.gameOver) {
+      const w = BOARD_WIDTH * CELL_SIZE
+      const h = BOARD_HEIGHT * CELL_SIZE
+      const tNow = Date.now()
+
+      // Progress towards next floor (lines cleared / target)
+      const lines = Math.max(0, state.towerFloorLines || 0)
+      const target = Math.max(1, state.towerFloorTarget || 1)
+      const prog = Math.max(0, Math.min(1, lines / target))
+
+      // Palette per theme for nicer coherence
+      const themeToPalette = (th) => {
+        switch (th) {
+          case 'blueprint': return { a:'rgba(34,211,238,0.22)', b:'rgba(168,85,247,0.10)', tick:'#7dd3fc' }
+          case 'bauhaus':  return { a:'rgba(255,200,0,0.25)',  b:'rgba(255,120,0,0.12)', tick:'#fde047' }
+          case 'sketch':   return { a:'rgba(120,100,60,0.22)', b:'rgba(220,180,120,0.10)', tick:'#a78b6d' }
+          case 'stone':    return { a:'rgba(180,200,220,0.18)', b:'rgba(120,140,160,0.10)', tick:'#cbd5e1' }
+          case 'wood':     return { a:'rgba(234,179,8,0.22)',   b:'rgba(190,120,40,0.10)', tick:'#facc15' }
+          case 'obsidian': return { a:'rgba(236,72,153,0.24)',  b:'rgba(168,85,247,0.12)', tick:'#f472b6' }
+          case 'biolume':  return { a:'rgba(16,185,129,0.24)',  b:'rgba(34,211,238,0.12)', tick:'#34d399' }
+          case 'vaporwave':return { a:'rgba(244,114,182,0.26)', b:'rgba(99,102,241,0.12)', tick:'#f472b6' }
+          case 'terminal': return { a:'rgba(34,197,94,0.22)',   b:'rgba(16,185,129,0.10)', tick:'#22c55e' }
+          default:         return { a:'rgba(168,85,247,0.22)',  b:'rgba(34,211,238,0.10)', tick:'#93c5fd' }
+        }
+      }
+      const bgToPalette = (bg) => {
+        switch (bg) {
+          case 'lava': case 'volcano': case 'inferno':
+            return { a:'rgba(255,120,0,0.26)', b:'rgba(200,40,0,0.12)', tick:'#fb923c' }
+          case 'ocean': case 'bubbles':
+            return { a:'rgba(56,189,248,0.24)', b:'rgba(34,211,238,0.10)', tick:'#7dd3fc' }
+          case 'crystal': case 'glacier':
+            return { a:'rgba(180,220,255,0.22)', b:'rgba(120,170,255,0.10)', tick:'#bae6fd' }
+          case 'forest':
+            return { a:'rgba(34,197,94,0.22)', b:'rgba(101,163,13,0.10)', tick:'#86efac' }
+          case 'nebula': case 'stars': case 'blackhole': case 'warp': case 'aurora': case 'oiia':
+            return { a:'rgba(168,85,247,0.24)', b:'rgba(34,211,238,0.12)', tick:'#c4b5fd' }
+          case 'storm': case 'clouds': case 'matrix': case 'abyss': case 'quake':
+            return { a:'rgba(148,163,184,0.20)', b:'rgba(71,85,105,0.10)', tick:'#cbd5e1' }
+          default:
+            return null
+        }
+      }
+      const pal = (bgTheme && bgToPalette(bgTheme)) || themeToPalette(theme)
+
+      // Compute breathing band height and vertical position
+      const baseBarH = CELL_SIZE * 1.6
+      const breath = 1 + 0.06 * Math.sin(tNow * 0.003) * (0.3 + 0.7 * prog)
+      const barH = baseBarH * breath
+      // Move the band up inside the matrix for better visibility
+      const rowsUp = 4.5
+      const y0 = h - barH - CELL_SIZE * rowsUp
+
+      // Reduce intensity when stack is high (closer to top)
+      let topFilled = BOARD_HEIGHT
+      for (let ty = 0; ty < BOARD_HEIGHT; ty++) { if (state.board[ty]?.some(c => c)) { topFilled = ty; break } }
+      const risk = Math.max(0, Math.min(1, (BOARD_HEIGHT - topFilled) / BOARD_HEIGHT))
+      const bandAlpha = Math.max(0.35, Math.min(0.9, 0.9 - 0.45 * risk))
+
+      ctx.save()
+      // Soft neon band base
+      ctx.globalCompositeOperation = 'screen'
+      const baseG = ctx.createLinearGradient(0, y0, 0, y0 + barH)
+      baseG.addColorStop(0, pal.a)
+      baseG.addColorStop(1, pal.b)
+      ctx.globalAlpha = bandAlpha
+      ctx.fillStyle = baseG
+      ctx.fillRect(0, y0, w, barH)
+
+      // Moving diagonal stripes (animated background texture)
+      const stripeW = 18
+      const offset = (tNow / 42) % stripeW
+      ctx.globalAlpha = 0.14 * (bandAlpha / 0.9)
+      ctx.fillStyle = 'rgba(255,255,255,0.18)'
+      for (let sx = -w; sx < w * 2; sx += stripeW) {
+        const x = sx + offset
+        ctx.beginPath()
+        // Parallelogram stripe slanted towards the right
+        ctx.moveTo(x, y0)
+        ctx.lineTo(x + 10, y0)
+        ctx.lineTo(x + 10, y0 + barH)
+        ctx.lineTo(x, y0 + barH)
+        ctx.closePath()
+        ctx.fill()
+      }
+
+      // Discrete tick marks for each line required this floor
+      if (target > 1) {
+        const step = w / target
+        ctx.globalAlpha = 0.22 * (bandAlpha / 0.9)
+        ctx.strokeStyle = pal.tick
+        ctx.lineWidth = 1
+        for (let i = 1; i < target; i++) {
+          const x = Math.floor(i * step) + 0.5
+          const isMajor = i % 5 === 0
+          const th = isMajor ? barH : barH * 0.55
+          ctx.beginPath()
+          ctx.moveTo(x, y0 + (barH - th))
+          ctx.lineTo(x, y0 + barH)
+          ctx.stroke()
+        }
+      }
+
+      // Fill up progress (left → right) with a brighter sheen
+      ctx.globalAlpha = 0.55 * (bandAlpha / 0.9)
+      const progG = ctx.createLinearGradient(0, y0, 0, h)
+      progG.addColorStop(0, 'rgba(255,255,255,0.22)')
+      progG.addColorStop(1, 'rgba(255,255,255,0.06)')
+      ctx.fillStyle = progG
+      ctx.fillRect(0, y0, w * prog, barH)
+
+      // Scanning sparkle across the filled portion
+      if (prog > 0.02) {
+        const scanX = ((tNow / 900) % 1) * (w * prog)
+        const scanW = Math.max(20, w * 0.08)
+        const sG = ctx.createLinearGradient(scanX - scanW, 0, scanX + scanW, 0)
+        sG.addColorStop(0, 'rgba(255,255,255,0)')
+        sG.addColorStop(0.5, 'rgba(255,255,255,0.45)')
+        sG.addColorStop(1, 'rgba(255,255,255,0)')
+        ctx.globalAlpha = 0.30 * (bandAlpha / 0.9)
+        ctx.fillStyle = sG
+        ctx.fillRect(0, y0, w * prog, barH)
+      }
+
+      // One-frame pulse when a floor is reached
+      if (state.towerFloorAdvance) {
+        ctx.globalAlpha = 0.45
+        const pulseG = ctx.createRadialGradient(w * 0.5, y0 + barH * 0.5, 0, w * 0.5, y0 + barH * 0.5, barH * 1.1)
+        pulseG.addColorStop(0, 'rgba(255,255,200,0.55)')
+        pulseG.addColorStop(1, 'rgba(255,255,200,0)')
+        ctx.fillStyle = pulseG
+        ctx.fillRect(0, y0 - barH * 0.2, w, barH * 1.4)
+      }
+
+      // Subtle "FLOOR N" label
+      ctx.globalCompositeOperation = 'source-over'
+      ctx.globalAlpha = 0.22 * (bandAlpha / 0.9)
+      ctx.fillStyle = '#eab308'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'alphabetic'
+      ctx.font = '700 22px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
+      try { ctx.fillText(`FLOOR ${state.towerFloor || 1}`, w * 0.5, y0 + barH - 8) } catch {}
+
+      ctx.restore()
     }
 
     // Grid lines
@@ -842,7 +996,7 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
     }
 
     ctx.restore()
-  }, [state, theme, colorMode])
+  }, [state, theme, colorMode, bgTheme])
 
   const handlePointerDown = (event) => {
     event.preventDefault()
