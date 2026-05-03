@@ -1,20 +1,20 @@
 import { doc, writeBatch, getFirestore, getDoc, updateDoc } from 'firebase/firestore'
+import { STORY_CHAPTERS } from '../logic/storyData'
 
 const db = getFirestore()
 
-// All themes unlocked by story progress — must mirror themeUnlock fields in storyData.js
+// Derive the full list of story-unlocked themes from storyData at module load time,
+// so this list never goes out of sync when new levels/unlocks are added.
 const STORY_THEME_UNLOCKS = [
-  'theme_terracotta',
-  'theme_amber',
-  'theme_obsidian',
-  'theme_frozen',
-  'theme_biolume',
-  'theme_copper',
-  'theme_stained',
-  'theme_ukiyo',
-  'theme_vaporwave',
-  'theme_terminal',
-  'theme_circuit',
+  ...new Set(
+    STORY_CHAPTERS.flatMap(ch =>
+      ch.levels.flatMap(lv => {
+        const u = lv.themeUnlock
+        if (!u) return []
+        return Array.isArray(u) ? u : [u]
+      })
+    )
+  ),
 ]
 
 // WARNING: DANGEROUS! This erases all Story progress and relocks story-unlocked themes.

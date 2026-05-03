@@ -544,11 +544,11 @@ export default function StoryLevelPage() {
           playZoneActivateSFX(theme)
           // Boost SFX volume during Zone and apply low-pass duck to story BGM
           setSfxDuck(1.5)
-          try { storyMusicRef.current?.setZoneFx?.(true) } catch {}
+          try { storyMusicRef.current?.setZoneFx?.(true) } catch { /* audio errors must not break gameplay */ }
         } else {
           // Restore normal SFX level and BGM when Zone ends
           setSfxDuck(1.0)
-          try { storyMusicRef.current?.setZoneFx?.(false) } catch {}
+          try { storyMusicRef.current?.setZoneFx?.(false) } catch { /* audio errors must not break gameplay */ }
         }
       }
       // Move / rotate only when the same piece is active
