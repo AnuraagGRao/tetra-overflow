@@ -78,8 +78,10 @@ export class StoryMusicManager {
     this._loaded     = new Array(TRACK_URLS.length).fill(false)
     this._levelBpm   = 120
     this._baseBpm    = 120
+    this._userVol    = 1.0   // tracks the volume set via setVolume()
+    this._zoneDuck   = 1.0   // 1.0 = normal, 0.35 = ducked during Zone
 
-    // Audio graph: source → trackGain → analyser → masterGain → destination
+    // Audio graph: source → trackGain → analyser → masterGain → lpf → volumeGain → destination
     this.masterGain = audioCtx.createGain()
     this.masterGain.gain.value = 0
 
@@ -88,11 +90,17 @@ export class StoryMusicManager {
     this.analyser.smoothingTimeConstant = 0.65  // moderate smoothing from Web Audio
     this._fftData = new Uint8Array(this.analyser.frequencyBinCount)
 
+    // Low-pass filter for Zone effect (open by default)
+    this.lpf = audioCtx.createBiquadFilter()
+    this.lpf.type = 'lowpass'
+    this.lpf.frequency.value = 18000
+
     this.volumeGain = audioCtx.createGain()
     this.volumeGain.gain.value = 1.0
 
     this.analyser.connect(this.masterGain)
-    this.masterGain.connect(this.volumeGain)
+    this.masterGain.connect(this.lpf)
+    this.lpf.connect(this.volumeGain)
     this.volumeGain.connect(audioCtx.destination)
 
     this._loadAll()
@@ -336,9 +344,25 @@ export class StoryMusicManager {
   setCrossfadeSeconds(sec) { this._xfadeSec = Math.max(0.2, Math.min(8, Number(sec)||0)) }
   setVolume(vol) {
     const v = Math.max(0, Math.min(1, Number(vol)||0))
-    this.volumeGain.gain.setTargetAtTime(v, this.ctx.currentTime, 0.05)
+    this._userVol = v
+    this.volumeGain.gain.setTargetAtTime(v * this._zoneDuck, this.ctx.currentTime, 0.05)
   }
-  getVolume() { return this.volumeGain?.gain?.value ?? 1 }
+  getVolume() { return this._userVol ?? 1 }
+
+  /** Zone low-pass + volume duck effect (mirrors solo MusicManager.setZoneFx). */
+  setZoneFx(on) {
+    if (!this.ctx) return
+    const t = this.ctx.currentTime
+    const targetFreq = on ? 900 : 18000
+    this._zoneDuck = on ? 0.35 : 1.0
+    const targetGain = this._userVol * this._zoneDuck
+    this.lpf.frequency.cancelScheduledValues(t)
+    this.lpf.frequency.setValueAtTime(this.lpf.frequency.value, t)
+    this.lpf.frequency.linearRampToValueAtTime(targetFreq, t + 0.25)
+    this.volumeGain.gain.cancelScheduledValues(t)
+    this.volumeGain.gain.setValueAtTime(this.volumeGain.gain.value, t)
+    this.volumeGain.gain.linearRampToValueAtTime(targetGain, t + 0.35)
+  }
   getNowPlaying() {
     const idx = this._currentIdx
     if (idx < 0) return null
