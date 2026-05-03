@@ -1,5 +1,5 @@
 // Bump CACHE_NAME to push updates to clients
-const CACHE_NAME = 'tetra-overflow-v2'
+const CACHE_NAME = 'tetra-overflow-v3'
 // Build absolute paths relative to the SW scope so it works under any base URL
 const BASE = self.registration.scope
 const APP_SHELL = ['', 'index.html', 'manifest.json'].map(p => new URL(p, BASE).href)
@@ -28,6 +28,17 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return
 
+  // For SPA navigation requests serve the cached app shell so deep links work
+  // even when the static host would return 404 for unknown paths.
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      caches.match(new URL('', BASE).href)
+        .then(cached => cached || fetch(event.request))
+        .catch(() => caches.match(new URL('index.html', BASE).href))
+    )
+    return
+  }
+
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached
@@ -38,7 +49,7 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy))
           return response
         })
-        .catch(() => caches.match('/index.html'))
+        .catch(() => caches.match(new URL('index.html', BASE).href))
     }),
   )
 })
