@@ -95,7 +95,7 @@ const HARD_DROP_VEL_PX_MS = 0.45 // px/ms threshold for hard-drop vs soft-drop
 
 // drawCell is defined per-frame inside the useEffect as a theme-aware closure
 
-export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, onDragEnd, onHardDrop, themeOverride, boardAlpha }) {
+export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, onDragEnd, onHardDrop, themeOverride, boardAlpha, renderQuality = 'balanced' }) {
   const { theme: contextTheme, colorMode, bgTheme } = useTheme()
   // Solo/Casual: allow mixing — use explicit theme unless an override is passed
   const theme = themeOverride ?? contextTheme
@@ -135,9 +135,29 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
     const canvas = canvasRef.current
     if (!canvas || !state.current) return
     const ctx = canvas.getContext('2d')
-  // Cat texture for meme blocks
-  const catImg = new Image()
-  catImg.src = catImageUrl
+
+    // ── Device Pixel Ratio scaling ───────────────────────────────────────────
+    const nativeDpr = window.devicePixelRatio || 1
+    const dpr = renderQuality === 'ultra'    ? Math.min(nativeDpr, 3)
+              : renderQuality === 'quality'  ? Math.min(nativeDpr, 2)
+              : renderQuality === 'balanced' ? Math.min(nativeDpr, 1.5)
+              : 1 // 'performance' — current behaviour, no scaling
+    const cW = BOARD_WIDTH  * CELL_SIZE   // logical board width  (CSS px)
+    const cH = BOARD_HEIGHT * CELL_SIZE   // logical board height (CSS px)
+    const physW = Math.round(cW * dpr)
+    const physH = Math.round(cH * dpr)
+    if (canvas.width !== physW || canvas.height !== physH) {
+      canvas.width        = physW
+      canvas.height       = physH
+      canvas.style.width  = cW + 'px'
+      canvas.style.height = cH + 'px'
+    }
+    // Every frame: apply scale so all drawing coords stay in logical (CSS-px) space
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+
+    // Cat texture for meme blocks
+    const catImg = new Image()
+    catImg.src = catImageUrl
 
 
     pulseRef.current += 0.05
@@ -613,7 +633,7 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
       ctx.translate(sx, sy)
     }
 
-    ctx.clearRect(-20, -20, canvas.width + 40, canvas.height + 40)
+    ctx.clearRect(-20, -20, cW + 40, cH + 40)
 
     // Background — zone gradient (default) or flat theme colour
     const themeBg = (colorMode === 'light' ? CANVAS_BG_LIGHT : CANVAS_BG_DARK)[theme]
@@ -626,34 +646,34 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
       // Semi-transparent board when a world background is active
       ctx.globalAlpha = 0.48
       ctx.fillStyle = '#04060e'
-      ctx.fillRect(-20, -20, canvas.width + 40, canvas.height + 40)
+      ctx.fillRect(-20, -20, cW + 40, cH + 40)
       ctx.globalAlpha = 1
     } else if (isUltimateMode) {
       // Ensure matrix transparency in Ultimate even without a bgTheme
       ctx.globalAlpha = 0.48
       ctx.fillStyle = '#04060e'
-      ctx.fillRect(-20, -20, canvas.width + 40, canvas.height + 40)
+      ctx.fillRect(-20, -20, cW + 40, cH + 40)
       ctx.globalAlpha = 1
     } else if (state.zoneActive && !themeBg) {
       const progress = state.zoneTimer / ZONE_DURATION_MS
-      const grad = ctx.createLinearGradient(0, 0, 0, canvas.height)
+      const grad = ctx.createLinearGradient(0, 0, 0, cH)
       grad.addColorStop(0, `hsl(${200 + progress * 60}, 80%, 8%)`)
       grad.addColorStop(1, `hsl(${240 + progress * 40}, 90%, 5%)`)
       ctx.globalAlpha = BOARD_BASE_ALPHA
       ctx.fillStyle = grad
-      ctx.fillRect(-20, -20, canvas.width + 40, canvas.height + 40)
+      ctx.fillRect(-20, -20, cW + 40, cH + 40)
       ctx.globalAlpha = 1
     } else {
       ctx.globalAlpha = BOARD_BASE_ALPHA
       ctx.fillStyle = themeBg ?? '#090b16'
-      ctx.fillRect(-20, -20, canvas.width + 40, canvas.height + 40)
+      ctx.fillRect(-20, -20, cW + 40, cH + 40)
       ctx.globalAlpha = 1
     }
 
     // Cat rotating background in meme mode (subtle, behind grid)
     if (state.useMemeBlocks && catImg.complete) {
       ctx.save()
-      const cx = canvas.width / 2, cy = canvas.height / 2
+      const cx = cW / 2, cy = cH / 2
       ctx.translate(cx, cy)
       const now = Date.now()
       // Base slow spin with occasional "meme" burst (~every 5s, ~600ms duration, pseudo-random)
@@ -668,7 +688,7 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
       const ang = (now * speed) % (Math.PI * 2)
       ctx.rotate(ang)
       ctx.globalAlpha = 0.10
-      const size = Math.max(canvas.width, canvas.height) * 1.35
+      const size = Math.max(cW, cH) * 1.35
       try { ctx.drawImage(catImg, 0, 0, catImg.width, catImg.height, -size / 2, -size / 2, size, size) } catch {}
       ctx.restore()
       ctx.globalAlpha = 1
@@ -962,14 +982,14 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
       drawTrails()
     }
     if (effs.includes('effect_holographic')) {
-      const g = ctx.createLinearGradient(0, 0, canvas.width, canvas.height)
+      const g = ctx.createLinearGradient(0, 0, cW, cH)
       g.addColorStop(0, 'rgba(0,255,255,0.08)')
       g.addColorStop(0.5, 'rgba(255,0,255,0.06)')
       g.addColorStop(1, 'rgba(0,255,128,0.08)')
       ctx.globalCompositeOperation = 'screen'
       ctx.globalAlpha = 0.35 + 0.15 * Math.sin(pulseRef.current * 0.7)
       ctx.fillStyle = g
-      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      ctx.fillRect(0, 0, cW, cH)
       ctx.globalAlpha = 1
       ctx.globalCompositeOperation = 'source-over'
     }
@@ -977,13 +997,13 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
       // Scanlines
       ctx.globalAlpha = 0.08
       ctx.fillStyle = '#000'
-      for (let y = 0; y < canvas.height; y += 3) ctx.fillRect(0, y, canvas.width, 1)
+      for (let y = 0; y < cH; y += 3) ctx.fillRect(0, y, cW, 1)
       // Vignette overlay
-      const vg = ctx.createRadialGradient(canvas.width/2, canvas.height/2, Math.min(canvas.width,canvas.height)*0.35, canvas.width/2, canvas.height/2, Math.max(canvas.width,canvas.height)*0.65)
+      const vg = ctx.createRadialGradient(cW/2, cH/2, Math.min(cW,cH)*0.35, cW/2, cH/2, Math.max(cW,cH)*0.65)
       vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.20)')
       ctx.globalAlpha = 1
       ctx.fillStyle = vg
-      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      ctx.fillRect(0, 0, cW, cH)
     }
     if (effs.includes('effect_gridpulse')) {
       const a = 0.03 + 0.03 * (0.5 + 0.5 * Math.sin(pulseRef.current * 0.9))
@@ -1099,14 +1119,14 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
             ctx.fillStyle = '#ffffff'; ctx.shadowColor = '#aa66ff'; ctx.shadowBlur = 18
           }
           const fx = ft.x * CELL_SIZE
-          ctx.fillText(ft.text, Math.max(2, Math.min(fx, canvas.width - 130)), Math.max(12, fy))
+          ctx.fillText(ft.text, Math.max(2, Math.min(fx, cW - 130)), Math.max(12, fy))
         }
         ctx.restore()
       })
     }
 
     ctx.restore()
-  }, [state, theme, colorMode, bgTheme])
+  }, [state, theme, colorMode, bgTheme, renderQuality])
 
   const handlePointerDown = (event) => {
     event.preventDefault()
@@ -1188,7 +1208,7 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
       className="game-canvas"
       width={BOARD_WIDTH * CELL_SIZE}
       height={BOARD_HEIGHT * CELL_SIZE}
-      style={{ touchAction: 'none' }}
+      style={{ touchAction: 'none', width: BOARD_WIDTH * CELL_SIZE, height: BOARD_HEIGHT * CELL_SIZE }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}

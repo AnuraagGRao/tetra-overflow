@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import BackgroundCanvas from '../components/BackgroundCanvas'
 import { STORY_CHAPTERS } from '../logic/storyData'
+import homeIconUrl from '../icons/home-button-icon-for-tetris-mobile-game-ui--simple.png'
 
 const CH_BG = (ch) => ch?.levels?.[0]?.bgType || 'abyss'
 
@@ -38,7 +39,7 @@ export default function StoryLorePage() {
 
       <div style={{ position: 'relative', zIndex: 1, height: '100%', display: 'flex', flexDirection: 'column' }}>
         <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.9rem 1.3rem', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-          <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: '0.72rem', letterSpacing: '0.14em' }}>← MENU</button>
+          <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: '0.72rem', letterSpacing: '0.14em', display: 'flex', alignItems: 'center', gap: 8 }}><img src={homeIconUrl} alt="" style={{ width: 18, height: 18, objectFit: 'contain' }} /><span>MENU</span></button>
           <div style={{ fontSize: '0.95rem', fontWeight: 900, letterSpacing: '0.3em' }}>LORE</div>
           <div style={{ width: 60 }} />
         </header>

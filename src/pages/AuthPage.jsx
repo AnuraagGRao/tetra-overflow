@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
+import homeIconUrl from '../icons/home-button-icon-for-tetris-mobile-game-ui--simple.png'
 
 const INPUT_STYLE = {
   width: '100%', boxSizing: 'border-box',
@@ -196,8 +197,9 @@ export default function AuthPage() {
   return (
     <div style={{ position: 'fixed', inset: 0, background: '#0a0a14', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: '"Courier New", monospace', padding: '1rem' }}>
       {/* Back button */}
-      <button onClick={() => navigate('/')} style={{ position: 'absolute', top: 16, left: 16, background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: '0.75rem', letterSpacing: '0.12em', fontFamily: 'inherit' }}>
-        ← BACK
+      <button onClick={() => navigate('/')} style={{ position: 'absolute', top: 16, left: 16, background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: '0.75rem', letterSpacing: '0.12em', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <img src={homeIconUrl} alt="" style={{ width: 18, height: 18, objectFit: 'contain' }} />
+        <span>BACK</span>
       </button>
 
       <motion.div

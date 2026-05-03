@@ -6,6 +6,7 @@ import { purchaseItem } from '../firebase/db'
 import { useTheme, THEMES } from '../contexts/ThemeContext'
 import { STORE_ITEMS } from '../logic/storeData'
 import BackgroundCanvas from '../components/BackgroundCanvas'
+import homeIconUrl from '../icons/home-button-icon-for-tetris-mobile-game-ui--simple.png'
 
 const BG_ITEMS = STORE_ITEMS.filter(i => i.type === 'bg')
 const THEME_STORE_ITEMS = STORE_ITEMS.filter(i => i.type === 'theme')
@@ -283,8 +284,8 @@ export default function ThemePage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.8rem' }}>
           <button
             onClick={() => navigate('/')}
-            style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.7rem', letterSpacing: '0.12em' }}
-          >← MENU</button>
+            style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.7rem', letterSpacing: '0.12em', display: 'flex', alignItems: 'center', gap: 8 }}
+          ><img src={homeIconUrl} alt="" style={{ width: 18, height: 18, objectFit: 'contain' }} /><span>MENU</span></button>
           <div style={{ flex: 1, textAlign: 'center', fontSize: '0.9rem', fontWeight: 900, letterSpacing: '0.3em', color: '#fff' }}>
             THEMES
           </div>

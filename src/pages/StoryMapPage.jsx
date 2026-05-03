@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { getStoryProgress, resetStoryProgress } from '../firebase/db'
 import { STORY_CHAPTERS } from '../logic/storyData'
 import { playTap, playZoomIn, playZoomOut, playBack } from '../audio/uiSfx'
+import homeIconUrl from '../icons/home-button-icon-for-tetris-mobile-game-ui--simple.png'
 
 // Returns true if a level is unlocked given progress data
 function isLevelUnlocked(chIdx, lvIdx, progress) {
@@ -161,14 +162,14 @@ export default function StoryMapPage() {
     <div style={{ minHeight: '100dvh', background: '#0a0a14', display: 'flex', flexDirection: 'column', fontFamily: '"Courier New", monospace', color: '#fff', overflow: 'hidden' }}>
       {/* Header */}
       <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.4rem', borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
-        <button onClick={() => { playBack(); navigate('/') }} style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: '0.72rem', letterSpacing: '0.14em', fontFamily: 'inherit', padding: 0 }}>
-          ← MENU
+        <button onClick={() => { playBack(); navigate('/') }} style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: '0.72rem', letterSpacing: '0.14em', fontFamily: 'inherit', padding: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <img src={homeIconUrl} alt="" style={{ width: 18, height: 18, objectFit: 'contain' }} />
+          <span>MENU</span>
         </button>
         <h1 style={{ margin: 0, fontSize: '1rem', fontWeight: 900, letterSpacing: '0.2em', color: '#a855f7' }}>STORY MODE</h1>
         <div style={{ fontSize: '0.65rem', color: '#555', letterSpacing: '0.1em' }}>
           {(() => {
             const count = completedChapters.length;
-            const total = STORY_CHAPTERS.length;
             if (count > 7) {
               return `${count}!/7? CHAPTERS`;
             }

@@ -3,6 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import SettingsPage from '../components/SettingsPage'
+import leaderboardIconUrl from '../icons/leaderboard-trophy-icon-for-tetris-mobile-game-ui-.png'
+import playIconUrl from '../icons/play-button-icon-for-tetris-mobile-game-ui--bold-t.png'
+import settingsIconUrl from '../icons/settings-gear-icon-for-tetris-mobile-game-ui--geom.png'
+import soundIconUrl from '../icons/sound-music-icon-for-tetris-mobile-game-ui--speake.png'
 
 // ─── Falling tetromino background ─────────────────────────────────────────────
 const BG_SHAPES = [
@@ -67,15 +71,15 @@ function useFallingPieces() {
 
 // ─── Main menu items ───────────────────────────────────────────────────────────
 const MENU_ITEMS = [
-  { label: 'SOLO',     sub: 'CLASSIC PLAY',   icon: '▦',  path: '/play',        color: '#00d4ff', public: true },
+  { label: 'SOLO',     sub: 'CLASSIC PLAY',   iconSrc: playIconUrl,       path: '/play',        color: '#00d4ff', public: true },
   { label: 'STORY',    sub: 'CAMPAIGN',        icon: '◈',  path: '/story',       color: '#a855f7' },
   { label: 'VERSUS',   sub: 'ONLINE MATCH',    icon: '⚡', path: '/multiplayer', color: '#f97316' },
   { label: 'THEMES',   sub: 'WORLD + PIECES',  icon: '◉',  path: '/themes',      color: '#e879f9' },
   { label: 'STORE',    sub: 'SHOP',            icon: '◆',  path: '/store',       color: '#22c55e' },
-  { label: 'STATS',    sub: 'LEADERBOARD',     icon: '▲',  path: '/stats',       color: '#eab308' },
+  { label: 'STATS',    sub: 'LEADERBOARD',     iconSrc: leaderboardIconUrl, path: '/stats',      color: '#eab308' },
   { label: 'LORE',     sub: 'STORY TEXTS',     icon: '✦',  path: '/lore',        color: '#22c55e' },
-  { label: 'SOUNDTRACK', sub: 'VOTE TRACKS',   icon: '♫',  path: '/artwork',     color: '#ec4899', public: true },
-  { label: 'SETTINGS', sub: 'CONTROLS · AUDIO', icon: '⚙', action: 'settings',  color: '#94a3b8', public: true },
+  { label: 'SOUNDTRACK', sub: 'VOTE TRACKS',   iconSrc: soundIconUrl,    path: '/artwork',     color: '#ec4899', public: true },
+  { label: 'SETTINGS', sub: 'CONTROLS · AUDIO', iconSrc: settingsIconUrl, action: 'settings', color: '#94a3b8', public: true },
 ]
 
 const CONFIG_KEY = 'tetris-config'
@@ -112,7 +116,11 @@ function MenuCard({ item, index, onClick }) {
         fontFamily: 'inherit',
       }}
     >
-      <div style={{ fontSize: '1.5rem', marginBottom: 6, color: item.color, lineHeight: 1 }}>{item.icon}</div>
+      <div style={{ fontSize: '1.5rem', marginBottom: 6, color: item.color, lineHeight: 1 }}>
+        {item.iconSrc ? (
+          <img src={item.iconSrc} alt="" style={{ width: 24, height: 24, objectFit: 'contain', display: 'block', filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.08))' }} />
+        ) : item.icon}
+      </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <div style={{ fontSize: '1rem', fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: hovered ? item.color : '#eee', transition: 'color 0.18s' }}>
           {item.label}
@@ -285,7 +293,7 @@ export default function MainMenuPage() {
           onClick={() => navigate('/info')}
           style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: '0.62rem', letterSpacing: '0.14em', textTransform: 'uppercase', fontFamily: 'inherit', padding: 0 }}
         >
-          ℹ Info
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ width: 14, height: 14, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', border: '1px solid currentColor', fontSize: 10, fontWeight: 700, lineHeight: 1 }}>i</span><span>Info</span></span>
         </button>
       </footer>
 

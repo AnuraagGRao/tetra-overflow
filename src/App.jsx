@@ -23,6 +23,29 @@ if (typeof window !== 'undefined') {
   } catch {}
 }
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import pauseIconUrl from './icons/pause-button-icon-for-tetris-mobile-game-ui--two-b.png'
+import playIconUrl from './icons/play-button-icon-for-tetris-mobile-game-ui--bold-t.png'
+import restartIconUrl from './icons/restart-refresh-icon-for-tetris-mobile-game-ui--ci.png'
+import settingsIconUrl from './icons/settings-gear-icon-for-tetris-mobile-game-ui--geom.png'
+import soundIconUrl from './icons/sound-music-icon-for-tetris-mobile-game-ui--speake.png'
+
+// ─── Custom: SW Update Banner ───────────────────
+
+function SWUpdateBanner({ onReload }) {
+  return (
+    <div
+      style={{
+        position: 'fixed', zIndex: 9999, left: 0, right: 0, bottom: 0,
+        background: '#26254a', color: '#fff', padding: '14px 0', textAlign: 'center',
+        fontSize: 18, fontWeight: 600, letterSpacing: 1.1,
+        boxShadow: '0 -4px 24px #0007',
+      }}
+    >
+      <span>New update available — reload for best experience and updated app icon.</span>
+      <button style={{ marginLeft: 24, padding: '6px 22px', fontWeight: 600, borderRadius: 4, outline: 'none', border: 'none', background: '#ffd02a', color: '#111', cursor: 'pointer', fontSize: 16 }} onClick={onReload}>Reload</button>
+    </div>
+  )
+}
 import { AnimatePresence, motion } from 'framer-motion'
 import './App.css'
 import GameCanvas, { PIECE_COLOR_MAPS } from './components/GameCanvas'
@@ -1079,7 +1102,7 @@ const playCountdownTickSFX = (second, theme = 'classic') => {
 
 // ─── Config / settings storage ───────────────────────────────────────────────
 const CONFIG_KEY = 'tetris-config'
-const DEFAULT_CONFIG = { sfxEnabled: true, hapticEnabled: true, musicVolume: 1.0, sfxVolume: 2.0, das: 110, arr: 25, showOnScreenControls: false }
+const DEFAULT_CONFIG = { sfxEnabled: true, hapticEnabled: true, musicVolume: 1.0, sfxVolume: 2.0, das: 110, arr: 25, showOnScreenControls: false, renderQuality: 'balanced' }
 const loadConfig = () => {
   try { return { ...DEFAULT_CONFIG, ...JSON.parse(localStorage.getItem(CONFIG_KEY) ?? '{}') } }
   catch (e) { console.warn('Failed to load config:', e); return { ...DEFAULT_CONFIG } }
@@ -1096,6 +1119,16 @@ import PiecePreview from './components/PiecePreview'
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 export default function App() {
+  const [showSWBanner, setShowSWBanner] = useState(false)
+
+  useEffect(() => {
+    function onShowSWBanner(e) {
+      if (e?.detail === 'showSWBanner') setShowSWBanner(true)
+    }
+
+    window.addEventListener('showSWBanner', onShowSWBanner)
+    return () => window.removeEventListener('showSWBanner', onShowSWBanner)
+  }, [])
   const { setTheme, theme, bgTheme } = useTheme()
   const { user } = useAuth()
   const engine  = useMemo(() => new TetrisEngine(), [])
@@ -2207,7 +2240,7 @@ export default function App() {
         </div>
 
         <div style={{ marginTop: '0.5rem' }}>
-          <button type="button" className="icon-btn" style={{ width: '100%', justifyContent: 'center', fontSize: '0.72rem' }} onClick={() => setShowSettings(true)}>⚙ Settings</button>
+          <button type="button" className="icon-btn" style={{ width: '100%', justifyContent: 'center', fontSize: '0.72rem' }} onClick={() => setShowSettings(true)}><img src={settingsIconUrl} alt="" style={{ width: 16, height: 16, objectFit: 'contain' }} /> Settings</button>
         </div>
       </div>
     )
@@ -2219,19 +2252,19 @@ export default function App() {
       <header className="site-header">
         <div className="site-logo">TETRA <span className="logo-overflow">OVERFLOW</span><sup className="logo-ultra">Ultra</sup></div>
         <div className="header-controls">
-          <button type="button" className="icon-btn" onClick={() => startGame(gameMode)}>↺ Restart</button>
+          <button type="button" className="icon-btn" onClick={() => startGame(gameMode)}><img src={restartIconUrl} alt="" style={{ width: 16, height: 16, objectFit: 'contain' }} /> Restart</button>
           <button type="button" className="icon-btn" onClick={handlePauseToggle}>
-            {state.paused ? '▶ Resume' : '⏸ Pause'}
+            <img src={state.paused ? playIconUrl : pauseIconUrl} alt="" style={{ width: 16, height: 16, objectFit: 'contain' }} /> {state.paused ? 'Resume' : 'Pause'}
           </button>
           <button type="button" className={`icon-btn${musicOn ? ' active' : ''}`} onClick={toggleMusic}>
-            {musicOn ? '🔇' : '🎵'} Music
+            <img src={soundIconUrl} alt="" style={{ width: 16, height: 16, objectFit: 'contain' }} /> Music
           </button>
           <button type="button" className="icon-btn" onClick={cycleZoom} title="Cycle zoom">
             🔍 {Math.round(zoom * 100)}%
           </button>
           <ThemeSwitcher />
-          <button type="button" className="icon-btn" onClick={() => setShowSettings(true)} title="Settings">⚙ Settings</button>
-          <button type="button" className="icon-btn" onClick={() => setShowAbout(true)} title="About">ℹ About</button>
+          <button type="button" className="icon-btn" onClick={() => setShowSettings(true)} title="Settings"><img src={settingsIconUrl} alt="" style={{ width: 16, height: 16, objectFit: 'contain' }} /> Settings</button>
+          <button type="button" className="icon-btn" onClick={() => setShowAbout(true)} title="About"><span style={{ width: 16, height: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', border: '1px solid currentColor', fontSize: 11, fontWeight: 700, lineHeight: 1 }}>i</span> About</button>
         </div>
       </header>
 
@@ -2252,7 +2285,7 @@ export default function App() {
               <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
                 onTwoFingerTap={() => triggerAction('activateZone')}
                 onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop}
-                boardAlpha={bgTheme ? 0.32 : undefined} />
+                boardAlpha={bgTheme ? 0.32 : undefined} renderQuality={config.renderQuality} />
               <GlitchOverlay active={glitchActive} />
               {/* Floor FX overlay */}
               <AnimatePresence>
@@ -2424,7 +2457,7 @@ export default function App() {
           <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
             onTwoFingerTap={() => triggerAction('activateZone')}
             onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop}
-            boardAlpha={bgTheme ? 0.32 : undefined} />
+            boardAlpha={bgTheme ? 0.32 : undefined} renderQuality={config.renderQuality} />
           {renderOverlay(state, false)}
           {renderPauseOverlay(state)}
           {renderZoneEnd(state)}
@@ -2436,7 +2469,7 @@ export default function App() {
       <div className="ls-right">
         {/* primary action buttons */}
         <button type="button" className="ls-action-btn ls-pause-btn" onClick={handlePauseToggle}>
-          <span className="ls-btn-icon">{state.paused ? '▶' : '⏸'}</span>
+          <span className="ls-btn-icon"><img src={state.paused ? playIconUrl : pauseIconUrl} alt="" style={{ width: 18, height: 18, objectFit: 'contain' }} /></span>
           <span className="ls-btn-label">{state.paused ? 'Resume' : 'Pause'}</span>
         </button>
 
@@ -2453,12 +2486,12 @@ export default function App() {
 
         {/* utility row */}
         <div className="ls-util ls-util-3">
-          <button type="button" className={`ls-util-btn${musicOn ? ' active' : ''}`} onClick={toggleMusic}>🎵</button>
-          <button type="button" className="ls-util-btn" onClick={() => startGame(gameMode)}>↺</button>
+          <button type="button" className={`ls-util-btn${musicOn ? ' active' : ''}`} onClick={toggleMusic}><img src={soundIconUrl} alt="Music" style={{ width: 18, height: 18, objectFit: 'contain' }} /></button>
+          <button type="button" className="ls-util-btn" onClick={() => startGame(gameMode)}><img src={restartIconUrl} alt="Restart" style={{ width: 18, height: 18, objectFit: 'contain' }} /></button>
           <button type="button" className="ls-util-btn" onClick={() => setShowAbout(true)}>ℹ</button>
         </div>
         <div className="ls-util ls-util-3">
-          <button type="button" className="ls-util-btn" onClick={() => setShowSettings(true)}>⚙</button>
+          <button type="button" className="ls-util-btn" onClick={() => setShowSettings(true)}><img src={settingsIconUrl} alt="Settings" style={{ width: 18, height: 18, objectFit: 'contain' }} /></button>
         </div>
 
         {/* mode selector */}
@@ -2553,7 +2586,7 @@ export default function App() {
         <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
           onTwoFingerTap={() => triggerAction('activateZone')}
           onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop}
-          boardAlpha={bgTheme ? 0.32 : undefined} />
+          boardAlpha={bgTheme ? 0.32 : undefined} renderQuality={config.renderQuality} />
         <GlitchOverlay active={glitchActive} />
         {renderOverlay(state, false)}
         {renderPauseOverlay(state)}
@@ -2585,7 +2618,7 @@ export default function App() {
       <div className="pt-panel">
         {/* Pause */}
         <button type="button" className="ls-action-btn ls-pause-btn" style={{ gridColumn: '1 / -1' }} onClick={handlePauseToggle}>
-          <span className="ls-btn-icon">{state.paused ? '▶' : '⏸'}</span>
+          <span className="ls-btn-icon"><img src={state.paused ? playIconUrl : pauseIconUrl} alt="" style={{ width: 18, height: 18, objectFit: 'contain' }} /></span>
           <span className="ls-btn-label">{state.paused ? 'Resume' : 'Pause'}</span>
         </button>
 
@@ -2602,10 +2635,10 @@ export default function App() {
 
         {/* Utilities */}
         <div className="ls-util ls-util-4">
-          <button type="button" className={`ls-util-btn${musicOn ? ' active' : ''}`} onClick={toggleMusic}>🎵</button>
-          <button type="button" className="ls-util-btn" onClick={() => startGame(gameMode)}>↺</button>
+          <button type="button" className={`ls-util-btn${musicOn ? ' active' : ''}`} onClick={toggleMusic}><img src={soundIconUrl} alt="Music" style={{ width: 18, height: 18, objectFit: 'contain' }} /></button>
+          <button type="button" className="ls-util-btn" onClick={() => startGame(gameMode)}><img src={restartIconUrl} alt="Restart" style={{ width: 18, height: 18, objectFit: 'contain' }} /></button>
           <button type="button" className="ls-util-btn" onClick={() => setShowAbout(true)}>ℹ</button>
-          <button type="button" className="ls-util-btn" onClick={() => setShowSettings(true)}>⚙</button>
+          <button type="button" className="ls-util-btn" onClick={() => setShowSettings(true)}><img src={settingsIconUrl} alt="Settings" style={{ width: 18, height: 18, objectFit: 'contain' }} /></button>
         </div>
 
         {/* Mode grid */}
@@ -2638,6 +2671,7 @@ export default function App() {
   return (
     <>
       {isLoading && <LoadingScreen onDone={() => setIsLoading(false)} />}
+      {showSWBanner && <SWUpdateBanner onReload={() => window.location.reload()} />}
       <div className={`app${state.zoneActive ? ' zone-active' : ''}`} style={!isMobile ? { '--board-w': `calc(260px * ${zoom})` } : undefined}>
       {renderInstallBanner()}
       {isMobile

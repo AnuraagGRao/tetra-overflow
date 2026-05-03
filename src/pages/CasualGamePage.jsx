@@ -4,6 +4,7 @@ import App from '../App'
 import BackgroundCanvas from '../components/BackgroundCanvas'
 import { useTheme, THEMES } from '../contexts/ThemeContext'
 import { STORE_ITEMS } from '../logic/storeData'
+import homeIconUrl from '../icons/home-button-icon-for-tetris-mobile-game-ui--simple.png'
 
 const BG_ITEMS_MAP = Object.fromEntries(STORE_ITEMS.filter(i => i.type === 'bg').map(i => [i.id, i]))
 const THEME_MAP = Object.fromEntries(THEMES.map(t => [t.id, t]))
@@ -40,11 +41,15 @@ export default function CasualGamePage() {
           fontFamily: '"Courier New", monospace',
           textTransform: 'uppercase',
           transition: 'color 0.15s, border-color 0.15s',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
         }}
         onMouseEnter={e => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.35)' }}
         onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.6)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.14)' }}
       >
-        ← MENU
+        <img src={homeIconUrl} alt="" style={{ width: 18, height: 18, objectFit: 'contain' }} />
+        <span>MENU</span>
       </button>
 
       {/* Favorites toggle + strip */}

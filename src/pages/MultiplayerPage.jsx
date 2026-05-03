@@ -10,6 +10,7 @@ import { PIECES } from '../logic/tetrominoes'
 import { MusicManager } from '../audio/musicManager'
 import { mpPlayLobbyMusic, mpStopMusic, mpMuteMusic, mpSetMusicVolume } from '../audio/multiplayerMusic'
 import GameCanvas from '../components/GameCanvas'
+import homeIconUrl from '../icons/home-button-icon-for-tetris-mobile-game-ui--simple.png'
 import { BOARD_HEIGHT } from '../logic/tetrominoes'
 import TouchControls from '../components/TouchControls'
 
@@ -1100,9 +1101,10 @@ export default function MultiplayerPage() {
       <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.4rem', borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0, zIndex: 10, position: 'relative' }}>
         <button
           onClick={screen === SCREEN.GAME ? undefined : () => (screen === SCREEN.PICK ? navigate('/') : setScreen(SCREEN.PICK))}
-          style={{ background: 'none', border: 'none', color: '#666', cursor: screen === SCREEN.GAME ? 'default' : 'pointer', fontSize: '0.72rem', letterSpacing: '0.14em', fontFamily: 'inherit', padding: 0, opacity: screen === SCREEN.GAME ? 0.3 : 1 }}
+          style={{ background: 'none', border: 'none', color: '#666', cursor: screen === SCREEN.GAME ? 'default' : 'pointer', fontSize: '0.72rem', letterSpacing: '0.14em', fontFamily: 'inherit', padding: 0, opacity: screen === SCREEN.GAME ? 0.3 : 1, display: 'flex', alignItems: 'center', gap: 8 }}
         >
-          ← {screen === SCREEN.PICK ? 'MENU' : 'BACK'}
+          <img src={homeIconUrl} alt="" style={{ width: 18, height: 18, objectFit: 'contain' }} />
+          <span>{screen === SCREEN.PICK ? 'MENU' : 'BACK'}</span>
         </button>
         <h1 style={{ margin: 0, fontSize: '1rem', fontWeight: 900, letterSpacing: '0.2em', color: '#f97316' }}>VERSUS</h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 60, justifyContent: 'flex-end' }}>
@@ -1385,6 +1387,7 @@ export default function MultiplayerPage() {
                       onDragBegin={handleDragBegin}
                       onDragEnd={handleDragEnd}
                       onHardDrop={handleHardDrop}
+                      renderQuality={(() => { try { return JSON.parse(localStorage.getItem('tetris-config') || '{}').renderQuality || 'balanced' } catch { return 'balanced' } })()}
                     />
                     {/* Small right-side focus toggle for mobile */}
                     <button

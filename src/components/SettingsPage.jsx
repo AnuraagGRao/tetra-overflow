@@ -1,4 +1,6 @@
 import { useTheme } from '../contexts/ThemeContext'
+import settingsIconUrl from '../icons/settings-gear-icon-for-tetris-mobile-game-ui--geom.png'
+import soundIconUrl from '../icons/sound-music-icon-for-tetris-mobile-game-ui--speake.png'
 
 export default function SettingsPage({ config, onConfig, onClose }) {
   const set = (key, val) => onConfig(prev => ({ ...prev, [key]: val }))
@@ -9,13 +11,19 @@ export default function SettingsPage({ config, onConfig, onClose }) {
       <div className="about-modal settings-modal" onClick={e => e.stopPropagation()}>
         <button type="button" className="about-close" onClick={onClose} aria-label="Close">✕</button>
 
-        <div className="settings-title">⚙ Settings</div>
+        <div className="settings-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+          <img src={settingsIconUrl} alt="" style={{ width: 22, height: 22, objectFit: 'contain' }} />
+          <span>Settings</span>
+        </div>
 
         {/* Display section (light mode removed) */}
 
         {/* Sound section */}
         <div className="settings-section">
-          <div className="settings-section-title">Sound</div>
+          <div className="settings-section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <img src={soundIconUrl} alt="" style={{ width: 18, height: 18, objectFit: 'contain' }} />
+            <span>Sound</span>
+          </div>
 
           <div className="settings-row">
             <span className="settings-label">Music Volume</span>
@@ -139,6 +147,42 @@ export default function SettingsPage({ config, onConfig, onClose }) {
               <span className="touch-ctrl-icon">⚡↓</span>
               <span className="touch-ctrl-action">Fling Down</span>
               <span className="touch-ctrl-desc">Hard Drop</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Graphics section */}
+        <div className="settings-section">
+          <div className="settings-section-title">Graphics</div>
+          <div className="settings-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+            <span className="settings-label" style={{ fontSize: '0.68rem', color: '#888' }}>Render Quality — higher looks sharper on HiDPI screens but uses more GPU</span>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {[
+                { key: 'performance', label: 'Performance', desc: '1× — best for older devices' },
+                { key: 'balanced',    label: 'Balanced',    desc: 'up to 1.5×' },
+                { key: 'quality',     label: 'Quality',     desc: 'up to 2× (HiDPI)' },
+                { key: 'ultra',       label: 'Ultra',       desc: 'up to 3× (4K)' },
+              ].map(({ key, label, desc }) => (
+                <button
+                  key={key}
+                  type="button"
+                  title={desc}
+                  onClick={() => set('renderQuality', key)}
+                  style={{
+                    padding: '5px 11px',
+                    borderRadius: 7,
+                    border: `1px solid ${config.renderQuality === key ? '#00d4ff' : 'rgba(255,255,255,0.12)'}`,
+                    background: config.renderQuality === key ? 'rgba(0,212,255,0.12)' : 'rgba(255,255,255,0.04)',
+                    color: config.renderQuality === key ? '#00d4ff' : '#888',
+                    fontSize: '0.65rem',
+                    letterSpacing: '0.12em',
+                    textTransform: 'uppercase',
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                    transition: 'all 0.15s',
+                  }}
+                >{label}</button>
+              ))}
             </div>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { doc, writeBatch, getFirestore, getDocs, collection } from 'firebase/firestore'
+import { doc, writeBatch, getFirestore } from 'firebase/firestore'
 
 const db = getFirestore()
 
