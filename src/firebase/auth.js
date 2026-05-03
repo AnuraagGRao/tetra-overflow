@@ -1,12 +1,16 @@
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  signInAnonymously,
   signOut as fbSignOut,
   updateProfile,
   sendPasswordResetEmail,
 } from 'firebase/auth'
 import { auth } from './config'
 import { createUserProfile } from './db'
+
+const randomTag = () => Math.random().toString(36).slice(2, 8).toUpperCase()
+const makeGuestName = () => `guest-${Math.floor(100000 + Math.random() * 900000)}`
 
 export const signUpWithEmail = async (email, password, displayName) => {
   const cred = await createUserWithEmailAndPassword(auth, email, password)
@@ -20,7 +24,18 @@ export const signInWithEmail = async (email, password) => {
   return cred.user
 }
 
-// Google and guest sign-in disabled
+export const signInGuest = async () => {
+  const cred = await signInAnonymously(auth)
+  const displayName = makeGuestName()
+  await updateProfile(cred.user, { displayName })
+  await createUserProfile(cred.user.uid, {
+    displayName,
+    email: null,
+    isGuest: true,
+    guestTag: randomTag(),
+  })
+  return cred.user
+}
 
 export const signOut = () => fbSignOut(auth)
 

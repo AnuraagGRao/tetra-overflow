@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { QRCodeSVG as QRCode } from 'qrcode.react'
 import { useAuth } from '../contexts/AuthContext'
-import { createLobby, joinLobby, updateLobby, updateLobbyPlayer, setLobbyStatus, setLobbyBestOf, subscribeLobby, archiveLobby, getFriends, getFriendRequests, acceptFriendRequest, declineFriendRequest, sendLobbyInvite, getLobbyInvites, dismissLobbyInvite, getPublicProfiles } from '../firebase/db'
+import { createLobby, joinLobby, updateLobby, updateLobbyPlayer, setLobbyStatus, setLobbyBestOf, subscribeLobby, archiveLobby, getFriends, getFriendRequests, getSentFriendRequests, acceptFriendRequest, declineFriendRequest, sendFriendRequest, findPublicProfileByFriendCode, sendLobbyInvite, getLobbyInvites, dismissLobbyInvite, getPublicProfiles } from '../firebase/db'
 import { TetrisEngine, GAME_MODE, ZONE_MIN_METER } from '../logic/gameEngine'
 import { setSfxVolume, playMoveSFX, playRotateSFX, playHoldSFX, playHardDropSFX, playLockSFX, playLineClearSFX, playTetrisSFX } from '../audio/gameSfx'
 import { PIECES } from '../logic/tetrominoes'
@@ -28,6 +28,7 @@ const KEY_BINDINGS = {
 
 const MAX_FRAME_MS     = 34
 const SNAP_INTERVAL_MS = 300  // faster board updates for smoother opponent preview
+const OPPONENTS_PER_PAGE = 4
 
 // ─── Audio (module-level — persists across re-renders, isolated from App.jsx) ─
 let _mpAudioCtx = null
@@ -100,8 +101,8 @@ function OpponentBoard({ snapshot, displayName, badge, score, wins = 0, isTarget
     const canvas = canvasRef.current; if (!canvas) return
     const ctx  = canvas.getContext('2d')
     const W = canvas.width, H = canvas.height
-    const cols = 10, rows = 20
-    const cw = W / cols, ch = H / rows
+    const cols = 10, visibleRows = 20
+    const cw = W / cols, ch = H / visibleRows
 
     ctx.fillStyle = '#06060f'
     ctx.fillRect(0, 0, W, H)
@@ -110,13 +111,13 @@ function OpponentBoard({ snapshot, displayName, badge, score, wins = 0, isTarget
     ctx.strokeStyle = 'rgba(255,255,255,0.025)'
     ctx.lineWidth = 0.5
     for (let c = 1; c < cols; c++) { ctx.beginPath(); ctx.moveTo(c * cw, 0); ctx.lineTo(c * cw, H); ctx.stroke() }
-    for (let r = 1; r < rows; r++) { ctx.beginPath(); ctx.moveTo(0, r * ch); ctx.lineTo(W, r * ch); ctx.stroke() }
+    for (let r = 1; r < visibleRows; r++) { ctx.beginPath(); ctx.moveTo(0, r * ch); ctx.lineTo(W, r * ch); ctx.stroke() }
 
     // Locked cells with real piece colors (supports compact boardRows format)
     if (snapshot?.boardRows) {
       const rowsArr = snapshot.boardRows
       // Skip hidden spawn rows (0–1). Map visible 20 rows 0..19 ← 2..21
-      for (let vr = 0; vr < rows; vr++) {
+      for (let vr = 0; vr < visibleRows; vr++) {
         const srcIdx = vr + 2
         const rowStr = rowsArr[srcIdx] || ''
         for (let c = 0; c < cols; c++) {
@@ -127,11 +128,11 @@ function OpponentBoard({ snapshot, displayName, badge, score, wins = 0, isTarget
           ctx.fillRect(c * cw + 0.5, vr * ch + 0.5, cw - 1, ch - 1)
         }
       }
-            ctx.fillStyle = '#06060f'
+    } else if (snapshot?.board) {
       // Back-compat for old nested-array snapshots
-      for (let r = 2; r < rows + 2; r++) {
+      for (let r = 2; r < visibleRows + 2; r++) {
         for (let c = 0; c < cols; c++) {
-          const cell = snapshot.board[r]?.[c]
+          const cell = snapshot.board?.[r]?.[c]
           if (!cell) continue
           ctx.fillStyle = cell === 'GBG' ? '#444' : (PIECES[cell]?.color ?? '#00d4ff')
           ctx.fillRect(c * cw + 0.5, (r - 2) * ch + 0.5, cw - 1, ch - 1)
@@ -141,15 +142,15 @@ function OpponentBoard({ snapshot, displayName, badge, score, wins = 0, isTarget
     // Falling piece (semi-transparent)
     if (snapshot?.current) {
       const { type, x, y } = snapshot.current
-      const rows = snapshot.current.rows
-      const matrix = rows ? rows.map(r => Array.from(r).map(ch => ch === '1')) : snapshot.current.matrix
+      const shapeRows = snapshot.current.rows
+      const matrix = shapeRows ? shapeRows.map(r => Array.from(r).map(ch => ch === '1')) : snapshot.current.matrix
       ctx.fillStyle  = PIECES[type]?.color ?? '#ccc'
       ctx.globalAlpha = 0.8
       matrix?.forEach((row, dy) => {
         row?.forEach((cell, dx) => {
           if (!cell) return
           const px = x + dx, py = y + dy
-          if (py < 2 || py >= rows + 2 || px < 0 || px >= cols) return
+          if (py < 2 || py >= visibleRows + 2 || px < 0 || px >= cols) return
           ctx.fillRect(px * cw + 0.5, (py - 2) * ch + 0.5, cw - 1, ch - 1)
         })
       })
@@ -157,7 +158,7 @@ function OpponentBoard({ snapshot, displayName, badge, score, wins = 0, isTarget
     }
 
     // If no snapshot yet, show a tiny hint
-    if (!snapshot?.board && !snapshot?.current) {
+    if (!snapshot?.boardRows && !snapshot?.board && !snapshot?.current) {
       ctx.fillStyle = 'rgba(200,200,220,0.35)'
       ctx.font = '8px monospace'
       ctx.textAlign = 'center'
@@ -492,12 +493,18 @@ export default function MultiplayerPage() {
   // No pause in multiplayer; keep state for overlay suppression
   const [_paused, setPaused] = useState(false)
   const [muted,       setMuted]       = useState(false)
+  const [showVolumePanel, setShowVolumePanel] = useState(false)
+  const [musicVol, setMusicVol] = useState(1)
+  const [sfxVol, setSfxVolState] = useState(2)
   const [roundResult, setRoundResult] = useState(null)
   const [showFriendsPanel, setShowFriendsPanel] = useState(false)
   const [friends, setFriends] = useState([])
   const [friendRequests, setFriendRequests] = useState([])
+  const [sentFriendRequests, setSentFriendRequests] = useState([])
   const [frLoading, setFrLoading] = useState(false)
   const [frAction, setFrAction] = useState({}) // id -> 'accepting'|'declining'
+  const [friendCodeInput, setFriendCodeInput] = useState('')
+  const [friendCodeState, setFriendCodeState] = useState({ kind: 'idle', message: '' })
   const [playerProfiles, setPlayerProfiles] = useState({}) // uid -> { selectedBadge }
   const [lobbyInvites, setLobbyInvites] = useState([])
   const [dismissedInvites, setDismissedInvites] = useState(new Set())
@@ -517,10 +524,9 @@ export default function MultiplayerPage() {
   const garbageSentToRef   = useRef({})   // { [targetUid]: totalSentToThem }
   const opponentGarbageRef = useRef({})   // { [senderUid]: totalApplied }
   const [targetUid, setTargetUid] = useState(null)
-  const [compactPreviews, setCompactPreviews] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('vs-compact-previews') ?? 'false') } catch { return false }
-  })
-  const [gridCols, setGridCols] = useState(() => (window.innerWidth > 1024 ? 4 : window.innerWidth > 768 ? 3 : 2))
+  const [previewPage, setPreviewPage] = useState(0)
+  const [previewDirection, setPreviewDirection] = useState(0)
+  const swipeStartRef = useRef(null)
     // Auto-join via URL (?join= or ?code=) or legacy hash (#join:CODE)
     useEffect(() => {
       try {
@@ -537,6 +543,40 @@ export default function MultiplayerPage() {
   const unsubRef           = useRef(null)
   const prevStateRef       = useRef(null) // previous engine state for SFX edge detection
 
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v))
+  const persistAudioConfig = useCallback((nextMusicVol, nextSfxVol) => {
+    try {
+      const cfg = JSON.parse(localStorage.getItem('tetris-config') ?? '{}')
+      cfg.musicVolume = nextMusicVol
+      cfg.sfxVolume = nextSfxVol
+      cfg.sfxEnabled = nextSfxVol > 0
+      localStorage.setItem('tetris-config', JSON.stringify(cfg))
+    } catch {}
+  }, [])
+
+  const applyAudioLevels = useCallback((nextMusicVol, nextSfxVol, { persist = true } = {}) => {
+    const music = clamp(nextMusicVol, 0, 1)
+    const sfx = clamp(nextSfxVol, 0, 2)
+
+    setMusicVol(music)
+    setSfxVolState(sfx)
+    if (persist) persistAudioConfig(music, sfx)
+
+    mpSetMusicVolume(music)
+    if (mutedRef.current) {
+      _mpMusicMgr?.setVolume(0)
+      mpMuteMusic(true)
+      _mpSfxVol = 0
+      setSfxVolume(0)
+      return
+    }
+
+    _mpMusicMgr?.setVolume(music)
+    mpMuteMusic(false)
+    _mpSfxVol = sfx
+    setSfxVolume(_mpSfxVol)
+  }, [persistAudioConfig])
+
   // Keep refs in sync with state
   useEffect(() => { screenRef.current = screen }, [screen])
   useEffect(() => { lobbyRef.current  = lobby  }, [lobby])
@@ -546,14 +586,6 @@ export default function MultiplayerPage() {
     if (!user) return
     getLobbyInvites(user.uid).then(setLobbyInvites).catch(() => {})
   }, [user])
-  useEffect(() => {
-    const onResize = () => setGridCols(window.innerWidth > 1024 ? 4 : window.innerWidth > 768 ? 3 : 2)
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [])
-  const toggleCompact = useCallback(() => {
-    setCompactPreviews(v => { const n = !v; localStorage.setItem('vs-compact-previews', JSON.stringify(n)); return n })
-  }, [])
   // Persist focus mode + F hotkey
   useEffect(() => { try { localStorage.setItem('vs-focus-mode', focus ? '1' : '0') } catch {} }, [focus])
   useEffect(() => {
@@ -561,14 +593,6 @@ export default function MultiplayerPage() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
-  // Auto-disable compact when there are 4 or fewer opponents
-  useEffect(() => {
-    const oppCount = (lobby?.players ?? []).filter(p => p.uid !== user?.uid).length
-    if (oppCount <= 4 && compactPreviews) {
-      setCompactPreviews(false)
-      try { localStorage.setItem('vs-compact-previews', 'false') } catch {}
-    }
-  }, [lobby, user, compactPreviews])
   // WS streaming disabled — Firestore-only path remains
 
   const showOnScreenControls = (() => {
@@ -580,16 +604,16 @@ export default function MultiplayerPage() {
   useEffect(() => {
     try {
       const cfg = JSON.parse(localStorage.getItem('tetris-config') ?? '{}')
-      _mpSfxVol = cfg.sfxEnabled !== false ? (cfg.sfxVolume ?? 2.0) : 0
-      setSfxVolume(_mpSfxVol)
-      if (cfg.musicVolume !== undefined) mpSetMusicVolume(cfg.musicVolume)
+      const initialMusic = clamp(cfg.musicVolume ?? 1.0, 0, 1)
+      const initialSfx = cfg.sfxEnabled !== false ? clamp(cfg.sfxVolume ?? 2.0, 0, 2) : 0
+      applyAudioLevels(initialMusic, initialSfx, { persist: false })
     } catch {}
     return () => {
       clearTimeout(roundTimerRef.current)
       _mpMusicMgr?.stop()
       mpStopMusic()
     }
-  }, [])
+  }, [applyAudioLevels])
 
   // ── Lobby / match music ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -602,12 +626,16 @@ export default function MultiplayerPage() {
     }
   }, [screen])
 
+  useEffect(() => {
+    if (screen !== SCREEN.GAME && screen !== SCREEN.LOBBY) setShowVolumePanel(false)
+  }, [screen])
+
   // Load friends + pending requests once for panel
   useEffect(() => {
     if (!user) return
     setFrLoading(true)
-    Promise.all([getFriends(user.uid), getFriendRequests(user.uid)])
-      .then(([fs, reqs]) => { setFriends(fs); setFriendRequests(reqs) })
+    Promise.all([getFriends(user.uid), getFriendRequests(user.uid), getSentFriendRequests(user.uid)])
+      .then(([fs, reqs, sent]) => { setFriends(fs); setFriendRequests(reqs); setSentFriendRequests(sent) })
       .catch(() => {})
       .finally(() => setFrLoading(false))
   }, [user])
@@ -628,6 +656,33 @@ export default function MultiplayerPage() {
     try { await declineFriendRequest(user.uid, req.id); setFriendRequests(list => list.filter(r => r.id !== req.id)) }
     finally { setFrAction(p => ({ ...p, [req.id]: undefined })) }
   }, [user])
+
+  const handleAddByFriendCode = useCallback(async () => {
+    if (!user?.uid) return
+    const code = friendCodeInput.trim()
+    if (!code) {
+      setFriendCodeState({ kind: 'error', message: 'Enter a friend ID first.' })
+      return
+    }
+    setFriendCodeState({ kind: 'loading', message: 'Looking up player…' })
+    try {
+      const profile = await findPublicProfileByFriendCode(code)
+      if (!profile) {
+        setFriendCodeState({ kind: 'error', message: 'No player found for that ID.' })
+        return
+      }
+      if (profile.uid === user.uid) {
+        setFriendCodeState({ kind: 'error', message: 'That is your own friend ID.' })
+        return
+      }
+      await sendFriendRequest(user.uid, profile.uid, displayName)
+      setSentFriendRequests((prev) => [{ id: `local-${profile.uid}`, fromUid: user.uid, toUid: profile.uid, toName: profile.displayName, status: 'pending' }, ...prev.filter((entry) => entry.toUid !== profile.uid)])
+      setFriendCodeState({ kind: 'success', message: `Request sent to ${profile.displayName}.` })
+      setFriendCodeInput('')
+    } catch (err) {
+      setFriendCodeState({ kind: 'error', message: err?.message || 'Could not send request.' })
+    }
+  }, [displayName, friendCodeInput, user])
 
   // ── Apply DAS / ARR from user config ──────────────────────────────────────────
     // Load public profiles for current lobby players to show badges
@@ -660,16 +715,15 @@ export default function MultiplayerPage() {
       _mpSfxVol = 0
       setSfxVolume(0)
     } else {
-      try {
-        const cfg = JSON.parse(localStorage.getItem('tetris-config') ?? '{}')
-        _mpMusicMgr?.setVolume(cfg.musicVolume ?? 1.0)
-        mpMuteMusic(false)
-        _mpSfxVol = cfg.sfxVolume ?? 2.0
-        setSfxVolume(_mpSfxVol)
-      } catch { _mpMusicMgr?.setVolume(1.0); mpMuteMusic(false); _mpSfxVol = 2.0 }
+      _mpMusicMgr?.setVolume(musicVol)
+      mpSetMusicVolume(musicVol)
+      mpMuteMusic(false)
+      _mpSfxVol = sfxVol
+      setSfxVolume(_mpSfxVol)
     }
-  }, [])
+  }, [musicVol, sfxVol])
   const toggleMute = useCallback(() => applyMute(!mutedRef.current), [applyMute])
+  const showAudioControls = screen === SCREEN.GAME || screen === SCREEN.LOBBY
 
   // ── Random garbage target selection ──────────────────────────────────────────
   const pickTarget = useCallback((lobbyData) => {
@@ -763,6 +817,7 @@ export default function MultiplayerPage() {
         setRoundResult({
           won: myW >= topW && myW > 0,
           roundWins:   data.roundWins ?? {},
+          roundWinner: data.matchWinner,
           matchWinner: data.matchWinner,
         })
         setScreen(SCREEN.RESULT)
@@ -771,6 +826,17 @@ export default function MultiplayerPage() {
 
       // During a live round
       if (lastSeenRoundRef.current > 0 && data.status === 'playing') {
+        const alive = data.players.filter(p => !p.gameOver)
+        if (alive.length <= 1 && data.players.length > 1) {
+          const winnerUid = alive[0]?.uid
+            ?? data.players.reduce((b, p) => (p.score > (b?.score ?? -1) ? p : b), data.players[0])?.uid
+          setRoundResult(prev => ({
+            ...(prev ?? {}),
+            roundWinner: winnerUid,
+            roundWins: data.roundWins ?? prev?.roundWins ?? {},
+          }))
+        }
+
         // Incoming garbage: compute delta per opponent
         let gotGarbage = false
         for (const p of (data.players ?? [])) {
@@ -791,14 +857,13 @@ export default function MultiplayerPage() {
 
         // Host-only: detect round end (≤1 player alive)
         if (isHost && !roundEndDoneRef.current) {
-          const alive = data.players.filter(p => !p.gameOver)
           if (alive.length <= 1 && data.players.length > 1) {
             roundEndDoneRef.current = true
             _mpMusicMgr?.stop()
             const winnerUid = alive[0]?.uid
               ?? data.players.reduce((b, p) => (p.score > (b?.score ?? -1) ? p : b), data.players[0])?.uid
             const wonRound = winnerUid === user?.uid
-            setRoundResult({ won: wonRound, roundWins: data.roundWins ?? {} })
+            setRoundResult({ won: wonRound, roundWins: data.roundWins ?? {}, roundWinner: winnerUid })
             if (screenRef.current === SCREEN.GAME) setScreen(SCREEN.ROUND_END)
             // Delay 3s so players can see the round result before the next round starts
             clearTimeout(roundTimerRef.current)
@@ -866,7 +931,7 @@ export default function MultiplayerPage() {
       if (ns.gameOver) {
         if (lobbyCode) updateLobbyPlayer(lobbyCode, user.uid, { score: ns.score, gameOver: true }).catch(() => {})
         _mpMusicMgr?.stop()
-        setRoundResult({ won: false, roundWins: lobbyRef.current?.roundWins ?? {} })
+        setRoundResult({ won: false, roundWins: lobbyRef.current?.roundWins ?? {}, roundWinner: null })
         setScreen(SCREEN.ROUND_END)
         return
       }
@@ -970,7 +1035,62 @@ export default function MultiplayerPage() {
   const bestOf       = lobby?.bestOf ?? 3
   const currentRound = lobby?.currentRound ?? 1
   const winsNeeded   = Math.ceil(bestOf / 2)
-  const leftWidth    = opponents.length > 4 ? 130 : 86
+  const leftWidth    = 88
+  const opponentPages = useMemo(() => {
+    const pages = []
+    for (let i = 0; i < opponents.length; i += OPPONENTS_PER_PAGE) {
+      pages.push(opponents.slice(i, i + OPPONENTS_PER_PAGE))
+    }
+    return pages
+  }, [opponents])
+  const maxPreviewPage = Math.max(0, opponentPages.length - 1)
+  const visibleOpponents = opponentPages[previewPage] ?? []
+
+  useEffect(() => {
+    setPreviewPage((p) => Math.min(p, maxPreviewPage))
+  }, [maxPreviewPage])
+
+  const goPrevPreviewPage = useCallback(() => {
+    setPreviewDirection(-1)
+    setPreviewPage((p) => Math.max(0, p - 1))
+  }, [])
+  const goNextPreviewPage = useCallback(() => {
+    setPreviewDirection(1)
+    setPreviewPage((p) => Math.min(maxPreviewPage, p + 1))
+  }, [maxPreviewPage])
+  const onPreviewTouchStart = useCallback((ev) => {
+    const t = ev.touches?.[0]
+    if (!t) return
+    swipeStartRef.current = { x: t.clientX, y: t.clientY }
+  }, [])
+  const onPreviewTouchEnd = useCallback((ev) => {
+    const start = swipeStartRef.current
+    const t = ev.changedTouches?.[0]
+    swipeStartRef.current = null
+    if (!start || !t) return
+    const dx = t.clientX - start.x
+    const dy = t.clientY - start.y
+    if (Math.abs(dx) < 28 || Math.abs(dx) < Math.abs(dy)) return
+    if (dx < 0) goNextPreviewPage()
+    else goPrevPreviewPage()
+  }, [goNextPreviewPage, goPrevPreviewPage])
+  const playersForStandings = (lobby?.players ?? []).map((p) => ({
+    ...p,
+    wins: roundResult?.roundWins?.[p.uid] ?? roundWins[p.uid] ?? 0,
+    isSelf: p.uid === user?.uid,
+  })).sort((a, b) => {
+    if (b.wins !== a.wins) return b.wins - a.wins
+    if ((b.score ?? 0) !== (a.score ?? 0)) return (b.score ?? 0) - (a.score ?? 0)
+    return String(a.displayName ?? '').localeCompare(String(b.displayName ?? ''))
+  })
+  const roundWinnerUid = roundResult?.roundWinner ?? null
+  const roundWinnerName = roundWinnerUid
+    ? ((lobby?.players ?? []).find((p) => p.uid === roundWinnerUid)?.displayName || (roundWinnerUid === user?.uid ? 'You' : 'Winner'))
+    : null
+  const matchWinnerUid = roundResult?.matchWinner ?? null
+  const matchWinnerName = matchWinnerUid
+    ? ((lobby?.players ?? []).find((p) => p.uid === matchWinnerUid)?.displayName || (matchWinnerUid === user?.uid ? 'You' : 'Winner'))
+    : null
 
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
@@ -1002,13 +1122,55 @@ export default function MultiplayerPage() {
               ⚡ {myState?.zoneActive ? `${Math.ceil((myState?.zoneTimer || 0)/1000)}s` : 'ZONE'}
             </button>
           )}
-          {screen === SCREEN.GAME && (
+          {showAudioControls && (
+            <button
+              onClick={() => setShowVolumePanel(v => !v)}
+              title={showVolumePanel ? 'Hide volume settings' : 'Volume settings'}
+              style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)', color: showVolumePanel ? '#f97316' : '#999', cursor: 'pointer', fontSize: '0.62rem', padding: '4px 8px', borderRadius: 4, fontFamily: 'inherit', letterSpacing: '0.08em' }}>
+              VOL
+            </button>
+          )}
+          {showAudioControls && (
             <button onClick={toggleMute} title={muted ? 'Unmute (M)' : 'Mute (M)'}
               style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)', color: muted ? '#444' : '#999', cursor: 'pointer', fontSize: '0.7rem', padding: '4px 8px', borderRadius: 4, fontFamily: 'inherit' }}>
               {muted ? '🔇' : '🔊'}
             </button>
           )}
         </div>
+        {showAudioControls && showVolumePanel && (
+          <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 12, background: 'rgba(10,10,20,0.96)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 10, padding: '10px 12px', width: 220, boxShadow: '0 8px 24px rgba(0,0,0,0.35)' }}>
+            <div style={{ fontSize: '0.5rem', color: '#777', letterSpacing: '0.2em', marginBottom: 8 }}>AUDIO</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
+              <span style={{ fontSize: '0.58rem', color: '#aaa', letterSpacing: '0.08em' }}>MUSIC</span>
+              <span style={{ fontSize: '0.58rem', color: '#f8fafc' }}>{Math.round(musicVol * 100)}%</span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              value={Math.round(musicVol * 100)}
+              onChange={(e) => applyAudioLevels(Number(e.target.value) / 100, sfxVol)}
+              style={{ width: '100%', marginBottom: 10 }}
+            />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
+              <span style={{ fontSize: '0.58rem', color: '#aaa', letterSpacing: '0.08em' }}>SFX</span>
+              <span style={{ fontSize: '0.58rem', color: '#f8fafc' }}>{Math.round(sfxVol * 100)}%</span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={200}
+              step={1}
+              value={Math.round(sfxVol * 100)}
+              onChange={(e) => applyAudioLevels(musicVol, Number(e.target.value) / 100)}
+              style={{ width: '100%' }}
+            />
+            <div style={{ marginTop: 8, fontSize: '0.52rem', color: muted ? '#f59e0b' : '#555', letterSpacing: '0.06em' }}>
+              {muted ? 'Muted: levels are saved and will apply when unmuted.' : 'Live changes applied in lobby and match.'}
+            </div>
+          </div>
+        )}
       </header>
 
       {/* Content */}
@@ -1143,33 +1305,63 @@ export default function MultiplayerPage() {
 
                 {/* Left column: opponent boards (grid) */}
                 {!focus && (
-                <div style={{ width: leftWidth, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'stretch', padding: '8px 6px', gap: 6, background: 'rgba(0,0,0,0.5)', overflowY: 'auto' }}>
+                <div style={{ width: leftWidth, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'stretch', padding: '8px 6px', gap: 6, background: 'rgba(0,0,0,0.5)', overflow: 'hidden' }}>
 
                   {opponents.length === 0 && (
                     <div style={{ fontSize: '0.44rem', color: '#333', textAlign: 'center', letterSpacing: '0.08em', paddingTop: 6 }}>no opponent</div>
                   )}
-                  <div style={{ display: 'grid', gridTemplateColumns: `repeat(${gridCols}, 1fr)`, gap: 6 }}>
-                    {opponents.map(opp => (
-                      <OpponentBoard
-                        key={opp.uid}
-                        snapshot={opp.boardSnapshot}
-                        displayName={opp.displayName}
-                        badge={playerProfiles[opp.uid]?.selectedBadge || null}
-                        score={opp.score}
-                        wins={roundWins[opp.uid] ?? 0}
-                        isTarget={opp.uid === (targetUid || currentTargetRef.current)}
-                        onClick={() => selectTarget(opp.uid)}
-                        compact={compactPreviews}
-                      />
-                    ))}
+                  {opponents.length > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.46rem', color: '#666', letterSpacing: '0.08em' }}>
+                      <button
+                        onClick={goPrevPreviewPage}
+                        disabled={previewPage <= 0}
+                        style={{ background: 'none', border: '1px solid rgba(255,255,255,0.1)', color: previewPage <= 0 ? '#333' : '#888', borderRadius: 4, width: 18, height: 18, padding: 0, cursor: previewPage <= 0 ? 'default' : 'pointer', fontFamily: 'inherit' }}
+                      >
+                        ‹
+                      </button>
+                      <span>{previewPage + 1}/{Math.max(1, opponentPages.length)}</span>
+                      <button
+                        onClick={goNextPreviewPage}
+                        disabled={previewPage >= maxPreviewPage}
+                        style={{ background: 'none', border: '1px solid rgba(255,255,255,0.1)', color: previewPage >= maxPreviewPage ? '#333' : '#888', borderRadius: 4, width: 18, height: 18, padding: 0, cursor: previewPage >= maxPreviewPage ? 'default' : 'pointer', fontFamily: 'inherit' }}
+                      >
+                        ›
+                      </button>
+                    </div>
+                  )}
+                  <div
+                    onTouchStart={onPreviewTouchStart}
+                    onTouchEnd={onPreviewTouchEnd}
+                    style={{ position: 'relative', minHeight: 0, overflow: 'hidden', flex: 1 }}>
+                    <AnimatePresence mode="wait" custom={previewDirection}>
+                      <motion.div
+                        key={previewPage}
+                        custom={previewDirection}
+                        initial={{ x: previewDirection >= 0 ? 18 : -18, opacity: 0 }}
+                        animate={{ x: 0, opacity: 1 }}
+                        exit={{ x: previewDirection >= 0 ? -18 : 18, opacity: 0 }}
+                        transition={{ duration: 0.16, ease: 'easeOut' }}
+                        style={{ display: 'flex', flexDirection: 'column', gap: 6, position: 'absolute', inset: 0 }}>
+                        {visibleOpponents.map(opp => (
+                          <OpponentBoard
+                            key={opp.uid}
+                            snapshot={opp.boardSnapshot}
+                            displayName={opp.displayName}
+                            badge={playerProfiles[opp.uid]?.selectedBadge || null}
+                            score={opp.score}
+                            wins={roundWins[opp.uid] ?? 0}
+                            isTarget={opp.uid === (targetUid || currentTargetRef.current)}
+                            onClick={() => selectTarget(opp.uid)}
+                            compact
+                          />
+                        ))}
+                      </motion.div>
+                    </AnimatePresence>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
-                    <div style={{ fontSize: '0.5rem', color: '#666', letterSpacing: '0.08em' }}>Tap a card to target</div>
-                    {opponents.length > 4 && (
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.52rem', color: '#888' }}>
-                        Compact
-                        <input type="checkbox" checked={!!compactPreviews} onChange={toggleCompact} />
-                      </label>
+                    <div style={{ fontSize: '0.5rem', color: '#666', letterSpacing: '0.08em' }}>Tap to target</div>
+                    {opponents.length > OPPONENTS_PER_PAGE && (
+                      <div style={{ fontSize: '0.46rem', color: '#555', letterSpacing: '0.06em' }}>swipe</div>
                     )}
                   </div>
 
@@ -1210,7 +1402,7 @@ export default function MultiplayerPage() {
                           const zoneReady = (myState?.zoneMeter ?? 0) >= ZONE_MIN_METER && !myState?.zoneActive
                           const zoneFillPct = Math.max(0, Math.min(100, myState?.zoneActive ? 100 : (myState?.zoneMeter || 0)))
                           return (
-                            <div className="fullscreen-mini-hud" style={{ right: 0 }}>
+                            <div className="fullscreen-mini-hud" style={{ position: 'absolute', top: 0, right: 0, zIndex: 20 }}>
                               <div className="fmh-hold">
                                 <div className="fmh-label">Hold</div>
                                 <PieceMini type={myState?.hold} size={8} />
@@ -1260,19 +1452,24 @@ export default function MultiplayerPage() {
                 <div style={{ fontSize: '1.1rem', fontWeight: 900, letterSpacing: '0.14em', color: roundResult?.won ? '#22c55e' : '#f87171', marginBottom: '1.4rem' }}>
                   {roundResult?.won ? 'ROUND WIN' : 'ROUND LOST'}
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1.2rem', marginBottom: '1.2rem' }}>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#00d4ff' }}>{myWins}</div>
-                    <div style={{ fontSize: '0.5rem', color: '#666' }}>YOU</div>
+                {bestOf === 1 ? (
+                  <div style={{ marginBottom: '1.2rem' }}>
+                    <div style={{ fontSize: '0.52rem', color: '#666', letterSpacing: '0.16em', marginBottom: 4 }}>WINNER</div>
+                    <div style={{ fontSize: '1rem', fontWeight: 800, color: '#f8fafc', letterSpacing: '0.08em' }}>{roundWinnerName ?? 'Resolving…'}</div>
                   </div>
-                  <div style={{ fontSize: '0.9rem', color: '#333' }}>–</div>
-                  {opponents.map(opp => (
-                    <div key={opp.uid} style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#f97316' }}>{roundResult?.roundWins?.[opp.uid] ?? roundWins[opp.uid] ?? 0}</div>
-                      <div style={{ fontSize: '0.5rem', color: '#666', maxWidth: 64, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{opp.displayName}</div>
+                ) : (
+                  <div style={{ marginBottom: '1.2rem' }}>
+                    <div style={{ fontSize: '0.52rem', color: '#666', letterSpacing: '0.16em', marginBottom: 8 }}>ROUND WINS</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 220 }}>
+                      {playersForStandings.map((p) => (
+                        <div key={p.uid} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '6px 10px', background: p.isSelf ? 'rgba(0,212,255,0.08)' : 'rgba(255,255,255,0.02)' }}>
+                          <div style={{ fontSize: '0.62rem', color: p.isSelf ? '#7dd3fc' : '#d1d5db', letterSpacing: '0.06em', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.isSelf ? 'YOU' : p.displayName}</div>
+                          <div style={{ fontSize: '0.92rem', fontWeight: 900, color: '#f97316' }}>{p.wins}</div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  </div>
+                )}
                 <div style={{ fontSize: '0.6rem', color: '#555', letterSpacing: '0.08em', marginBottom: '1.2rem' }}>
                   {isHost ? 'Next round starting in 3 s…' : 'Waiting for host…'}
                 </div>
@@ -1293,19 +1490,24 @@ export default function MultiplayerPage() {
                 <div style={{ fontSize: '1.2rem', fontWeight: 900, letterSpacing: '0.16em', color: roundResult?.matchWinner === user?.uid ? '#22c55e' : '#f87171', marginBottom: '1.6rem' }}>
                   {roundResult?.matchWinner === user?.uid ? 'VICTORY' : 'DEFEATED'}
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1.4rem', marginBottom: '1.6rem' }}>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '2rem', fontWeight: 900, color: '#00d4ff' }}>{myWins}</div>
-                    <div style={{ fontSize: '0.52rem', color: '#666' }}>YOU</div>
+                {bestOf === 1 ? (
+                  <div style={{ marginBottom: '1.6rem' }}>
+                    <div style={{ fontSize: '0.52rem', color: '#666', letterSpacing: '0.16em', marginBottom: 5 }}>WINNER</div>
+                    <div style={{ fontSize: '1.02rem', fontWeight: 800, color: '#f8fafc', letterSpacing: '0.08em' }}>{matchWinnerName ?? 'Winner'}</div>
                   </div>
-                  <div style={{ fontSize: '1rem', color: '#333' }}>–</div>
-                  {opponents.map(opp => (
-                    <div key={opp.uid} style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: '2rem', fontWeight: 900, color: '#f97316' }}>{roundResult?.roundWins?.[opp.uid] ?? 0}</div>
-                      <div style={{ fontSize: '0.52rem', color: '#666', maxWidth: 70, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{opp.displayName}</div>
+                ) : (
+                  <div style={{ marginBottom: '1.6rem' }}>
+                    <div style={{ fontSize: '0.52rem', color: '#666', letterSpacing: '0.16em', marginBottom: 8 }}>FINAL WINS</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 230 }}>
+                      {playersForStandings.map((p) => (
+                        <div key={p.uid} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '6px 10px', background: p.isSelf ? 'rgba(0,212,255,0.08)' : 'rgba(255,255,255,0.02)' }}>
+                          <div style={{ fontSize: '0.64rem', color: p.isSelf ? '#7dd3fc' : '#d1d5db', letterSpacing: '0.06em', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.isSelf ? 'YOU' : p.displayName}</div>
+                          <div style={{ fontSize: '0.98rem', fontWeight: 900, color: '#f97316' }}>{p.wins}</div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  </div>
+                )}
                 <div style={{ fontSize: '0.68rem', color: '#888', marginBottom: '1.5rem' }}>
                   {bestOf === 1 ? 'Single match' : `Best of ${bestOf} — first to ${winsNeeded}`}
                 </div>
@@ -1340,6 +1542,30 @@ export default function MultiplayerPage() {
                 <div style={{ padding: '1rem', color: '#666', fontSize: '0.7rem' }}>Loading…</div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{ background: 'rgba(0,212,255,0.06)', border: '1px solid rgba(0,212,255,0.2)', borderRadius: 10, padding: '10px 12px' }}>
+                    <div style={{ fontSize: '0.58rem', color: '#00d4ff', letterSpacing: '0.14em', marginBottom: 6 }}>YOUR FRIEND ID</div>
+                    <div style={{ fontSize: '0.72rem', color: '#f8fafc', marginBottom: 8 }}>{userProfile?.friendCode || 'Generating…'}</div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input
+                        value={friendCodeInput}
+                        onChange={(e) => setFriendCodeInput(e.target.value)}
+                        placeholder="displayname#tag"
+                        style={{ flex: 1, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, color: '#fff', padding: '7px 9px', fontSize: '0.68rem', fontFamily: 'inherit' }}
+                      />
+                      <button
+                        onClick={handleAddByFriendCode}
+                        disabled={friendCodeState.kind === 'loading'}
+                        style={{ background: 'rgba(0,212,255,0.14)', border: '1px solid rgba(0,212,255,0.3)', color: '#00d4ff', borderRadius: 8, padding: '7px 10px', cursor: 'pointer', fontSize: '0.62rem', fontFamily: 'inherit' }}
+                      >
+                        {friendCodeState.kind === 'loading' ? '…' : 'ADD'}
+                      </button>
+                    </div>
+                    {friendCodeState.kind !== 'idle' && (
+                      <div style={{ marginTop: 7, fontSize: '0.6rem', color: friendCodeState.kind === 'success' ? '#22c55e' : friendCodeState.kind === 'error' ? '#f87171' : '#888' }}>
+                        {friendCodeState.message}
+                      </div>
+                    )}
+                  </div>
                   {friendRequests.length > 0 && (
                     <div>
                       <div style={{ fontSize: '0.6rem', color: '#eab308', letterSpacing: '0.18em', marginBottom: 6 }}>Pending Requests</div>
@@ -1349,6 +1575,19 @@ export default function MultiplayerPage() {
                             <div style={{ flex: 1, color: '#ddd', fontSize: '0.78rem' }}>{req.fromName || req.fromUid?.slice(0,8)}</div>
                             <button onClick={() => handleAcceptReq(req)} disabled={frAction[req.id] === 'accepting'} style={{ background: 'rgba(34,197,94,0.12)', border: '1px solid #22c55e55', color: '#22c55e', borderRadius: 6, padding: '3px 9px', fontSize: '0.62rem', cursor: 'pointer' }}>{frAction[req.id] === 'accepting' ? '…' : 'Accept'}</button>
                             <button onClick={() => handleDeclineReq(req)} disabled={frAction[req.id] === 'declining'} style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid #f8717155', color: '#f87171', borderRadius: 6, padding: '3px 9px', fontSize: '0.62rem', cursor: 'pointer' }}>{frAction[req.id] === 'declining' ? '…' : 'Decline'}</button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {sentFriendRequests.length > 0 && (
+                    <div>
+                      <div style={{ fontSize: '0.6rem', color: '#00d4ff', letterSpacing: '0.18em', marginBottom: 6 }}>Outgoing Requests</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {sentFriendRequests.map(req => (
+                          <div key={req.id} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(0,212,255,0.12)', borderRadius: 8, padding: '8px 10px' }}>
+                            <div style={{ flex: 1, color: '#ddd', fontSize: '0.78rem' }}>{req.toName || playerProfiles[req.toUid]?.displayName || req.toUid?.slice(0,8)}</div>
+                            <div style={{ fontSize: '0.6rem', color: '#00d4ff', letterSpacing: '0.08em' }}>Pending</div>
                           </div>
                         ))}
                       </div>

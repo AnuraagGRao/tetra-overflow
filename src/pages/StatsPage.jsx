@@ -38,7 +38,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
-import { getUserStats, getLeaderboard, getCoinHistory, getPublicProfile, getPublicStats, getPublicProfiles, getFriends, getFriendRequests, acceptFriendRequest, declineFriendRequest, sendFriendRequest } from '../firebase/db'
+import { getUserStats, getLeaderboard, getCoinHistory, getPublicProfile, getPublicStats, getPublicProfiles, getFriends, getFriendRequests, getSentFriendRequests, acceptFriendRequest, declineFriendRequest, sendFriendRequest, findPublicProfileByFriendCode } from '../firebase/db'
 import { GAME_MODE } from '../logic/gameEngine'
 import DailyChallengesMenu from '../components/DailyChallengesMenu'
 
@@ -169,6 +169,11 @@ function PlayerProfileModal({ uid, onClose, myUid, myDisplayName, friends }) {
                 <div style={{ fontSize: '0.6rem', color: '#555', marginTop: 2 }}>
                   {pStats?.totalGames || 0} games · {(pStats?.totalLines || 0).toLocaleString()} lines
                 </div>
+                {profile?.friendCode && (
+                  <div style={{ fontSize: '0.56rem', color: '#00d4ff', marginTop: 3, letterSpacing: '0.08em' }}>
+                    {profile.friendCode}
+                  </div>
+                )}
               </div>
               <button onClick={onClose} style={{ marginLeft: 'auto', background: 'none', border: '1px solid rgba(255,255,255,0.15)', color: '#888', borderRadius: 6, padding: '4px 9px', cursor: 'pointer', fontSize: '0.65rem', fontFamily: 'inherit' }}>✕</button>
             </div>
@@ -218,8 +223,11 @@ export default function StatsPage() {
   const [profileModal, setProfileModal] = useState(null) // uid | null
   const [friends, setFriends] = useState([])
   const [friendRequests, setFriendRequests] = useState([])
+  const [sentFriendRequests, setSentFriendRequests] = useState([])
   const [friendsLoading, setFriendsLoading] = useState(false)
   const [requestAction, setRequestAction] = useState({}) // requestId → 'accepting'|'declining'|'done'
+  const [friendCodeInput, setFriendCodeInput] = useState('')
+  const [friendCodeState, setFriendCodeState] = useState({ kind: 'idle', message: '' })
 
   // Responsive flag for very small screens to avoid horizontal overflow
   useEffect(() => {
@@ -257,9 +265,10 @@ export default function StatsPage() {
   useEffect(() => {
     if (!user) return
     setFriendsLoading(true)
-    Promise.all([getFriends(user.uid), getFriendRequests(user.uid)]).then(([f, r]) => {
+    Promise.all([getFriends(user.uid), getFriendRequests(user.uid), getSentFriendRequests(user.uid)]).then(([f, r, sent]) => {
       setFriends(f)
       setFriendRequests(r)
+      setSentFriendRequests(sent)
       setFriendsLoading(false)
     }).catch(() => setFriendsLoading(false))
   }, [user])
@@ -284,6 +293,33 @@ export default function StatsPage() {
   }, [user])
 
   const displayName = userProfile?.displayName || user?.displayName || 'Player'
+
+  const handleAddByFriendCode = useCallback(async () => {
+    if (!user?.uid) return
+    const code = friendCodeInput.trim()
+    if (!code) {
+      setFriendCodeState({ kind: 'error', message: 'Enter a friend ID first.' })
+      return
+    }
+    setFriendCodeState({ kind: 'loading', message: 'Looking up player…' })
+    try {
+      const profile = await findPublicProfileByFriendCode(code)
+      if (!profile) {
+        setFriendCodeState({ kind: 'error', message: 'No player found for that ID.' })
+        return
+      }
+      if (profile.uid === user.uid) {
+        setFriendCodeState({ kind: 'error', message: 'That is your own friend ID.' })
+        return
+      }
+      await sendFriendRequest(user.uid, profile.uid, displayName)
+      setSentFriendRequests((prev) => [{ id: `local-${profile.uid}`, fromUid: user.uid, toUid: profile.uid, toName: profile.displayName, status: 'pending' }, ...prev.filter((entry) => entry.toUid !== profile.uid)])
+      setFriendCodeState({ kind: 'success', message: `Request sent to ${profile.displayName}.` })
+      setFriendCodeInput('')
+    } catch (err) {
+      setFriendCodeState({ kind: 'error', message: err?.message || 'Could not send request.' })
+    }
+  }, [friendCodeInput, user, displayName])
   const bestScores = useMemo(() => MODES.map(m => ({ ...m, score: stats?.[`best_${m.key}`] || 0 })), [stats])
   const maxBest = useMemo(() => Math.max(...bestScores.map(m => m.score), 1), [bestScores])
 
@@ -545,6 +581,31 @@ export default function StatsPage() {
             <div>
               <div style={{ fontSize: '0.6rem', letterSpacing: '0.22em', color: '#555', margin: '0.75rem 0' }}>Friends</div>
 
+              <div style={{ marginBottom: '0.8rem', background: '#0f1120', border: '1px solid rgba(0,212,255,0.14)', borderRadius: 12, padding: '0.9rem' }}>
+                <div style={{ fontSize: '0.55rem', letterSpacing: '0.16em', color: '#00d4ff88', marginBottom: 8 }}>YOUR FRIEND ID</div>
+                <div style={{ fontSize: '0.8rem', color: '#e5f3ff', letterSpacing: '0.08em', marginBottom: 10 }}>{userProfile?.friendCode || 'Generating…'}</div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input
+                    value={friendCodeInput}
+                    onChange={(e) => setFriendCodeInput(e.target.value)}
+                    placeholder="displayname#tag"
+                    style={{ flex: 1, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, color: '#fff', padding: '8px 10px', fontSize: '0.72rem', fontFamily: 'inherit' }}
+                  />
+                  <button
+                    onClick={handleAddByFriendCode}
+                    disabled={friendCodeState.kind === 'loading'}
+                    style={{ background: 'rgba(0,212,255,0.12)', border: '1px solid rgba(0,212,255,0.35)', color: '#00d4ff', borderRadius: 8, padding: '8px 11px', fontSize: '0.66rem', fontFamily: 'inherit', letterSpacing: '0.08em', cursor: 'pointer' }}
+                  >
+                    {friendCodeState.kind === 'loading' ? '…' : 'ADD'}
+                  </button>
+                </div>
+                {friendCodeState.kind !== 'idle' && (
+                  <div style={{ marginTop: 8, fontSize: '0.62rem', color: friendCodeState.kind === 'success' ? '#22c55e' : friendCodeState.kind === 'error' ? '#f87171' : '#888' }}>
+                    {friendCodeState.message}
+                  </div>
+                )}
+              </div>
+
               {/* Pending requests */}
               {friendRequests.length > 0 && (
                 <div style={{ marginBottom: '0.8rem' }}>
@@ -563,6 +624,20 @@ export default function StatsPage() {
                           onClick={() => handleDecline(req)}
                           style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid #f8717155', color: '#f87171', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.65rem', fontFamily: 'inherit', letterSpacing: '0.08em' }}
                         >{requestAction[req.id] === 'declining' ? '…' : 'Decline'}</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {sentFriendRequests.length > 0 && (
+                <div style={{ marginBottom: '0.8rem' }}>
+                  <div style={{ fontSize: '0.55rem', letterSpacing: '0.16em', color: '#00d4ff88', marginBottom: 6 }}>OUTGOING REQUESTS</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {sentFriendRequests.map(req => (
+                      <div key={req.id} style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#0f1120', border: '1px solid rgba(0,212,255,0.15)', borderRadius: 10, padding: '8px 12px' }}>
+                        <div style={{ flex: 1, fontSize: '0.78rem', color: '#eee', letterSpacing: '0.06em' }}>{req.toName || lbProfiles[req.toUid]?.displayName || `player_${req.toUid?.slice(0, 5)}`}</div>
+                        <div style={{ fontSize: '0.62rem', color: '#00d4ff', letterSpacing: '0.08em' }}>Pending</div>
                       </div>
                     ))}
                   </div>

@@ -127,6 +127,37 @@ function SignUpForm({ onSuccess }) {
   )
 }
 
+function GuestForm({ onSuccess }) {
+  const { signInGuest } = useAuth()
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  const handleGuest = async () => {
+    setBusy(true)
+    setErr('')
+    try {
+      await signInGuest()
+      onSuccess()
+    } catch (ex) {
+      setErr(friendlyError(ex?.code))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <ErrorBox msg={err} />
+      <div style={{ fontSize: '0.72rem', color: '#777', lineHeight: 1.5 }}>
+        Play immediately with a temporary profile like <span style={{ color: '#00d4ff' }}>guest-483921</span>. Guest progress is temporary until you create a real account.
+      </div>
+      <button type="button" onClick={handleGuest} disabled={busy} style={{ ...BTN_PRIMARY, opacity: busy ? 0.6 : 1 }}>
+        {busy ? '…' : 'PLAY AS GUEST'}
+      </button>
+    </div>
+  )
+}
+
 function friendlyError(code) {
   const map = {
     // Legacy codes (Firebase < v9.6)
@@ -187,6 +218,7 @@ export default function AuthPage() {
         <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
           <TabButton label="LOG IN" active={tab === 'login'} onClick={() => setTab('login')} />
           <TabButton label="SIGN UP" active={tab === 'signup'} onClick={() => setTab('signup')} />
+          <TabButton label="GUEST" active={tab === 'guest'} onClick={() => setTab('guest')} />
         </div>
 
         {/* Form */}
@@ -198,16 +230,14 @@ export default function AuthPage() {
             exit={{ opacity: 0, x: tab === 'login' ? 12 : -12 }}
             transition={{ duration: 0.2 }}
           >
-            {tab === 'login'
-              ? <LoginForm onSuccess={onSuccess} />
-              : <SignUpForm onSuccess={onSuccess} />
-            }
+            {tab === 'login' && <LoginForm onSuccess={onSuccess} />}
+            {tab === 'signup' && <SignUpForm onSuccess={onSuccess} />}
+            {tab === 'guest' && <GuestForm onSuccess={onSuccess} />}
           </motion.div>
         </AnimatePresence>
 
-        {/* Third-party and guest sign-in temporarily disabled */}
         <div style={{ fontSize: '0.62rem', color: '#444', textAlign: 'center' }}>
-          Third-party and guest sign-in are currently unavailable.
+          Email accounts keep progress permanently. Guest profiles are quick temporary access.
         </div>
       </motion.div>
     </div>

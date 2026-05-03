@@ -3,8 +3,8 @@ import { onAuthStateChanged } from 'firebase/auth'
 import { doc, onSnapshot as fsOnSnapshot } from 'firebase/firestore'
 import { auth } from '../firebase/config'
 import { db } from '../firebase/config'
-import { getUserProfile } from '../firebase/db'
-import { signUpWithEmail, signInWithEmail, signOut, sendPasswordReset } from '../firebase/auth'
+import { getUserProfile, ensureUserProfileIdentity } from '../firebase/db'
+import { signUpWithEmail, signInWithEmail, signInGuest, signOut, sendPasswordReset } from '../firebase/auth'
 
 const AuthContext = createContext(null)
 
@@ -17,7 +17,8 @@ export function AuthProvider({ children }) {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser)
       if (firebaseUser) {
-        const profile = await getUserProfile(firebaseUser.uid)
+        const rawProfile = await getUserProfile(firebaseUser.uid)
+        const profile = await ensureUserProfileIdentity(firebaseUser.uid, rawProfile, firebaseUser.displayName)
         setUserProfile(profile)
       } else {
         setUserProfile(null)
@@ -52,8 +53,8 @@ export function AuthProvider({ children }) {
       refreshProfile,
       signUp: signUpWithEmail,
       signIn: signInWithEmail,
+      signInGuest,
       resetPassword: sendPasswordReset,
-      // Third-party and guest sign-in disabled
       signOut,
     }}>
       {children}
