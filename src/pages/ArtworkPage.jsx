@@ -65,6 +65,7 @@ function DetailView({ track, trackIndex, votes, myVote, onVote, voteBusy, onClos
   const [volume, setVolume]     = useState(0.8)
   const [progress, setProgress] = useState(0)   // 0–1
   const [duration, setDuration] = useState(0)
+  const touchStartXRef = useRef(null)
 
   const up    = votes?.up   || 0
   const down  = votes?.down || 0
@@ -131,6 +132,15 @@ function DetailView({ track, trackIndex, votes, myVote, onVote, voteBusy, onClos
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
+      onTouchStart={(e) => { touchStartXRef.current = e.touches[0].clientX }}
+      onTouchEnd={(e) => {
+        if (touchStartXRef.current === null) return
+        const dx = e.changedTouches[0].clientX - touchStartXRef.current
+        touchStartXRef.current = null
+        if (Math.abs(dx) < 50) return
+        if (dx > 0 && hasPrev) onPrev()
+        else if (dx < 0 && hasNext) onNext()
+      }}
       style={{
         position: 'fixed', inset: 0, background: 'rgba(5,5,15,0.97)', zIndex: 200,
         display: 'flex', flexDirection: 'column', fontFamily: '"Courier New", monospace',
