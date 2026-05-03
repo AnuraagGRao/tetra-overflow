@@ -1307,8 +1307,11 @@ export default function App() {
       if (nowPlayingToastTimerRef.current) clearTimeout(nowPlayingToastTimerRef.current)
       nowPlayingToastTimerRef.current = setTimeout(() => setNowPlayingToast(null), 4500)
     })
-    return () => { musicManager.setOnTrackChange(null) }
-  }, [musicOn]) // re-register when music toggled so the closure is fresh
+    return () => {
+      musicManager.setOnTrackChange(null)
+      if (nowPlayingToastTimerRef.current) { clearTimeout(nowPlayingToastTimerRef.current); nowPlayingToastTimerRef.current = null }
+    }
+  }, []) // musicManager is a module-level singleton; no deps needed
 
   // Resize → isMobile
   useEffect(() => {
@@ -1606,8 +1609,8 @@ export default function App() {
         } else if (spinType === 'tSpin' || spinType === 'allSpin') {
           if (sfxOn) playTSpinSFX(theme)
           doVibrate([20, 15, 40])
-          const tLabel = lines === 0 ? '🌀 T-SPIN' : lines === 1 ? '🌀 T-SPIN SINGLE' : lines === 2 ? '🌀 T-SPIN DOUBLE' : '🌀 T-SPIN TRIPLE'
-          spawnPopup(tLabel, '#a855f7')
+          const TSPIN_LABELS = { 0: 'T-SPIN', 1: 'T-SPIN SINGLE', 2: 'T-SPIN DOUBLE', 3: 'T-SPIN TRIPLE' }
+          spawnPopup(`🌀 ${TSPIN_LABELS[lines] || 'T-SPIN TRIPLE'}`, '#a855f7')
           playedClearCue = true
         } else if (spinType === 'tSpinMini') {
           if (sfxOn) playTSpinSFX(theme)
@@ -2280,6 +2283,8 @@ export default function App() {
   })()
 
   // ─── Floating event popups (tetris / t-spin / combo / all-clear) ────────────
+  const POPUP_BASE_TOP_PCT = 28    // % from top where the first popup appears
+  const POPUP_SPACING_PCT  = 13   // % gap between stacked simultaneous popups
   const renderFloatPopups = () => (
     <AnimatePresence>
       {floatPopups.slice(-4).map((p, idx) => (
@@ -2291,7 +2296,7 @@ export default function App() {
           style={{
             position: 'absolute',
             left: '50%',
-            top: `${28 + idx * 13}%`,
+            top: `${POPUP_BASE_TOP_PCT + idx * POPUP_SPACING_PCT}%`,
             transform: 'translateX(-50%)',
             color: p.color,
             fontFamily: '"Courier New", monospace',
