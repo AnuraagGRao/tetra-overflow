@@ -1,3 +1,27 @@
+// ─── App version (keep in sync for cache/localStorage rescans) ─────────────
+const APP_VERSION = '0.5.0-2026.05.03';
+
+// Clear versioned localStorage keys on first load after a version bump
+if (typeof window !== 'undefined') {
+  try {
+    const prev = localStorage.getItem('app_version');
+    if (prev !== APP_VERSION) {
+      [
+        'selectedEffects',
+        'selectedEffect',
+        'tetris-zoom',
+        'tetris-config',
+        'theme',
+        'bgTheme',
+        'custom-bg-url',
+        'focus-mode',
+        // add other cross-version sensitive keys here
+      ].forEach(k => { try { localStorage.removeItem(k) } catch {} });
+      localStorage.setItem('app_version', APP_VERSION);
+      // Optionally: window.location.reload(); to force clear, if desired
+    }
+  } catch {}
+}
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import './App.css'
@@ -12,7 +36,7 @@ import GlitchOverlay from './components/GlitchOverlay'
 import { useTheme } from './contexts/ThemeContext'
 import { useAuth } from './contexts/AuthContext'
 import { MusicManager } from './audio/musicManager'
-import { saveGameResult } from './firebase/db'
+import { saveGameResult, addCoinsWithLedger } from './firebase/db'
 import catImageUrl from './meme/oiia_cat_assets_by_awesomeconsoles7_djwlgwe-fullview.png'
 import catMusicUrl from './meme/YTDown_YouTube_OIIAOIIA-CAT-but-in-4K-Not-Actually_Media_ZHgyQGoeaB0_009_128k.mp3'
 import horror1Url from './meme/horror1.jpg'
@@ -1067,52 +1091,8 @@ const loadHighScores = () => {
   try { return JSON.parse(localStorage.getItem(HS_KEY) ?? '{}') } catch { return {} }
 }
 
-// ─── PiecePreview ─────────────────────────────────────────────────────────────
-const PREV_CELL = 10
-const PREV_COLS = 4
-const PREV_ROWS = 2
-
-function PiecePreview({ type, small = false }) {
-  const canvasRef = useRef(null)
-  // When a world background is active in Solo mode, mirror story behaviour and
-  // show previews using the mapped piece theme.
-  const { theme, bgTheme } = useTheme()
-  const previewTheme = bgTheme ? (BG_TYPE_TO_PIECE_THEME[bgTheme] ?? theme) : theme
-  const cell = small ? 8 : PREV_CELL
-
-  useEffect(() => {
-    const canvas = canvasRef.current; if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-    if (!type) return
-    const { matrix } = PIECES[type]
-    const color = (PIECE_COLOR_MAPS[previewTheme]?.[type]) ?? PIECES[type].color
-    const filled = matrix.filter(r => r.some(Boolean))
-    const colMin = Math.min(...filled.map(r => r.findIndex(Boolean)))
-    const colMax = Math.max(...filled.map(r => r.length - 1 - [...r].reverse().findIndex(Boolean)))
-    const tw = colMax - colMin + 1, th = filled.length
-    const ox = Math.floor((PREV_COLS - tw) / 2) * cell
-    const oy = Math.floor((PREV_ROWS - th) / 2) * cell
-    filled.forEach((row, ry) => {
-      for (let cx = colMin; cx <= colMax; cx++) {
-        if (!row[cx]) continue
-        ctx.save()
-        ctx.fillStyle = color; ctx.shadowColor = color; ctx.shadowBlur = 8
-        ctx.fillRect(ox + (cx - colMin) * cell + 1, oy + ry * cell + 1, cell - 2, cell - 2)
-        ctx.restore()
-      }
-    })
-  }, [type, cell, previewTheme])
-
-  const w = PREV_COLS * cell, h = PREV_ROWS * cell
-  return (
-    <div className="preview-box" style={small ? { height: '1.8rem' } : undefined}>
-      {type
-        ? <canvas ref={canvasRef} width={w} height={h} className="preview-canvas" />
-        : <span className="preview-empty">—</span>}
-    </div>
-  )
-}
+// ─── PiecePreview component extracted to ./components/PiecePreview.jsx ──────
+import PiecePreview from './components/PiecePreview'
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 export default function App() {
@@ -1163,6 +1143,13 @@ export default function App() {
   const zenResettingRef = useRef(false)
   const prevBlitzSecRef  = useRef(null)
   const prevPurifySecRef = useRef(null)
+  const sessionTSpinsRef = useRef(0)
+  const sessionILinesRef = useRef(0)
+  const sessionPiecesPlacedRef = useRef(0)
+  const sessionHoldUsesRef = useRef(0)
+  const sessionTetrisClearsRef = useRef(0)
+  const sessionHardDropsRef = useRef(0)
+  const prevPieceTypeRef = useRef(null)
   const configRef         = useRef(config)
   useEffect(() => { configRef.current = config }, [config])
 
@@ -1245,6 +1232,21 @@ export default function App() {
       }, stepDur)
     } catch {}
   }, [])
+
+  // Trigger a short OIIA cat cameo (audio + meme blocks) and auto-stop
+  const startCatCameo = useCallback((durMs = 10000) => {
+    try {
+      const a = catAudioRef.current
+      if (a) {
+        a.currentTime = 0
+        a.volume = 0.55
+        a.play().catch(() => {})
+        setTimeout(() => fadeOutAndStopCat(a, 1000), Math.max(1200, durMs - 1000))
+      }
+      try { engine.useMemeBlocks = true } catch {}
+      setTimeout(() => { try { engine.useMemeBlocks = false } catch {} }, durMs + 50)
+    } catch {}
+  }, [engine, fadeOutAndStopCat])
 
   // Persist config changes
   useEffect(() => { localStorage.setItem(CONFIG_KEY, JSON.stringify(config)) }, [config])
@@ -1380,6 +1382,13 @@ export default function App() {
     setCoinDelta(0)
     prevGameOverRef.current = false
     prevLevelRef.current = 1; prevBackToBackRef.current = false; prevZoneMeterRef.current = 0; prevZoneActiveRef.current = false
+    sessionTSpinsRef.current = 0
+    sessionILinesRef.current = 0
+    sessionPiecesPlacedRef.current = 0
+    sessionHoldUsesRef.current = 0
+    sessionTetrisClearsRef.current = 0
+    sessionHardDropsRef.current = 0
+    prevPieceTypeRef.current = null
     zenResettingRef.current = false
     prevBlitzSecRef.current = null; prevPurifySecRef.current = null
     setZenResetting(false)
@@ -1496,7 +1505,7 @@ export default function App() {
           isUltimate &&
           jsNow >= (jumpscareAllowedAfterRef.current || 0) &&
           jsNow - (lastJumpscareRef.current || 0) > (jumpscareCooldownRef.current || 0) &&
-          Math.random() < 0.25
+          Math.random() < (ns.towerFloor >= 15 ? 0.5 : 0.25)
         ) {
           const imgs = [horror1Url, horror2Url, horror3Url]
           const src = imgs[Math.floor(Math.random() * imgs.length)]
@@ -1520,14 +1529,19 @@ export default function App() {
             if (sfxDuckTimerRef.current) clearTimeout(sfxDuckTimerRef.current)
             sfxDuckTimerRef.current = setTimeout(() => setSfxDuck(1.0), 1700)
           } catch {}
-          // Randomize next cooldown between 1–2 minutes to avoid predictability
-          jumpscareCooldownRef.current = 60_000 + Math.random() * 60_000
+          // After floor 15: make jumpscares more frequent (10–20s). Otherwise 1–2 min.
+          jumpscareCooldownRef.current = (ns.towerFloor >= 15)
+            ? (12_000 + Math.random() * 8_000)
+            : (60_000 + Math.random() * 60_000)
           setTimeout(() => setJumpscare(null), 1650)
         }
       }
       let playedClearCue = false
       if (ns.lastClear) {
         const { spinType, lines, isAllClear } = ns.lastClear
+        if (spinType === 'tSpin' || spinType === 'tSpinMini') sessionTSpinsRef.current += 1
+        if ((lines || 0) > 0 && prevPieceTypeRef.current === 'I') sessionILinesRef.current += lines
+        if ((lines || 0) === 4) sessionTetrisClearsRef.current += 1
         if (isAllClear) {
           if (sfxOn) playAllClearSFX(theme)
           doVibrate([30, 10, 30, 10, 30, 10, 80])
@@ -1554,8 +1568,31 @@ export default function App() {
         const burstCat = Math.random() < 0.35
         setFloorFx({ until: performance.now() + 1600, floor: ns.towerFloor, burstCat })
         setTimeout(() => setFloorFx(prev => (prev && performance.now() >= prev.until ? null : prev)), 1650)
+        // Recurring OIIA cat cameos in Ultimate
+        if (burstCat && gameModeRef.current === GAME_MODE.ULTIMATE) startCatCameo(10000 + Math.random() * 4000)
+        // Unlock and speed up jumpscares after floor 15
+        if (gameModeRef.current === GAME_MODE.ULTIMATE && ns.towerFloor >= 15) {
+          jumpscareAllowedAfterRef.current = 0
+          jumpscareCooldownRef.current = 12_000 + Math.random() * 8_000
+        }
+        // One-time milestone coin awards at floors 75 and 100
+        if (user?.uid) {
+          try {
+            if (ns.towerFloor >= 75 && !localStorage.getItem('ult_award_75')) {
+              addCoinsWithLedger(user.uid, 10000, { mode: 'ultimate_bonus', floor: 75 }).catch(()=>{})
+              localStorage.setItem('ult_award_75', '1')
+            }
+            if (ns.towerFloor >= 100 && !localStorage.getItem('ult_award_100')) {
+              addCoinsWithLedger(user.uid, 50000, { mode: 'ultimate_bonus', floor: 100 }).catch(()=>{})
+              localStorage.setItem('ult_award_100', '1')
+            }
+          } catch {}
+        }
       }
       if (ns.lastCombo > 0 && sfxOn) playComboSFX(ns.lastCombo, theme)
+      if (ns.pieceLocked) sessionPiecesPlacedRef.current += 1
+      if (ns.pieceHeld) sessionHoldUsesRef.current += 1
+      if (ns.hardDropped) sessionHardDropsRef.current += 1
       // B2B streak start
       if (ns.backToBack && !prevBackToBackRef.current && sfxOn) playB2BSFX(theme)
       prevBackToBackRef.current = ns.backToBack
@@ -1629,8 +1666,18 @@ export default function App() {
         }
         // Save to Firestore (XP = 1 per 1000 pts, best score updated, leaderboard)
         if (user?.uid) {
+          const survivalMs = Math.max(0, Number(ns.elapsedTime || 0))
           saveGameResult(user.uid, gameModeRef.current, ns.score, {
-            lines: ns.lines, level: ns.level,
+            lines: ns.lines,
+            level: ns.level,
+            floors: ns.towerFloor || 0,
+            tSpins: sessionTSpinsRef.current || 0,
+            iPieceLines: sessionILinesRef.current || 0,
+            piecesPlaced: sessionPiecesPlacedRef.current || 0,
+            holdUses: sessionHoldUsesRef.current || 0,
+            tetrisClears: sessionTetrisClearsRef.current || 0,
+            hardDrops: sessionHardDropsRef.current || 0,
+            survivalMs,
           }).then(res => setCoinDelta(res?.coinsEarned || 0)).catch(() => {})
           // Mark NOOB brand if playing Easy mode
           if (gameModeRef.current === GAME_MODE.EASY) {
@@ -1639,6 +1686,7 @@ export default function App() {
         }
       }
       prevGameOverRef.current = ns.gameOver
+      prevPieceTypeRef.current = ns.current?.type ?? prevPieceTypeRef.current
       setState(ns)
       frameId = requestAnimationFrame(frame)
     }
@@ -1701,12 +1749,13 @@ export default function App() {
   const _handlePress  = (key, hold) => {
     const sfxOn = configRef.current.sfxEnabled
     const hapticOn = configRef.current.hapticEnabled
+    const bgBeat = () => { try { window.dispatchEvent(new Event('bg-beat')) } catch {} }
     if (hold) {
       heldRef.current[key] = true
-      if (key === 'left' || key === 'right') { if (sfxOn) playMoveSFX(theme); if (hapticOn) navigator.vibrate?.(20) }
+      if (key === 'left' || key === 'right') { if (sfxOn) playMoveSFX(theme); bgBeat(); if (hapticOn) navigator.vibrate?.(20) }
       else if (key === 'softDrop' && hapticOn) navigator.vibrate?.(15)
     } else {
-      triggerAction(key)
+      triggerAction(key); bgBeat()
     }
   }
   const _handleRelease = (key, hold) => { if (hold) heldRef.current[key] = false }
@@ -1714,12 +1763,12 @@ export default function App() {
     const sfxOn = configRef.current.sfxEnabled
     if (dir === 'left' || dir === 'right') {
       heldRef.current[dir] = true
-      if (sfxOn) playSwipeSFX(dir, theme)
+      if (sfxOn) playSwipeSFX(dir, theme); try { window.dispatchEvent(new Event('bg-beat')) } catch {}
     } else if (dir === 'down') {
       heldRef.current.softDrop = true
-      if (sfxOn) playSwipeSFX('down', theme)
+      if (sfxOn) playSwipeSFX('down', theme); try { window.dispatchEvent(new Event('bg-beat')) } catch {}
     } else if (dir === 'up') {
-      if (sfxOn) playSwipeSFX('up', theme)
+      if (sfxOn) playSwipeSFX('up', theme); try { window.dispatchEvent(new Event('bg-beat')) } catch {}
       triggerAction('hold')
     }
   }
@@ -1731,7 +1780,7 @@ export default function App() {
     if (!countdownActiveRef.current) {
       heldRef.current.softDrop = false
       actionRef.current.hardDrop = true
-      if (configRef.current.sfxEnabled) playHardDropSFX(theme)
+      if (configRef.current.sfxEnabled) { playHardDropSFX(theme); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }
       if (configRef.current.hapticEnabled) navigator.vibrate?.([25, 50, 25])
     }
   }

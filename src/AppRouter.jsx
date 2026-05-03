@@ -11,6 +11,7 @@ import MultiplayerPage from './pages/MultiplayerPage'
 import ThemePage from './pages/ThemePage'
 import ArtworkPage from './pages/ArtworkPage'
 import InfoPage from './pages/InfoPage'
+import StoryLorePage from './pages/StoryLorePage'
 
 function AuthRoute({ children }) {
   const { user, loading } = useAuth()
@@ -36,6 +37,7 @@ export default function AppRouter() {
         <Route path="/store" element={<AuthRoute><StorePage /></AuthRoute>} />
         <Route path="/multiplayer" element={<AuthRoute><MultiplayerPage /></AuthRoute>} />
         <Route path="/themes" element={<AuthRoute><ThemePage /></AuthRoute>} />
+        <Route path="/lore" element={<AuthRoute><StoryLorePage /></AuthRoute>} />
         <Route path="/artwork" element={<ArtworkPage />} />
         <Route path="/info" element={<InfoPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />

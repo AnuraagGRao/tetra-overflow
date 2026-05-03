@@ -605,12 +605,8 @@ function drawForeground(ctx, bgType, w, h, t, beat = 0) {
 // ── Auto-Vanta map: bgType → { type, ...vantaOptions } ───────────────────────
 // Covers cosmic/water/crystal bgTypes. Fire/earth/jungle keep the canvas painter.
 const BGTYPE_VANTA_CONFIG = {
-  // NET — space, digital, void
-  stars:     { type: 'net', color: 0x00ccff, backgroundColor: 0x000008, points: 14, maxDistance: 22, spacing: 16, showDots: true },
-  nebula:    { type: 'net', color: 0x9933ff, backgroundColor: 0x030008, points: 12, maxDistance: 18, spacing: 18, showDots: false },
-  warp:      { type: 'net', color: 0x3366ff, backgroundColor: 0x000008, points: 16, maxDistance: 25, spacing: 13, showDots: true },
-  blackhole: { type: 'net', color: 0x550088, backgroundColor: 0x000002, points: 8,  maxDistance: 14, spacing: 22, showDots: false },
-  abyss:     { type: 'net', color: 0x220044, backgroundColor: 0x000000, points: 6,  maxDistance: 10, spacing: 28, showDots: false },
+  // Keep stars/nebula/warp/blackhole/abyss on the classic canvas painter (no Vanta)
+  // matrix can use net for digital effect
   matrix:    { type: 'net', color: 0x00ff44, backgroundColor: 0x000500, points: 18, maxDistance: 20, spacing: 12, showDots: true },
   // WAVES — water, ocean, storm
   ocean:     { type: 'waves', color: 0x004488, backgroundColor: 0x00050f, shininess: 28, waveHeight: 25, waveSpeed: 1.0, zoom: 0.65 },
@@ -620,13 +616,18 @@ const BGTYPE_VANTA_CONFIG = {
   crystal:   { type: 'cells', color1: 0x2244aa, color2: 0x00ddff, size: 1.5, speed: 0.7 },
   glacier:   { type: 'cells', color1: 0x8899cc, color2: 0xbbddff, size: 2.2, speed: 0.3 },
   aurora:    { type: 'cells', color1: 0x003322, color2: 0x00ffaa, size: 1.2, speed: 1.2 },
+  // New TE-style themes
+  deepsea:   { type: 'clouds', backgroundColor: 0x0b1621, skyColor: 0x0b1621, cloudColor: 0x00f2ff, speed: 0.5, zoom: 1.0 },
+  stellar:   { type: 'halo', backgroundColor: 0x000000, amplitude: 2.2, size: 1.4, xOffset: 0.2, yOffset: -0.05, color: 0xffddaa },
+  ritual:    { type: 'fog', highlightColor: 0xffd700, midtoneColor: 0x3b0d5c, lowlightColor: 0x1a0a2a, baseColor: 0x000000, zoom: 1.5, speed: 0.6 },
+  geometry:  { type: 'net', color: 0xff00cc, backgroundColor: 0x000000, points: 10, maxDistance: 20, spacing: 22, showDots: true },
 }
 
 // Module-level cache for loaded Vanta effect factories (avoids re-importing)
 const _vantaModCache = {}
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export default function BackgroundCanvas({ bgType = 'stars', style, beatRef: _beatRef = null, useVanta = false, vantaType = null, vantaOptions = null }) {
+export default function BackgroundCanvas({ bgType = 'stars', style, beatRef: _beatRef = null, bpm = 120, useVanta = false, vantaType = null, vantaOptions = null }) {
   const canvasRef = useRef(null)
   const vantaElRef = useRef(null)
   const vantaInstRef = useRef(null)
@@ -662,6 +663,11 @@ export default function BackgroundCanvas({ bgType = 'stars', style, beatRef: _be
           if (activeType === 'waves') mod = await import('vanta/dist/vanta.waves.min')
           else if (activeType === 'cells') mod = await import('vanta/dist/vanta.cells.min')
           else if (activeType === 'net')   mod = await import('vanta/dist/vanta.net.min')
+          else if (activeType === 'clouds') mod = await import('vanta/dist/vanta.clouds.min')
+          else if (activeType === 'birds')  mod = await import('vanta/dist/vanta.birds.min')
+          else if (activeType === 'halo')   mod = await import('vanta/dist/vanta.halo.min')
+          else if (activeType === 'fog')    mod = await import('vanta/dist/vanta.fog.min')
+          else if (activeType === 'dots')   mod = await import('vanta/dist/vanta.dots.min')
           if (mod) _vantaModCache[activeType] = mod.default || mod
         }
         const VANTA = _vantaModCache[activeType]
@@ -687,6 +693,59 @@ export default function BackgroundCanvas({ bgType = 'stars', style, beatRef: _be
     }
   }, [activeType, bgType]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Continuous tempo sync for Vanta (music beat + level BPM)
+  useEffect(() => {
+    if (!activeType || !vantaInstRef.current) return
+    let raf = 0
+    const baseSpeed = autoCfg?.speed || 1.0
+    const baseAmp = autoCfg?.amplitude || 1.0
+    const baseDist = autoCfg?.maxDistance || 18
+    const loop = () => {
+      const beat = Math.max(0, Math.min(1.2, Number(_beatRef?.current || 0)))
+      const b = Math.max(40, Math.min(260, Number(bpm) || 120))
+      const t = performance.now() / 1000
+      const bpmPulse = Math.pow((Math.sin(t * (b / 60) * Math.PI * 2) + 1) / 2, 2)
+      const energy = Math.max(beat, bpmPulse * 0.65)
+      try {
+        if (activeType === 'net') {
+          vantaInstRef.current.setOptions({ maxDistance: baseDist + energy * 8 })
+        } else if (activeType === 'waves' || activeType === 'clouds' || activeType === 'fog') {
+          vantaInstRef.current.setOptions({ speed: baseSpeed * (1 + energy * 0.45) })
+        } else if (activeType === 'halo') {
+          vantaInstRef.current.setOptions({ amplitude: baseAmp * (1 + energy * 0.55) })
+        }
+      } catch {}
+      raf = requestAnimationFrame(loop)
+    }
+    raf = requestAnimationFrame(loop)
+    return () => cancelAnimationFrame(raf)
+  }, [activeType, autoCfg, bpm, _beatRef])
+
+  // Lightweight interactivity: react to global 'bg-beat' events by pulsing Vanta params
+  useEffect(() => {
+    const onBeat = () => {
+      const inst = vantaInstRef.current
+      if (!inst || !activeType) return
+      try {
+        if (activeType === 'net') {
+          const base = (autoCfg?.maxDistance || 18)
+          inst.setOptions({ maxDistance: base + 6 })
+          setTimeout(() => inst.setOptions({ maxDistance: base }), 180)
+        } else if (activeType === 'waves' || activeType === 'clouds' || activeType === 'fog') {
+          const speed = (autoCfg?.speed || 1.0)
+          inst.setOptions({ speed: speed * 1.6 })
+          setTimeout(() => inst.setOptions({ speed }), 180)
+        } else if (activeType === 'halo') {
+          const amp = (autoCfg?.amplitude || 1.0)
+          inst.setOptions({ amplitude: amp * 1.8 })
+          setTimeout(() => inst.setOptions({ amplitude: amp }), 220)
+        }
+      } catch {}
+    }
+    window.addEventListener('bg-beat', onBeat)
+    return () => window.removeEventListener('bg-beat', onBeat)
+  }, [activeType])
+
   useEffect(() => {
     // Load/refresh custom image when bgType is 'custom'
     if (bgType === 'custom') {
@@ -696,6 +755,7 @@ export default function BackgroundCanvas({ bgType = 'stars', style, beatRef: _be
           const img = new Image()
           img.crossOrigin = 'anonymous'
           img.src = url
+          img.onload = () => { customImgRef.current = img }
           customImgRef.current = img
           lastUrlRef.current = url
         }
@@ -719,9 +779,14 @@ export default function BackgroundCanvas({ bgType = 'stars', style, beatRef: _be
     window.addEventListener('resize', resize)
 
     const tick = (now) => {
-      const dt = Math.min(now-lastTime, 50)
+      const baseDt = Math.min(now-lastTime, 50)
       lastTime = now
       const t = now-startTime
+      const beat = Math.max(0, Math.min(1.25, Number(_beatRef?.current || 0)))
+      const b = Math.max(40, Math.min(260, Number(bpm) || 120))
+      const bpmPulse = Math.pow((Math.sin((now / 1000) * (b / 60) * Math.PI * 2) + 1) / 2, 2)
+      const energy = Math.max(beat, bpmPulse * 0.65)
+      const dt = baseDt * (0.9 + energy * 0.6)
       const w = canvas.width, hh = canvas.height
 
       ctx.globalAlpha = 1
@@ -773,17 +838,17 @@ export default function BackgroundCanvas({ bgType = 'stars', style, beatRef: _be
         } catch {}
       }
 
-      if (bgType !== 'nyancat') {
+      if (bgType !== 'nyancat' && bgType !== 'custom') {
         ctx.globalAlpha = 1
         drawAmbient(ctx, bgType, w, hh, t)
         ctx.globalAlpha = 1
         for (let i=particles.length-1;i>=0;i--) {
           const dead = updateParticle(particles[i], bgType, w, hh, dt)
           if (dead) particles[i] = makeParticle(bgType, w, hh, false)
-          drawParticle(ctx, particles[i], bgType, w, hh)
+          drawParticle(ctx, particles[i], bgType, w, hh, energy)
         }
         ctx.globalAlpha = 1
-        drawForeground(ctx, bgType, w, hh, t)
+        drawForeground(ctx, bgType, w, hh, t, energy)
       }
 
       ctx.globalAlpha = 1
@@ -791,7 +856,7 @@ export default function BackgroundCanvas({ bgType = 'stars', style, beatRef: _be
     }
     animId = requestAnimationFrame(tick)
     return () => { cancelAnimationFrame(animId); window.removeEventListener('resize', resize) }
-  }, [bgType, activeType])  
+  }, [bgType, activeType, bpm, _beatRef])  
 
   // Always render both; CSS display toggles which is visible
   const sharedStyle = { position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', ...style }

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
-import { saveStoryProgress, unlockItem, saveGameResult, markEasyModePlayed, setActiveBadge } from '../firebase/db'
+import { saveStoryProgress, unlockItem, saveGameResult, markEasyModePlayed, setActiveBadge, awardStoryChapterMilestone } from '../firebase/db'
 import SettingsPage from '../components/SettingsPage'
 import { findLevel, getNextLevel } from '../logic/storyData'
 import { PIECES } from '../logic/tetrominoes'
@@ -85,6 +85,13 @@ function useStoryGameLoop(engine, targetLines, levelStartLinesRef, levelKey, onC
   const [paused, setPaused] = useState(false)
   const pausedRef = useRef(false)
   const prevGameOverRef = useRef(false)
+  const tSpinsRef = useRef(0)
+  const iPieceLinesRef = useRef(0)
+  const piecesPlacedRef = useRef(0)
+  const holdUsesRef = useRef(0)
+  const tetrisClearsRef = useRef(0)
+  const hardDropsRef = useRef(0)
+  const prevPieceTypeRef = useRef(null)
 
   const triggerAction = useCallback((action) => {
     actionRef.current[action] = true
@@ -112,12 +119,16 @@ function useStoryGameLoop(engine, targetLines, levelStartLinesRef, levelKey, onC
     const down = (ev) => {
       const b = KEY_BINDINGS[ev.code]; if (!b) return
       ev.preventDefault(); if (ev.repeat) return
-      if (b.held) heldRef.current[b.held] = true
+      if (b.held) {
+        heldRef.current[b.held] = true
+        try { window.dispatchEvent(new Event('bg-beat')) } catch {}
+      }
       if (b.action) {
         if (b.action === 'pause') {
           togglePause()
         } else {
           actionRef.current[b.action] = true
+          try { window.dispatchEvent(new Event('bg-beat')) } catch {}
         }
       }
     }
@@ -133,6 +144,13 @@ function useStoryGameLoop(engine, targetLines, levelStartLinesRef, levelKey, onC
   // rAF loop — levelKey in deps resets prevGameOverRef for each new level
   useEffect(() => {
     prevGameOverRef.current = false // reset completion guard for this level/attempt
+    tSpinsRef.current = 0
+    iPieceLinesRef.current = 0
+    piecesPlacedRef.current = 0
+    holdUsesRef.current = 0
+    tetrisClearsRef.current = 0
+    hardDropsRef.current = 0
+    prevPieceTypeRef.current = null
     let frameId, lastTime = performance.now()
     const frame = (now) => {
       const dt = Math.min(now - lastTime, MAX_FRAME_MS); lastTime = now
@@ -143,6 +161,16 @@ function useStoryGameLoop(engine, targetLines, levelStartLinesRef, levelKey, onC
       engine.update(dt, heldRef.current, actions)
 
       const ns = engine.getState()
+      if (ns.lastClear) {
+        const spinType = ns.lastClear.spinType
+        const lines = ns.lastClear.lines || 0
+        if (spinType === 'tSpin' || spinType === 'tSpinMini') tSpinsRef.current += 1
+        if (lines > 0 && prevPieceTypeRef.current === 'I') iPieceLinesRef.current += lines
+        if (lines === 4) tetrisClearsRef.current += 1
+      }
+      if (ns.pieceLocked) piecesPlacedRef.current += 1
+      if (ns.pieceHeld) holdUsesRef.current += 1
+      if (ns.hardDropped) hardDropsRef.current += 1
       if (beatRef) beatRef.current = storyMusicRef?.current?.getBeatEnergy() ?? 0
 
       const linesThisLevel = ns.lines - (levelStartLinesRef?.current ?? 0)
@@ -150,9 +178,21 @@ function useStoryGameLoop(engine, targetLines, levelStartLinesRef, levelKey, onC
 
       if ((ns.gameOver || levelComplete) && !prevGameOverRef.current) {
         prevGameOverRef.current = true
-        onComplete({ score: ns.score, lines: ns.lines, linesThisLevel, gameOver: ns.gameOver })
+        onComplete({
+          score: ns.score,
+          lines: ns.lines,
+          linesThisLevel,
+          gameOver: ns.gameOver,
+          tSpins: tSpinsRef.current,
+          iPieceLines: iPieceLinesRef.current,
+          piecesPlaced: piecesPlacedRef.current,
+          holdUses: holdUsesRef.current,
+          tetrisClears: tetrisClearsRef.current,
+          hardDrops: hardDropsRef.current,
+        })
       }
 
+      prevPieceTypeRef.current = ns.current?.type ?? prevPieceTypeRef.current
       setState(ns)
       frameId = requestAnimationFrame(frame)
     }
@@ -258,11 +298,12 @@ export default function StoryLevelPage() {
       const Ctx = window.AudioContext || window.webkitAudioContext
       if (Ctx && !storyMusicRef.current) storyMusicRef.current = new StoryMusicManager(new Ctx())
       storyMusicRef.current?.playForLevelContinuous(currentChapterId, currentLevelId)
+      storyMusicRef.current?.setLevelBpm?.(found?.level?.bpm || 120)
     } else if (phase === PHASE.FAIL || phase === PHASE.COMPLETE) {
       storyMusicRef.current?.stop()
     }
     // TRANSITION and STORY: music keeps playing — intentional no-op
-  }, [phase, currentChapterId, currentLevelId])
+  }, [phase, currentChapterId, currentLevelId, found?.level?.bpm])
 
   // Cleanup music on unmount
   useEffect(() => () => { storyMusicRef.current?.stop() }, [])
@@ -349,7 +390,7 @@ export default function StoryLevelPage() {
     catch { return false }
   })()
 
-  const handleComplete = useCallback(async ({ score, lines, linesThisLevel: ltl, gameOver }) => {
+  const handleComplete = useCallback(async ({ score, lines, linesThisLevel: ltl, gameOver, tSpins = 0, iPieceLines = 0, piecesPlaced = 0, holdUses = 0, tetrisClears = 0, hardDrops = 0 }) => {
     const lt = ltl ?? lines
     setFinalScore(score)
     setFinalLines(lt)
@@ -366,18 +407,36 @@ export default function StoryLevelPage() {
     }
     if (user && found) {
       setSaving(true)
+      const isChapterComplete = found.chapter.levels[found.chapter.levels.length - 1]?.id === currentLevelId
       const unlocks = [
         saveStoryProgress(user.uid, currentChapterId, currentLevelId, score, lt),
         unlockItem(user.uid, `bg_${found.level.bgType}`),
       ]
       if (found.level.themeUnlock) {
-        unlocks.push(unlockItem(user.uid, found.level.themeUnlock))
+        const unlockThemes = Array.isArray(found.level.themeUnlock)
+          ? found.level.themeUnlock
+          : [found.level.themeUnlock]
+        unlockThemes.filter(Boolean).forEach((id) => unlocks.push(unlockItem(user.uid, id)))
       }
       // Also record a score entry for overall totals/coins under 'story' mode
       try {
         const lv = engine.getState().level || 1
-        unlocks.push(saveGameResult(user.uid, 'story', score, { lines: lt, level: lv }))
+        const survivalMs = Math.max(0, Number(engine.getState().elapsedTime || 0))
+        unlocks.push(saveGameResult(user.uid, 'story', score, {
+          lines: lt,
+          level: lv,
+          survivalMs,
+          tSpins,
+          iPieceLines,
+          piecesPlaced,
+          holdUses,
+          tetrisClears,
+          hardDrops,
+        }))
       } catch {}
+      if (isChapterComplete) {
+        unlocks.push(awardStoryChapterMilestone(user.uid, currentChapterId))
+      }
       Promise.all(unlocks).finally(() => setSaving(false))
     }
 
@@ -397,9 +456,12 @@ export default function StoryLevelPage() {
 
   const levelKey = `${currentChapterId}-${currentLevelId}`
 
-  const effectiveTargetLines = easyMode && found?.level?.targetLines > 0
-    ? Math.round(found.level.targetLines * 0.75)
-    : (found?.level?.targetLines || 0)
+  const effectiveTargetLines = (() => {
+    const tl = found?.level?.targetLines || 0
+    if (!easyMode || tl <= 0) return tl
+    const easyOverride = found?.level?.easyTargetLines
+    return typeof easyOverride === 'number' ? easyOverride : Math.round(tl * 0.75)
+  })()
 
   const { state, paused, triggerAction, handlePress, handleRelease, togglePause } = useStoryGameLoop(
     engine,
@@ -415,12 +477,15 @@ export default function StoryLevelPage() {
     if (dir === 'left' || dir === 'right') {
       if (config?.sfxEnabled && !paused) try { playMoveSFX(pieceTheme || 'classic') } catch {}
       handlePress(dir, true)
+      try { window.dispatchEvent(new Event('bg-beat')) } catch {}
     } else if (dir === 'down') {
       if (config?.sfxEnabled && !paused) try { playMoveSFX(pieceTheme || 'classic') } catch {}
       handlePress('softDrop', true)
+      try { window.dispatchEvent(new Event('bg-beat')) } catch {}
     } else if (dir === 'up') {
       if (config?.sfxEnabled && !paused) try { playHoldSFX(pieceTheme || 'classic') } catch {}
       triggerAction('hold')
+      try { window.dispatchEvent(new Event('bg-beat')) } catch {}
     }
   }, [handlePress, triggerAction, config?.sfxEnabled, paused, pieceTheme])
 
@@ -433,6 +498,7 @@ export default function StoryLevelPage() {
     if (config?.sfxEnabled && !paused) try { playHardDropSFX(pieceTheme || 'classic') } catch {}
     handleRelease('softDrop')
     triggerAction('hardDrop')
+    try { window.dispatchEvent(new Event('bg-beat')) } catch {}
   }, [handleRelease, triggerAction, config?.sfxEnabled, paused, pieceTheme])
 
   
@@ -498,7 +564,12 @@ export default function StoryLevelPage() {
   return (
     <div style={{ position: 'fixed', inset: 0, overflow: 'hidden', fontFamily: '"Courier New", monospace' }}>
       {/* Dynamic background — always visible behind the semi-transparent board */}
-      <BackgroundCanvas bgType={found?.level?.bgType || 'stars'} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} beatRef={beatRef} />
+      <BackgroundCanvas
+        bgType={found?.level?.bgType || 'stars'}
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+        beatRef={beatRef}
+        bpm={found?.level?.bpm || 120}
+      />
 
       {/* Subtle darkening overlay */}
       <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.26)', pointerEvents: 'none' }} />
@@ -530,7 +601,7 @@ export default function StoryLevelPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
                 {level.targetLines > 0 && (
                   <div style={{ fontSize: '0.65rem', color: '#666', letterSpacing: '0.14em', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, padding: '5px 14px' }}>
-                    CLEAR {easyMode ? Math.round(level.targetLines * 0.75) : level.targetLines} LINES
+                    CLEAR {effectiveTargetLines} LINES
                   </div>
                 )}
                 {/* Easy mode toggle */}
@@ -622,8 +693,8 @@ export default function StoryLevelPage() {
               <div style={{ position: 'relative', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>
                 <GameCanvas
                   state={state}
-                  onTap={() => { if (config?.sfxEnabled && !paused) try { playRotateSFX(pieceTheme || 'classic') } catch {}; triggerAction('rotateCW') }}
-                  onTwoFingerTap={() => { if (config?.sfxEnabled && !paused) try { playZoneActivateSFX(pieceTheme || 'classic') } catch {}; triggerAction('activateZone') }}
+                  onTap={() => { if (config?.sfxEnabled && !paused) try { playRotateSFX(pieceTheme || 'classic') } catch {}; triggerAction('rotateCW'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
+                  onTwoFingerTap={() => { if (config?.sfxEnabled && !paused) try { playZoneActivateSFX(pieceTheme || 'classic') } catch {}; triggerAction('activateZone'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
                   onDragBegin={handleDragBegin}
                   onDragEnd={handleDragEnd}
                   onHardDrop={handleHardDrop}

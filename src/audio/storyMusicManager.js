@@ -76,6 +76,8 @@ export class StoryMusicManager {
     this._xfadeSec = 1.6
     this._buffers    = new Array(TRACK_URLS.length).fill(null)
     this._loaded     = new Array(TRACK_URLS.length).fill(false)
+    this._levelBpm   = 120
+    this._baseBpm    = 120
 
     // Audio graph: source → trackGain → analyser → masterGain → destination
     this.masterGain = audioCtx.createGain()
@@ -162,6 +164,10 @@ export class StoryMusicManager {
     const src = this.ctx.createBufferSource()
     src.buffer = buf
     src.loop   = false // play once; we'll advance to next track on end
+    try {
+      const rate = Math.max(0.78, Math.min(1.28, (this._levelBpm || this._baseBpm) / this._baseBpm))
+      src.playbackRate.value = rate
+    } catch {}
     src.connect(tg)
     src.onended = () => {
       if (!this._playing) return
@@ -210,6 +216,10 @@ export class StoryMusicManager {
     const nextSrc = this.ctx.createBufferSource()
     nextSrc.buffer = nextBuf
     nextSrc.loop = false
+    try {
+      const rate = Math.max(0.78, Math.min(1.28, (this._levelBpm || this._baseBpm) / this._baseBpm))
+      nextSrc.playbackRate.value = rate
+    } catch {}
     nextSrc.connect(nextGain)
     nextSrc.start()
 
@@ -338,6 +348,22 @@ export class StoryMusicManager {
   }
 
   /**
+   * Apply current level BPM to background pulse + subtle music tempo sync.
+   * Values are clamped to keep audio natural.
+   */
+  setLevelBpm(bpm) {
+    const n = Number(bpm)
+    if (!Number.isFinite(n) || n <= 0) return
+    this._levelBpm = Math.max(40, Math.min(260, n))
+    try {
+      if (this._source?.playbackRate) {
+        const rate = Math.max(0.78, Math.min(1.28, this._levelBpm / this._baseBpm))
+        this._source.playbackRate.setTargetAtTime(rate, this.ctx.currentTime, 0.08)
+      }
+    } catch {}
+  }
+
+  /**
    * Sample bass-frequency energy and return a smoothed 0–1 value.
    * Call every rAF frame; drives BackgroundCanvas beat-reactive effects.
    * Uses bins 0–7 ≈ 0–344 Hz (fftSize=512, 44100 Hz sample rate).
@@ -348,9 +374,14 @@ export class StoryMusicManager {
     let sum = 0
     for (let i = 0; i < 8; i++) sum += this._fftData[i]
     const raw = sum / (8 * 255)
+    // Synthetic BPM pulse ensures visual sync even in low-energy passages.
+    const bpm = Math.max(40, Math.min(260, this._levelBpm || 120))
+    const phase = this.ctx.currentTime * (bpm / 60) * Math.PI * 2
+    const bpmPulse = Math.pow((Math.sin(phase) + 1) / 2, 2.2)
+    const mixed = Math.max(raw, bpmPulse * 0.62)
     // Two-stage smoothing: Web Audio does one pass (smoothingTimeConstant=0.65),
     // we add a second EMA here for a slightly laggy but satisfying pulse.
-    this._smoothBeat = this._smoothBeat * 0.72 + raw * 0.28
+    this._smoothBeat = this._smoothBeat * 0.72 + mixed * 0.28
     return this._smoothBeat
   }
 }

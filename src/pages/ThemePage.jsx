@@ -69,14 +69,17 @@ function CustomImageModal({ coins, onConfirm, onClose, busy }) {
   const canAfford = coins >= CUSTOM_PRICE
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 200,
-      background: 'rgba(0,0,0,0.82)', backdropFilter: 'blur(6px)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: '1rem',
-    }}>
+    <motion.div
+      initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 200,
+        background: 'rgba(0,0,0,0.82)', backdropFilter: 'blur(6px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: '1rem',
+      }}
+    >
       <motion.div
-        initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+        initial={{ scale: 0.99, opacity: 1 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.97, opacity: 0 }}
         style={{
           background: '#0d0d1a', border: '1px solid #eab30840',
           borderRadius: 16, padding: '1.5rem', width: '100%', maxWidth: 380,
@@ -178,7 +181,7 @@ function CustomImageModal({ coins, onConfirm, onClose, busy }) {
           </motion.button>
         </div>
       </motion.div>
-    </div>
+    </motion.div>
   )
 }
 
@@ -186,6 +189,11 @@ export default function ThemePage() {
   const navigate = useNavigate()
   const { user, userProfile, refreshProfile } = useAuth()
   const { theme, setTheme, bgTheme, setBgTheme, favThemes, setFavThemes } = useTheme()
+
+  // Do we have a saved custom background image?
+  const hasCustomImg = (() => {
+    try { return !!localStorage.getItem('custom-bg-url') } catch { return false }
+  })()
 
   const [selectedSlot, setSelectedSlot] = useState(-1)
   const [customModalOpen, setCustomModalOpen] = useState(false)
@@ -303,10 +311,8 @@ export default function ThemePage() {
                     width: 52, height: 52, borderRadius: 10,
                     border: isSelected ? '2px solid #fff' : `1px solid ${isFilled ? (item?.accent || '#555') : '#333'}`,
                     background: isFilled ? 'rgba(255,255,255,0.06)' : 'transparent',
-                    cursor: 'pointer',
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                    gap: 2, position: 'relative',
-                    boxShadow: isSelected ? '0 0 12px rgba(255,255,255,0.4)' : 'none',
+                    cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2,
+                    position: 'relative', boxShadow: isSelected ? '0 0 12px rgba(255,255,255,0.4)' : 'none',
                   }}
                 >
                   {isFilled ? (
@@ -397,10 +403,10 @@ export default function ThemePage() {
                 <motion.button
                   key={item.id}
                   whileTap={unlocked ? { scale: 0.94 } : {}}
-                  onClick={async () => {
+                  onClick={() => {
                     if (!unlocked) return
                     if (item.bgType === 'custom') {
-                      setCustomModalOpen(true)
+                      if (hasCustomImg) setBgTheme('custom'); else setCustomModalOpen(true)
                       return
                     }
                     isAssigning ? assignToSlot(item.id) : applyTheme(item.id)
@@ -421,6 +427,17 @@ export default function ThemePage() {
                   )}
                   <span style={{ fontSize: '1.3rem', lineHeight: 1 }}>{item.emoji}</span>
                   <span style={{ fontSize: '0.42rem', letterSpacing: '0.1em', color: isActive ? item.accent : '#888', textTransform: 'uppercase', maxWidth: 62, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
+                  {item.bgType === 'custom' && hasCustomImg && unlocked && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setCustomModalOpen(true) }}
+                      title={`Edit image (◆ ${CUSTOM_PRICE})`}
+                      style={{ position: 'absolute', bottom: 4, right: 4, fontSize: '0.5rem', letterSpacing: '0.12em',
+                               background: 'rgba(234,179,8,0.10)', border: '1px solid #eab30866', color: '#eab308',
+                               borderRadius: 6, padding: '2px 6px', cursor: 'pointer' }}
+                    >
+                      ✎
+                    </button>
+                  )}
                 </motion.button>
               )
             })}

@@ -1,9 +1,11 @@
+export { resetStoryProgress } from './resetStoryProgress'
 import {
   doc, getDoc, setDoc, updateDoc, collection,
   query, where, orderBy, limit, getDocs, increment,
   serverTimestamp, addDoc, onSnapshot, runTransaction,
 } from 'firebase/firestore'
 import { db } from './config'
+import { calculateCoinsEarned, applyDailyGameRewards } from '../logic/economy'
 
 // ─── User profile ─────────────────────────────────────────────────────────────
 export const createUserProfile = async (uid, data) => {
@@ -63,19 +65,62 @@ export const saveGameResult = async (uid, mode, score, extra = {}) => {
   const existing = statsSnap.exists() ? statsSnap.data() : {}
   const bestKey = `best_${mode}`
   const isBest = score > (existing[bestKey] || 0)
+  const floors = extra.floors || 0
+  const isBestUltimateFloors = mode === 'ultimate' && floors > (existing.best_ultimate_floors || 0)
 
   await setDoc(statsRef, {
     totalGames: increment(1),
     totalLines: increment(extra.lines || 0),
     totalScore: increment(score),
+    totalFloors: increment(floors || 0),
     ...(isBest ? { [bestKey]: score } : {}),
+    ...(isBestUltimateFloors ? { best_ultimate_floors: floors } : {}),
     lastPlayed: serverTimestamp(),
   }, { merge: true })
 
-  // Earn coins: 1 coin per 1000 score; Ultimate bonus 2×
-  const rate = mode === 'ultimate' ? 2 : 1
-  const earned = Math.floor(score / 1000) * rate
-  if (earned > 0) await addCoinsWithLedger(uid, earned, { mode, score, lines: extra.lines || 0 })
+  // Score-based earnings with diminishing returns and per-match cap.
+  const scoreCoins = calculateCoinsEarned(score)
+  if (scoreCoins > 0) {
+    await addCoinsWithLedger(uid, scoreCoins, {
+      mode,
+      source: 'score',
+      score,
+      lines: extra.lines || 0,
+    })
+  }
+
+  // Daily system (local-time reset): first completion + daily challenges.
+  const daily = applyDailyGameRewards({
+    score,
+    lines: extra.lines || 0,
+    tSpins: extra.tSpins || 0,
+    survivalMs: extra.survivalMs || 0,
+    iPieceLines: extra.iPieceLines || 0,
+    piecesPlaced: extra.piecesPlaced || 0,
+    holdUses: extra.holdUses || 0,
+    tetrisClears: extra.tetrisClears || 0,
+    hardDrops: extra.hardDrops || 0,
+    mode,
+  })
+
+  if (daily.firstWinCoins > 0) {
+    await addCoinsWithLedger(uid, daily.firstWinCoins, {
+      mode,
+      source: 'first_win_daily',
+      score,
+      lines: extra.lines || 0,
+    })
+  }
+
+  if (daily.challengeCoins > 0) {
+    await addCoinsWithLedger(uid, daily.challengeCoins, {
+      mode,
+      source: 'daily_challenges',
+      completedChallenges: daily.completedChallengeIds,
+      score,
+      lines: extra.lines || 0,
+    })
+  }
 
   await addDoc(collection(db, 'scores'), {
     uid,
@@ -83,10 +128,50 @@ export const saveGameResult = async (uid, mode, score, extra = {}) => {
     score,
     lines: extra.lines || 0,
     level: extra.level || 1,
+    floors,
     timestamp: serverTimestamp(),
   })
 
-  return { isBest, coinsEarned: earned }
+  return {
+    isBest,
+    coinsEarned: scoreCoins + daily.totalCoins,
+    scoreCoins,
+    dailyCoins: daily.totalCoins,
+  }
+}
+
+export const awardStoryChapterMilestone = async (uid, chapterId) => {
+  const bonus = 500
+  const storyRef = doc(db, 'story', uid)
+  const userRef = doc(db, 'users', uid)
+  const awardKey = `${chapterId}_milestone_awarded`
+
+  let awarded = false
+
+  await runTransaction(db, async (tx) => {
+    const [storySnap, userSnap] = await Promise.all([tx.get(storyRef), tx.get(userRef)])
+    if (!userSnap.exists()) throw new Error('User not found')
+    const story = storySnap.exists() ? storySnap.data() : {}
+    if (story[awardKey]) return
+
+    const prev = userSnap.data().coins || 0
+    const next = prev + bonus
+
+    tx.set(storyRef, { [awardKey]: true, lastUpdated: serverTimestamp() }, { merge: true })
+    tx.update(userRef, { coins: next })
+    const ledgerRef = doc(collection(db, 'users', uid, 'coin_ledger'))
+    tx.set(ledgerRef, {
+      type: 'earn',
+      amount: bonus,
+      source: 'story_chapter_milestone',
+      chapterId,
+      balanceAfter: next,
+      createdAt: serverTimestamp(),
+    })
+    awarded = true
+  })
+
+  return { awarded, coins: awarded ? bonus : 0 }
 }
 
 export const getUserStats = async (uid) => {

@@ -17,7 +17,7 @@ export default function CasualGamePage() {
     <div style={{ position: 'relative', width: '100dvw', height: '100dvh', overflow: 'hidden' }}>
       {/* World background — always on; default to 'stars' when none selected */}
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none' }}>
-        <BackgroundCanvas bgType={bgTheme || 'stars'} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+        <BackgroundCanvas bgType={bgTheme || 'abyss'} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
       </div>
 
       <App />

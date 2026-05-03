@@ -1,9 +1,46 @@
-import { useEffect, useState, useCallback } from 'react'
+function StatsSkeletonCard() {
+  return (
+    <div style={{
+      background: '#161622',
+      border: '1px solid #21214a',
+      borderRadius: 12,
+      padding: '1rem',
+      minHeight: 58,
+      display: 'flex', flexDirection: 'column', gap: 4, opacity: 0.82,
+      animation: 'statsSkeletonPulse 1.6s infinite cubic-bezier(.7,0,.3,1)'
+    }}>
+      <div style={{ width: 56, height: 13, background: 'rgba(255,255,255,0.10)', borderRadius: 4 }} />
+      <div style={{ width: '52%', height: 23, background: 'rgba(255,255,255,0.13)', borderRadius: 7 }} />
+      <div style={{ width: '44%', height: 10, background: 'rgba(255,255,255,0.07)', borderRadius: 4 }} />
+    </div>
+  )
+}
+
+function StatsSkeletonRow() {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '40px minmax(0,1fr) 110px 80px 86px', gap: 8, alignItems: 'center', padding: '8px 10px' }}>
+      <div style={{ background:'#24244f', borderRadius:4, width:30, height:13 }} />
+      <div style={{ background:'#22223b', borderRadius:4, width:'80%', height:11 }} />
+      <div style={{ background:'#161637', borderRadius:4, width:70, height:16 }} />
+      <div style={{ background:'#19193c', borderRadius:4, width:40, height:9 }} />
+      <div style={{ background:'#1a1a3d', borderRadius:4, width:60, height:9 }} />
+    </div>
+  )
+}
+
+if (typeof window !== 'undefined' && !document.getElementById('stats-skel-pulse')) {
+  const style = document.createElement('style');
+  style.id = 'stats-skel-pulse';
+  style.innerHTML = '@keyframes statsSkeletonPulse { 0%{opacity:.8} 50%{opacity:.58} 100%{opacity:.8} }';
+  document.head.appendChild(style);
+}
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { getUserStats, getLeaderboard, getCoinHistory, getPublicProfile, getPublicStats, getPublicProfiles, getFriends, getFriendRequests, acceptFriendRequest, declineFriendRequest, sendFriendRequest } from '../firebase/db'
 import { GAME_MODE } from '../logic/gameEngine'
+import DailyChallengesMenu from '../components/DailyChallengesMenu'
 
 // Include all solo modes (excluding multiplayer/versus)
 const MODES = [
@@ -15,7 +52,18 @@ const MODES = [
   { key: 'story',            label: 'STORY',    color: '#ffd700' },
 ]
 
-function StatCard({ label, value, sub, color = '#00d4ff' }) {
+function formatCompactNumber(n) {
+  if (n == null) return '0'
+  if (Math.abs(n) >= 1e9)
+    return (n / 1e9).toFixed(2).replace(/\.00$/, '') + 'B'
+  if (Math.abs(n) >= 1e6)
+    return (n / 1e6).toFixed(2).replace(/\.00$/, '') + 'M'
+  if (Math.abs(n) >= 1e3)
+    return (n / 1e3).toFixed(2).replace(/\.00$/, '') + 'K'
+  return n.toLocaleString()
+}
+
+function StatCard({ label, value, sub, color = '#00d4ff', compact = false }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -23,7 +71,7 @@ function StatCard({ label, value, sub, color = '#00d4ff' }) {
       style={{ background: '#10101c', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: '1rem', display: 'flex', flexDirection: 'column', gap: 4 }}
     >
       <div style={{ fontSize: '0.6rem', color: '#555', letterSpacing: '0.18em', textTransform: 'uppercase' }}>{label}</div>
-      <div style={{ fontSize: '1.5rem', fontWeight: 900, color, letterSpacing: '0.04em' }}>{value}</div>
+      <div style={{ fontSize: '1.5rem', fontWeight: 900, color, letterSpacing: '0.04em' }}>{compact ? formatCompactNumber(value) : value}</div>
       {sub && <div style={{ fontSize: '0.65rem', color: '#555' }}>{sub}</div>}
     </motion.div>
   )
@@ -236,8 +284,23 @@ export default function StatsPage() {
   }, [user])
 
   const displayName = userProfile?.displayName || user?.displayName || 'Player'
-  const bestScores = MODES.map(m => ({ ...m, score: stats?.[`best_${m.key}`] || 0 }))
-  const maxBest = Math.max(...bestScores.map(m => m.score), 1)
+  const bestScores = useMemo(() => MODES.map(m => ({ ...m, score: stats?.[`best_${m.key}`] || 0 })), [stats])
+  const maxBest = useMemo(() => Math.max(...bestScores.map(m => m.score), 1), [bestScores])
+
+  // Personal bests for solo leaderboard row (for user even if not ranked globally)
+  const personalRow = useMemo(() => {
+    if (!user || !stats) return null
+    return {
+      uid: user.uid,
+      displayName: userProfile?.displayName || 'You',
+      score: stats[`best_${lbMode}`] || 0,
+      lines: stats[`best_${lbMode}_lines`] || 0,
+      timestamp: stats[`best_${lbMode}_at`] || null,
+      personal: true,
+      badge: userProfile?.selectedBadge || null,
+      hasNoob: !!userProfile?.hasPlayedEasy,
+    }
+  }, [user, stats, userProfile, lbMode])
   const isNoob = !!userProfile?.hasPlayedEasy
   const myBadge = userProfile?.selectedBadge || null
 
@@ -264,7 +327,41 @@ export default function StatsPage() {
 
       <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '1.4rem', maxWidth: '100%', contain: 'content' }}>
         {loading ? (
-          <div style={{ color: '#555', fontSize: '0.8rem', letterSpacing: '0.16em', textAlign: 'center', padding: '3rem' }}>LOADING…</div>
+          <>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', maxWidth: 640, margin: '0 auto' }}>
+              {/* Player card skeleton */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, background: '#10101c', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: '1.2rem', minHeight: 80, marginBottom: 24 }}>
+                <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'linear-gradient(135deg,#161628,#181930)', flexShrink: 0 }} />
+                <div style={{ flex:1 }}>
+                  <div style={{ width: 130, height: 17, background: 'rgba(255,255,255,0.07)', borderRadius: 6, marginBottom: 12 }} />
+                  <div style={{ width: 70, height: 12, background: 'rgba(255,255,255,0.04)', borderRadius: 4, marginTop: 5 }} />
+                </div>
+              </div>
+              {/* Stat cards grid skeleton */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.65rem' }}>
+                {Array.from({ length: 4 }).map((_, i) => <StatsSkeletonCard key={i} />)}
+              </div>
+              {/* Best scores skeleton */}
+              <div style={{ margin: '1.4rem 0', background: '#10101c', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {Array.from({ length: 5 }).map((_, i) => <StatsSkeletonCard key={100+i} />)}
+              </div>
+              {/* Leaderboard header + rows skeleton */}
+              <div style={{ background: '#0f1120', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, overflow: 'hidden', maxWidth: '100%' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '40px minmax(0,1fr) 110px 80px 86px', gap: 8, alignItems: 'center', padding: '8px 10px', background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid rgba(255,255,255,0.06)', fontSize: '0.60rem', color: '#666', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                  <div>#</div>
+                  <div style={{ minWidth: 0 }}>Player</div>
+                  <div style={{ textAlign: 'right' }}>Score</div>
+                  <div style={{ textAlign: 'right' }}>Lines</div>
+                  <div style={{ textAlign: 'right' }}>When</div>
+                </div>
+                {[...Array(8)].map((_,i) => <StatsSkeletonRow key={i} />)}
+              </div>
+              {/* Coin history skeleton */}
+              <div style={{ marginTop:'1.3rem', background: '#0f1120', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, overflow: 'hidden', maxWidth: '100%' }}>
+                {[...Array(8)].map((_,i) => <div key={i} style={{height:16, borderBottom: i<7?'1px solid #18182c':'none', background:'#18182c26'}} />)}
+              </div>
+            </div>
+          </>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', maxWidth: 640, margin: '0 auto' }}>
             {/* Player card */}
@@ -290,12 +387,15 @@ export default function StatsPage() {
               </div>
             </motion.div>
 
+            <DailyChallengesMenu />
+
             {/* Overview grid */}
             <div>
               <div style={{ fontSize: '0.6rem', letterSpacing: '0.22em', color: '#555', marginBottom: '0.75rem', textTransform: 'uppercase' }}>Overview</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.65rem' }}>
-                <StatCard label="Total Score" value={(stats?.totalScore || 0).toLocaleString()} color="#00d4ff" />
-                <StatCard label="Total Lines" value={(stats?.totalLines || 0).toLocaleString()} color="#a855f7" />
+                    <StatCard label="Total Score" value={stats?.totalScore || 0} color="#00d4ff" compact />
+                    <StatCard label="Total Lines" value={(stats?.totalLines || 0).toLocaleString()} color="#a855f7" />
+                    <StatCard label="Floors Climbed" value={stats?.totalFloors || 0} color="#22c55e" compact />
                 <StatCard label="Games" value={stats?.totalGames || 0} color="#f97316" />
                 <StatCard label="Coins Earned" value={(userProfile?.coins || 0).toLocaleString()} color="#eab308" sub="current balance" />
               </div>
@@ -306,6 +406,12 @@ export default function StatsPage() {
               <div style={{ fontSize: '0.6rem', letterSpacing: '0.22em', color: '#555', marginBottom: '0.75rem' }}>Best Scores by Mode</div>
               <div style={{ background: '#10101c', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 {bestScores.map(m => <BestScoreRow key={m.key} mode={m} score={m.score} max={maxBest} />)}
+                {stats?.best_ultimate_floors > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 8 }}>
+                    <span style={{ fontSize: '0.7rem', color: '#ef4444', letterSpacing: '0.14em' }}>ULTIMATE FLOORS</span>
+                    <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#eee' }}>{(stats.best_ultimate_floors || 0).toLocaleString()}</span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -341,45 +447,70 @@ export default function StatsPage() {
                   {!narrow && <div style={{ textAlign: 'right' }}>Lines</div>}
                   {!narrow && <div style={{ textAlign: 'right' }}>When</div>}
                 </div>
-                {/* Rows */}
-                {leaderboard.length === 0 ? (
+                {/* Rows (add personal best row if not present) */}
+                {leaderboard.length === 0 && personalRow ? (
+                  <div
+                    style={{ padding: '1.5rem', textAlign: 'center', fontSize: '0.72rem', color: '#555', letterSpacing: '0.1em' }}>
+                    NOT RANKED – Your Best: {(personalRow.score||0).toLocaleString()} points
+                  </div>
+                ) : leaderboard.length === 0 ? (
                   <div style={{ padding: '1.5rem', textAlign: 'center', fontSize: '0.72rem', color: '#555', letterSpacing: '0.1em' }}>NO SCORES YET</div>
-                ) : leaderboard.map((entry, i) => {
-                  const isMe = entry.uid === user?.uid
-                  const ts = entry.timestamp
-                  const dt = ts?.toDate ? ts.toDate() : (typeof ts?.seconds === 'number' ? new Date(ts.seconds * 1000) : null)
-                  const bg = i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent'
-                  const rankColor = i === 0 ? '#eab308' : i === 1 ? '#9ca3af' : i === 2 ? '#b45309' : '#555'
-                  const p = lbProfiles[entry.uid]
-                  const name = isMe ? (userProfile?.displayName || 'You') : (p?.displayName || `player_${(entry.uid||'').slice(0,5)}`)
-                  const hasNoob = isMe ? isNoob : !!p?.hasPlayedEasy
-                  const badge = isMe ? (userProfile?.selectedBadge || null) : (p?.selectedBadge || null)
-                  return (
-                    <div
-                      key={entry.id}
-                      onClick={() => !isMe && entry.uid && setProfileModal(entry.uid)}
-                      title={!isMe ? 'View profile' : undefined}
-                      style={{ display: 'grid', gridTemplateColumns: narrow ? '32px minmax(0,1fr) auto' : '40px minmax(0,1fr) 110px 80px 86px', gap: 8, alignItems: 'center', padding: '8px 10px', borderBottom: i < leaderboard.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', background: bg, cursor: !isMe ? 'pointer' : 'default', transition: 'background 0.12s' }}
-                      onMouseEnter={e => { if (!isMe) e.currentTarget.style.background = 'rgba(0,212,255,0.05)' }}
-                      onMouseLeave={e => { e.currentTarget.style.background = bg }}
-                    >
-                      <div style={{ color: rankColor, fontWeight: 700, fontSize: '0.75rem' }}>#{i + 1}</div>
-                      <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0, color: isMe ? '#00d4ff' : '#ddd', display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</span>
-                        {badge && <span style={{ fontSize: '0.45rem', color: '#c084fc', border: '1px solid #c084fc55', borderRadius: 3, padding: '0 4px', background: 'rgba(192,132,252,0.08)', flexShrink: 0, letterSpacing: '0.1em' }}>{badge.replace('badge_', '').toUpperCase()}</span>}
-                        {hasNoob && <span style={{ fontSize: '0.45rem', color: '#f87171', border: '1px solid #f8717155', borderRadius: 3, padding: '0 4px', background: 'rgba(248,113,113,0.08)', flexShrink: 0, letterSpacing: '0.1em' }}>NOOB</span>}
-                        {narrow && (
-                          <div style={{ fontSize: '0.6rem', color: '#666', letterSpacing: '0.06em', marginTop: 2, display: 'block' }}>
-                            L {entry.lines ?? '—'} • {relTime(dt)}
-                          </div>
-                        )}
+                ) : (
+                  leaderboard.map((entry, i) => {
+                    const isMe = entry.uid === user?.uid
+                    const ts = entry.timestamp
+                    const dt = ts?.toDate ? ts.toDate() : (typeof ts?.seconds === 'number' ? new Date(ts.seconds * 1000) : null)
+                    const bg = i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent'
+                    const rankColor = i === 0 ? '#eab308' : i === 1 ? '#9ca3af' : i === 2 ? '#b45309' : '#555'
+                    const p = lbProfiles[entry.uid]
+                    const name = isMe ? (userProfile?.displayName || 'You') : (p?.displayName || `player_${(entry.uid||'').slice(0,5)}`)
+                    const hasNoob = isMe ? isNoob : !!p?.hasPlayedEasy
+                    const badge = isMe ? (userProfile?.selectedBadge || null) : (p?.selectedBadge || null)
+                    return (
+                      <div
+                        key={entry.id}
+                        onClick={() => !isMe && entry.uid && setProfileModal(entry.uid)}
+                        title={!isMe ? 'View profile' : undefined}
+                        style={{ display: 'grid', gridTemplateColumns: narrow ? '32px minmax(0,1fr) auto' : '40px minmax(0,1fr) 110px 80px 86px', gap: 8, alignItems: 'center', padding: '8px 10px', borderBottom: i < leaderboard.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', background: bg, cursor: !isMe ? 'pointer' : 'default', transition: 'background 0.12s' }}
+                        onMouseEnter={e => { if (!isMe) e.currentTarget.style.background = 'rgba(0,212,255,0.05)' }}
+                        onMouseLeave={e => { e.currentTarget.style.background = bg }}
+                      >
+                        <div style={{ color: rankColor, fontWeight: 700, fontSize: '0.75rem' }}>#{i + 1}</div>
+                        <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0, color: isMe ? '#00d4ff' : '#ddd', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</span>
+                          {badge && <span style={{ fontSize: '0.45rem', color: '#c084fc', border: '1px solid #c084fc55', borderRadius: 3, padding: '0 4px', background: 'rgba(192,132,252,0.08)', flexShrink: 0, letterSpacing: '0.1em' }}>{badge.replace('badge_', '').toUpperCase()}</span>}
+                          {hasNoob && <span style={{ fontSize: '0.45rem', color: '#f87171', border: '1px solid #f8717155', borderRadius: 3, padding: '0 4px', background: 'rgba(248,113,113,0.08)', flexShrink: 0, letterSpacing: '0.1em' }}>NOOB</span>}
+                          {narrow && (
+                            <div style={{ fontSize: '0.6rem', color: '#666', letterSpacing: '0.06em', marginTop: 2, display: 'block' }}>
+                              L {entry.lines ?? '—'} • {relTime(dt)}
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ textAlign: 'right', color: '#eee', fontWeight: 700 }}>{(entry.score||0).toLocaleString()}</div>
+                        {!narrow && <div style={{ textAlign: 'right', color: '#aaa' }}>{entry.lines ?? '—'}</div>}
+                        {!narrow && <div style={{ textAlign: 'right', color: '#777', fontSize: '0.7rem' }}>{relTime(dt)}</div>}
                       </div>
-                      <div style={{ textAlign: 'right', color: '#eee', fontWeight: 700 }}>{(entry.score||0).toLocaleString()}</div>
-                      {!narrow && <div style={{ textAlign: 'right', color: '#aaa' }}>{entry.lines ?? '—'}</div>}
-                      {!narrow && <div style={{ textAlign: 'right', color: '#777', fontSize: '0.7rem' }}>{relTime(dt)}</div>}
+                    )
+                  })
+                )}
+                {/* Personal best row if not on leaderboard AND have score */}
+                {personalRow && leaderboard.length > 0 && !leaderboard.some(e => e.uid === user?.uid) && personalRow.score > 0 && (
+                  <div
+                    key={personalRow.uid + '_pers'}
+                    title="Your Best (not ranked)"
+                    style={{ display: 'grid', gridTemplateColumns: narrow ? '32px minmax(0,1fr) auto' : '40px minmax(0,1fr) 110px 80px 86px', gap: 8, alignItems: 'center', padding: '8px 10px', background: 'rgba(34,197,94,0.09)', borderTop: '1px solid #22c55e22', borderRadius: 7, marginTop: 4, fontStyle: 'italic', color: '#b4f0ce' }}
+                  >
+                    <div style={{ color: '#22c55e', fontWeight: 700, fontSize: '0.75rem' }}>—</div>
+                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0, color: '#22c55e', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>Your Best</span>
+                      {personalRow.badge && <span style={{ fontSize: '0.45rem', color: '#c084fc', border: '1px solid #c084fc55', borderRadius: 3, padding: '0 4px', background: 'rgba(192,132,252,0.08)', flexShrink: 0, letterSpacing: '0.1em' }}>{personalRow.badge.replace('badge_', '').toUpperCase()}</span>}
+                      {personalRow.hasNoob && <span style={{ fontSize: '0.45rem', color: '#f87171', border: '1px solid #f8717155', borderRadius: 3, padding: '0 4px', background: 'rgba(248,113,113,0.08)', flexShrink: 0, letterSpacing: '0.1em' }}>NOOB</span>}
                     </div>
-                  )
-                })}
+                    <div style={{ textAlign: 'right', color: '#eee', fontWeight: 700 }}>{(personalRow.score||0).toLocaleString()}</div>
+                    {!narrow && <div style={{ textAlign: 'right', color: '#aaa' }}>{personalRow.lines ?? '—'}</div>}
+                    {!narrow && <div style={{ textAlign: 'right', color: '#777', fontSize: '0.7rem' }}>{relTime(personalRow.timestamp?.toDate?.() ?? null)}</div>}
+                  </div>
+                )}
               </div>
             </div>
 

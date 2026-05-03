@@ -73,6 +73,7 @@ const MENU_ITEMS = [
   { label: 'THEMES',   sub: 'WORLD + PIECES',  icon: '◉',  path: '/themes',      color: '#e879f9' },
   { label: 'STORE',    sub: 'SHOP',            icon: '◆',  path: '/store',       color: '#22c55e' },
   { label: 'STATS',    sub: 'LEADERBOARD',     icon: '▲',  path: '/stats',       color: '#eab308' },
+  { label: 'LORE',     sub: 'STORY TEXTS',     icon: '✦',  path: '/lore',        color: '#22c55e' },
   { label: 'SOUNDTRACK', sub: 'VOTE TRACKS',   icon: '♫',  path: '/artwork',     color: '#ec4899', public: true },
   { label: 'SETTINGS', sub: 'CONTROLS · AUDIO', icon: '⚙', action: 'settings',  color: '#94a3b8', public: true },
 ]
