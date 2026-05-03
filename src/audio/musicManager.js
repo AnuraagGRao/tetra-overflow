@@ -112,6 +112,7 @@ export class MusicManager {
     }
     src.start()
     this._source = src
+    try { this._onTrackChange?.(TRACKS[index]) } catch {}
   }
 
   // -- Public API -------------------------------------------------------------
@@ -284,6 +285,7 @@ export class MusicManager {
     this.volumeGain.gain.setTargetAtTime(target, t, 0.05)
   }
   isMuted() { return !!this._muted }
+  setOnTrackChange(fn) { this._onTrackChange = fn || null }
   getNowPlaying() {
     const name = TRACKS[this.trackIndex]?.name || ''
     return name.replace(/_/g,' ').replace(/\b(\w)/g, m=>m.toUpperCase())

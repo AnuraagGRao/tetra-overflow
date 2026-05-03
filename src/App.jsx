@@ -1146,6 +1146,10 @@ export default function App() {
   const [showInstallBanner, setShowInstallBanner] = useState(false)
   const [showAbout, setShowAbout] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [nowPlayingToast, setNowPlayingToast] = useState(null) // { name, id }
+  const [floatPopups, setFloatPopups] = useState([]) // [{ id, text, color }]
+  const floatPopupCounterRef = useRef(0)
+  const nowPlayingToastTimerRef = useRef(null)
   const checkMobile = () => window.innerWidth < 768 || (window.innerHeight < 600 && ('ontouchstart' in window || navigator.maxTouchPoints > 0))
   const checkLandscape = () => window.innerHeight < 600 && window.innerWidth > window.innerHeight && ('ontouchstart' in window || navigator.maxTouchPoints > 0)
   const [isMobile, setIsMobile]       = useState(checkMobile)
@@ -1286,6 +1290,28 @@ export default function App() {
 
   // Sync engine DAS/ARR from config
   useEffect(() => { engine.setSettings({ das: config.das, arr: config.arr }) },  [engine, config.das, config.arr])
+
+  // ─── Floating event popups ─────────────────────────────────────────────────
+  const spawnPopup = useCallback((text, color = '#fff') => {
+    const id = ++floatPopupCounterRef.current
+    setFloatPopups(prev => [...prev.slice(-4), { id, text, color }])
+    setTimeout(() => setFloatPopups(prev => prev.filter(p => p.id !== id)), 4000)
+  }, [])
+
+  // ─── Music "now playing" overlay ────────────────────────────────────────────
+  useEffect(() => {
+    if (!musicManager) return
+    musicManager.setOnTrackChange((track) => {
+      const name = (track?.name || '').replace(/_/g, ' ').replace(/\b(\w)/g, m => m.toUpperCase())
+      setNowPlayingToast({ name, id: Date.now() })
+      if (nowPlayingToastTimerRef.current) clearTimeout(nowPlayingToastTimerRef.current)
+      nowPlayingToastTimerRef.current = setTimeout(() => setNowPlayingToast(null), 4500)
+    })
+    return () => {
+      musicManager.setOnTrackChange(null)
+      if (nowPlayingToastTimerRef.current) { clearTimeout(nowPlayingToastTimerRef.current); nowPlayingToastTimerRef.current = null }
+    }
+  }, []) // musicManager is a module-level singleton; no deps needed
 
   // Resize → isMobile
   useEffect(() => {
@@ -1578,14 +1604,23 @@ export default function App() {
         if (isAllClear) {
           if (sfxOn) playAllClearSFX(theme)
           doVibrate([30, 10, 30, 10, 30, 10, 80])
+          spawnPopup('✨ ALL CLEAR!', '#facc15')
           playedClearCue = true
         } else if (spinType === 'tSpin' || spinType === 'allSpin') {
           if (sfxOn) playTSpinSFX(theme)
           doVibrate([20, 15, 40])
+          const TSPIN_LABELS = { 0: 'T-SPIN', 1: 'T-SPIN SINGLE', 2: 'T-SPIN DOUBLE', 3: 'T-SPIN TRIPLE' }
+          spawnPopup(`🌀 ${TSPIN_LABELS[lines] || 'T-SPIN TRIPLE'}`, '#a855f7')
+          playedClearCue = true
+        } else if (spinType === 'tSpinMini') {
+          if (sfxOn) playTSpinSFX(theme)
+          doVibrate([20, 15, 40])
+          spawnPopup('🌀 T-SPIN MINI', '#c084fc')
           playedClearCue = true
         } else if (lines === 4) {
           if (sfxOn) playTetrisSFX(theme)
           doVibrate([30, 10, 30, 10, 30, 10, 80])
+          spawnPopup('🟦 TETRIS!', '#00d4ff')
           playedClearCue = true
         } else if (lines > 0) {
           if (sfxOn) playLineClearSFX(theme)
@@ -1622,6 +1657,7 @@ export default function App() {
           } catch {}
         }
       }
+      if (ns.lastCombo > 1) spawnPopup(`✕${ns.lastCombo} COMBO`, '#f59e0b')
       if (ns.lastCombo > 0 && sfxOn) playComboSFX(ns.lastCombo, theme)
       if (ns.pieceLocked) sessionPiecesPlacedRef.current += 1
       if (ns.pieceHeld) sessionHoldUsesRef.current += 1
@@ -2246,6 +2282,70 @@ export default function App() {
     )
   })()
 
+  // ─── Floating event popups (tetris / t-spin / combo / all-clear) ────────────
+  const POPUP_BASE_TOP_PCT = 28    // % from top where the first popup appears
+  const POPUP_SPACING_PCT  = 13   // % gap between stacked simultaneous popups
+  const renderFloatPopups = () => (
+    <AnimatePresence>
+      {floatPopups.slice(-4).map((p, idx) => (
+        <motion.div
+          key={p.id}
+          initial={{ opacity: 0, y: 0, scale: 0.75 }}
+          animate={{ opacity: [0, 1, 1, 0], y: [0, -10, -40, -70], scale: [0.75, 1.15, 1.05, 0.95] }}
+          transition={{ duration: 3.5, times: [0, 0.08, 0.65, 1], ease: 'easeOut' }}
+          style={{
+            position: 'absolute',
+            left: '50%',
+            top: `${POPUP_BASE_TOP_PCT + idx * POPUP_SPACING_PCT}%`,
+            transform: 'translateX(-50%)',
+            color: p.color,
+            fontFamily: '"Courier New", monospace',
+            fontWeight: 900,
+            fontSize: 'clamp(0.85rem, 3.5vw, 1.25rem)',
+            letterSpacing: '0.12em',
+            textShadow: `0 0 14px ${p.color}cc, 0 2px 6px rgba(0,0,0,0.9)`,
+            pointerEvents: 'none',
+            zIndex: 52,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {p.text}
+        </motion.div>
+      ))}
+    </AnimatePresence>
+  )
+
+  // ─── Now-playing song overlay (shown when BGM track changes) ─────────────────
+  const renderNowPlayingToast = () => (
+    <AnimatePresence>
+      {nowPlayingToast && (
+        <motion.div
+          key={nowPlayingToast.id}
+          initial={{ opacity: 0, y: -12 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.3 }}
+          style={{
+            position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+            background: 'rgba(10,10,26,0.88)', backdropFilter: 'blur(10px)',
+            border: '1px solid rgba(255,255,255,0.14)', borderRadius: 10,
+            padding: '9px 18px', zIndex: 9990, pointerEvents: 'none',
+            display: 'flex', alignItems: 'center', gap: 8,
+            fontFamily: '"Courier New", monospace',
+          }}
+        >
+          <span style={{ fontSize: '1rem' }}>🎵</span>
+          <div>
+            <div style={{ fontSize: '0.48rem', letterSpacing: '0.2em', color: '#888', marginBottom: 2 }}>NOW PLAYING</div>
+            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#e2e8f0', letterSpacing: '0.06em', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {nowPlayingToast.name}
+            </div>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  )
+
   // ─── Desktop render ─────────────────────────────────────────────────────────
   const renderDesktop = () => (
     <>
@@ -2354,6 +2454,7 @@ export default function App() {
               {renderPauseOverlay(state)}
               {renderZoneEnd(state)}
               {renderCountdown()}
+              {renderFloatPopups()}
             </div>
             <div className="game-hud-bottom">
               {state.mode === GAME_MODE.SPRINT && <span>⏱ <span className="hud-val">{fmtElapsed(state.elapsedTime)}</span></span>}
@@ -2462,6 +2563,7 @@ export default function App() {
           {renderPauseOverlay(state)}
           {renderZoneEnd(state)}
           {renderCountdown()}
+          {renderFloatPopups()}
         </div>
       </div>
 
@@ -2592,6 +2694,7 @@ export default function App() {
         {renderPauseOverlay(state)}
         {renderZoneEnd(state)}
         {renderCountdown()}
+        {renderFloatPopups()}
 
         {/* Fullscreen mini HUD — visible only when UI is hidden */}
         {isUiHidden && (
@@ -2692,6 +2795,7 @@ export default function App() {
           onClose={() => setShowSettings(false)}
         />
       )}
+      {renderNowPlayingToast()}
     </div>
     </>
   )

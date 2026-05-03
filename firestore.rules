@@ -34,7 +34,8 @@ service cloud.firestore {
 
       match /coin_ledger/{entryId} {
         allow read: if isOwner(uid);
-        allow write: if false;
+        allow create: if isOwner(uid);
+        allow update, delete: if false;
       }
 
       match /lobby_invites/{inviteId} {

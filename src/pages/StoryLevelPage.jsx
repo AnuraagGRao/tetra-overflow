@@ -676,8 +676,8 @@ export default function StoryLevelPage() {
             </div>
           )}
 
-          {/* Lines progress bar */}
-          {!focus && level.targetLines > 0 && (
+          {/* Lines progress bar — shown in both normal and focus mode */}
+          {level.targetLines > 0 && (
             <div style={{ height: 3, background: 'rgba(255,255,255,0.08)', flexShrink: 0 }}>
               <div style={{ height: '100%', background: chapter.color, width: `${Math.min(100, (linesThisLevel / effectiveTargetLines) * 100)}%`, transition: 'width 0.3s ease' }} />
             </div>
