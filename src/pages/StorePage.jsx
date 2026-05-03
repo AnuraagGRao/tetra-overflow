@@ -210,7 +210,7 @@ function ItemCard({ item, owned, active, onBuy, onEquip, coins }) {
 export default function StorePage() {
   const navigate = useNavigate()
   const { user, userProfile, refreshProfile } = useAuth()
-  const { theme, setTheme } = useTheme()
+  const { theme, setTheme, bgTheme, setBgTheme } = useTheme()
   const [activeTab, setActiveTab] = useState('theme')
   const [toast, setToast] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -250,6 +250,9 @@ export default function StorePage() {
     if (isThemeType(item.type)) {
       setTheme(item.themeKey)
       showToast(`Theme applied: ${item.name}`)
+    } else if (item.type === 'bg') {
+      setBgTheme(item.bgType)
+      showToast(`Background applied: ${item.name}`)
     } else if (item.type === 'badge') {
       if (!user) return
       try {
@@ -375,7 +378,7 @@ export default function StorePage() {
                 key={item.id}
                 item={item}
                 owned={item.price === 0 || inventory.includes(item.id)}
-                active={(isThemeType(item.type) && item.themeKey === theme) || (item.type === 'badge' && item.id === selectedBadge) || (item.type === 'effect' && selectedEffects.includes(item.id))}
+                active={(isThemeType(item.type) && item.themeKey === theme) || (item.type === 'badge' && item.id === selectedBadge) || (item.type === 'effect' && selectedEffects.includes(item.id)) || (item.type === 'bg' && item.bgType === bgTheme)}
                 coins={coins}
                 onBuy={() => handleBuy(item)}
                 onEquip={() => handleEquip(item)}

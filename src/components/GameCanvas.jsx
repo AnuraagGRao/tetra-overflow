@@ -147,10 +147,11 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
     const physW = Math.round(cW * dpr)
     const physH = Math.round(cH * dpr)
     if (canvas.width !== physW || canvas.height !== physH) {
-      canvas.width        = physW
-      canvas.height       = physH
-      canvas.style.width  = cW + 'px'
-      canvas.style.height = cH + 'px'
+      canvas.width  = physW
+      canvas.height = physH
+      // Clear any previously set inline size so CSS (--board-w / zoom) takes control
+      canvas.style.width  = ''
+      canvas.style.height = ''
     }
     // Every frame: apply scale so all drawing coords stay in logical (CSS-px) space
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
