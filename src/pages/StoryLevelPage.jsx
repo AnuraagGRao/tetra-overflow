@@ -6,8 +6,8 @@ import { saveStoryProgress, unlockItem, saveGameResult, markEasyModePlayed, setA
 import SettingsPage from '../components/SettingsPage'
 import { findLevel, getNextLevel } from '../logic/storyData'
 import { PIECES } from '../logic/tetrominoes'
-import { TetrisEngine, GAME_MODE, ZONE_MIN_METER } from '../logic/gameEngine'
-import { setSfxVolume, playMoveSFX, playRotateSFX, playHoldSFX, playHardDropSFX, playLockSFX, playLineClearSFX, playTetrisSFX, playZoneActivateSFX } from '../audio/gameSfx'
+import { TetrisEngine, GAME_MODE, ZONE_MIN_METER, ZONE_DURATION_MS } from '../logic/gameEngine'
+import { setSfxVolume, setSfxDuck, playMoveSFX, playRotateSFX, playHoldSFX, playHardDropSFX, playLockSFX, playLineClearSFX, playTetrisSFX, playZoneActivateSFX } from '../audio/gameSfx'
 import GameCanvas, { PIECE_COLOR_MAPS } from '../components/GameCanvas'
 import FocusHud from '../components/FocusHud'
 import { BG_TYPE_TO_PIECE_THEME } from '../logic/themeMappings'
@@ -327,7 +327,10 @@ export default function StoryLevelPage() {
       levelStartLinesRef.current = 0
       const gm = found?.level?.gravityMult ?? 1.0
       const gravFactor = easyMode ? 0.6 : 1.0
-      engine.level = Math.max(1, Math.round(gm * gravFactor * 5 + 1))
+      const targetLevel = Math.max(1, Math.round(gm * gravFactor * 5 + 1))
+      engine.level = targetLevel
+      engine.storyLevelOffset = targetLevel
+      engine.storyLinesOffset = 0
     }
   }, [phase, engine, found, easyMode])
 
@@ -365,7 +368,10 @@ export default function StoryLevelPage() {
       const nextFound = findLevel(next.chapterId, next.levelId)
       const gm = nextFound?.level?.gravityMult ?? 1.0
         const gravFactor = easyMode ? 0.6 : 1.0
-        engine.level = Math.max(1, Math.round(gm * gravFactor * 5 + 1))
+        const targetLevel = Math.max(1, Math.round(gm * gravFactor * 5 + 1))
+        engine.level = targetLevel
+        engine.storyLevelOffset = targetLevel
+        engine.storyLinesOffset = engine.getState().lines
       levelStartLinesRef.current = engine.getState().lines
       engine.togglePause()  // resume
       setCurrentChapterId(next.chapterId)
@@ -533,7 +539,18 @@ export default function StoryLevelPage() {
       else if (state.pieceLocked)          playLockSFX(theme)
       if (state.lastClear?.lines > 0)      { (state.lastClear.lines >= 4 ? playTetrisSFX : playLineClearSFX)(theme) }
       if (state.pieceHeld)                 playHoldSFX(theme)
-      if (prev.zoneActive !== state.zoneActive && state.zoneActive) playZoneActivateSFX(theme)
+      if (prev.zoneActive !== state.zoneActive) {
+        if (state.zoneActive) {
+          playZoneActivateSFX(theme)
+          // Boost SFX volume during Zone and apply low-pass duck to story BGM
+          setSfxDuck(1.5)
+          try { storyMusicRef.current?.setZoneFx?.(true) } catch { /* audio errors must not break gameplay */ }
+        } else {
+          // Restore normal SFX level and BGM when Zone ends
+          setSfxDuck(1.0)
+          try { storyMusicRef.current?.setZoneFx?.(false) } catch { /* audio errors must not break gameplay */ }
+        }
+      }
       // Move / rotate only when the same piece is active
       if (prev.current?.type === state.current?.type) {
         if (state.current?.x !== prev.current?.x)          playMoveSFX(theme)
@@ -713,7 +730,9 @@ export default function StoryLevelPage() {
                 </button>
                 {focus && (() => {
                   const zoneReady = state.zoneMeter >= ZONE_MIN_METER && !state.zoneActive
-                  const zoneFillPct = Math.max(0, Math.min(100, state.zoneActive ? 100 : (state.zoneMeter || 0)))
+                  const zoneFillPct = Math.max(0, Math.min(100, state.zoneActive
+                    ? (state.zoneTimer / (state.zoneDuration || ZONE_DURATION_MS)) * 100
+                    : (state.zoneMeter || 0)))
                   return (
                     <div className="fullscreen-mini-hud" style={{ right: 0 }}>
                       <div className="fmh-hold">

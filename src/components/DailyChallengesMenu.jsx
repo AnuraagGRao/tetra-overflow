@@ -127,7 +127,6 @@ export default function DailyChallengesMenu() {
         {(state.challenges || []).map((ch, idx) => {
           const pct = Math.max(0, Math.min(100, ((ch.progress || 0) / Math.max(1, ch.target || 1)) * 100));
           const isFree = !freeChange[idx];
-          const disableBtn = ch.completed;
           return (
             <div key={ch.id} style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${ch.completed ? '#22c55e55' : 'rgba(255,255,255,0.08)'}`, borderRadius: 10, padding: '0.75rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
@@ -140,7 +139,8 @@ export default function DailyChallengesMenu() {
               <div style={{ marginTop: 5, fontSize: '0.58rem', color: '#666', letterSpacing: '0.06em' }}>
                 {Math.min(ch.progress || 0, ch.target || 0)} / {ch.target}
               </div>
-              {/* Change challenge button (disabled if completed) */}
+              {/* Change challenge button — hidden once completed */}
+              {!ch.completed && (
               <button
                 style={{
                   marginTop: 6,
@@ -148,9 +148,9 @@ export default function DailyChallengesMenu() {
                   padding: '5px 11px',
                   borderRadius: 7,
                   border: '1px solid #eab308',
-                  color: disableBtn ? '#7e7e7e' : isFree ? '#eab308' : '#fff',
-                  background: disableBtn ? 'rgba(0,0,0,0.09)' : isFree ? 'rgba(234,179,8,0.08)' : '#202c14',
-                  cursor: disableBtn ? 'not-allowed' : 'pointer',
+                  color: isFree ? '#eab308' : '#fff',
+                  background: isFree ? 'rgba(234,179,8,0.08)' : '#202c14',
+                  cursor: 'pointer',
                   fontWeight: 700,
                   letterSpacing: '0.09em',
                   marginRight: 8,
@@ -158,11 +158,11 @@ export default function DailyChallengesMenu() {
                   outline: 'none',
                   minWidth: 74
                 }}
-                disabled={disableBtn}
                 onClick={() => handleChangeChallenge(idx)}
               >
                 {isFree ? 'Change' : 'Change (50◆)'}
               </button>
+              )}
             </div>
           )
         })}

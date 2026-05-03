@@ -8,7 +8,7 @@ let _sfxDuck = 1.0
 const _sfxGate = {}
 
 export const setSfxVolume = (v) => { _sfxVol = Math.max(0, Math.min(1, v ?? 1)) }
-export const setSfxDuck = (v) => { _sfxDuck = Math.max(0, Math.min(1, v ?? 1)) }
+export const setSfxDuck = (v) => { _sfxDuck = Math.max(0, Math.min(2, v ?? 1)) }
 
 const getAudioCtx = () => {
   if (!ToneContext) return null

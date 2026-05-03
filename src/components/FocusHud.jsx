@@ -29,7 +29,7 @@ function MiniPiece({ type, pieceTheme, size = 12 }) {
 
 export default function FocusHud({ state, pieceTheme = 'classic', side = 'right', style }) {
   const zonePct = state.zoneActive
-    ? Math.max(0, 1 - (state.zoneTimer / Math.max(1, state.zoneDuration || 1)))
+    ? Math.max(0, state.zoneTimer / Math.max(1, state.zoneDuration || 1))
     : Math.min(1, (state.zoneMeter || 0) / 100)
 
   const col = side === 'left' ? { left: -10, right: 'auto' } : { right: -10, left: 'auto' }

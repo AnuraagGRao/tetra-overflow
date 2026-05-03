@@ -317,6 +317,10 @@ export class TetrisEngine {
     this.lastGarbage = 0
     // Zone floor (lines captured during Zone sitting at the bottom)
     this.zoneFloor = 0
+    // Story mode: when set, level is computed as storyLevelOffset + floor((lines - storyLinesOffset)/10)
+    // so gravity stays pegged to the story-defined level and only rises slowly within each level.
+    this.storyLevelOffset = 0
+    this.storyLinesOffset = 0
     this.horizontalState = {
       left: { active: false, timer: 0, repeat: 0 },
       right: { active: false, timer: 0, repeat: 0 },
@@ -549,7 +553,12 @@ export class TetrisEngine {
       } else {
         this.lines += cleared
       }
-      this.level = Math.floor(this.lines / 10) + 1
+      if (this.storyLevelOffset > 0) {
+        // Story mode: level rises gently from the story-defined base; only lines this level count
+        this.level = this.storyLevelOffset + Math.floor(Math.max(0, this.lines - this.storyLinesOffset) / 10)
+      } else {
+        this.level = Math.floor(this.lines / 10) + 1
+      }
 
       // Tower Climb: track floor progress (also when merged into Ultimate)
       if (this.mode === GAME_MODE.ULTIMATE && cleared > 0) {
