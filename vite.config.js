@@ -8,6 +8,11 @@ const pkg = JSON.parse(readFileSync('./package.json', 'utf-8'))
 export default defineConfig({
   base: '/tetra-overflow/',
   plugins: [react()],
+  server: {
+    hmr: {
+      path: '/@vite',
+    },
+  },
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
   },

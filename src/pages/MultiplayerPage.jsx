@@ -3,11 +3,14 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { QRCodeSVG as QRCode } from 'qrcode.react'
 import { useAuth } from '../contexts/AuthContext'
-import { createLobby, joinLobby, updateLobby, updateLobbyPlayer, setLobbyStatus, setLobbyBestOf, subscribeLobby, archiveLobby } from '../firebase/db'
+import { createLobby, joinLobby, updateLobby, updateLobbyPlayer, setLobbyStatus, setLobbyBestOf, subscribeLobby, archiveLobby, getFriends, getFriendRequests, acceptFriendRequest, declineFriendRequest, sendLobbyInvite, getLobbyInvites, dismissLobbyInvite, getPublicProfiles } from '../firebase/db'
 import { TetrisEngine, GAME_MODE, ZONE_MIN_METER } from '../logic/gameEngine'
+import { setSfxVolume, playMoveSFX, playRotateSFX, playHoldSFX, playHardDropSFX, playLockSFX, playLineClearSFX, playTetrisSFX } from '../audio/gameSfx'
 import { PIECES } from '../logic/tetrominoes'
 import { MusicManager } from '../audio/musicManager'
+import { mpPlayLobbyMusic, mpStopMusic, mpMuteMusic, mpSetMusicVolume } from '../audio/multiplayerMusic'
 import GameCanvas from '../components/GameCanvas'
+import { BOARD_HEIGHT } from '../logic/tetrominoes'
 import TouchControls from '../components/TouchControls'
 
 const KEY_BINDINGS = {
@@ -69,16 +72,16 @@ const _mpNoise = (lpFreq, gain, dur, offset = 0) => {
 }
 
 let _lastMpMoveBeep = 0
-const mpPlayMove     = () => { const n = performance.now(); if (n - _lastMpMoveBeep < 75) return; _lastMpMoveBeep = n; _mpNote(380, 0.022, 0.026, 'triangle') }
-const mpPlayRotate   = () => { _mpNote(1100, 0.032, 0.22, 'triangle'); _mpNote(750, 0.020, 0.16, 'sine', 0.010) }
-const mpPlayHold     = () =>   _mpNote(660, 0.018, 0.15, 'triangle')
-const mpPlayHardDrop = () => { _mpNote(75, 0.18, 0.44, 'sine'); _mpNote(410, 0.06, 0.14, 'triangle', 0.010); _mpNoise(900, 0.18, 0.06, 0.012) }
-const mpPlayClear    = (lines = 1) => {
+const _mpPlayMove     = () => { const n = performance.now(); if (n - _lastMpMoveBeep < 75) return; _lastMpMoveBeep = n; _mpNote(380, 0.022, 0.026, 'triangle') }
+const _mpPlayRotate   = () => { _mpNote(1100, 0.032, 0.22, 'triangle'); _mpNote(750, 0.020, 0.16, 'sine', 0.010) }
+const _mpPlayHold     = () =>   _mpNote(660, 0.018, 0.15, 'triangle')
+const _mpPlayHardDrop = () => { _mpNote(75, 0.18, 0.44, 'sine'); _mpNote(410, 0.06, 0.14, 'triangle', 0.010); _mpNoise(900, 0.18, 0.06, 0.012) }
+const _mpPlayClear    = (lines = 1) => {
   _mpNoise(9000, 0.18, 0.11)
   const freqs = lines >= 4 ? [392, 523, 659, 784, 1047] : [392, 523, 659, 784]
   freqs.forEach((f, i) => _mpNote(f, 0.095, 0.18, 'sine', i * 0.062))
 }
-const mpPlayLock = () => {
+const _mpPlayLock = () => {
   const ctx = getMpAudio(); if (!ctx) return
   const osc = ctx.createOscillator(), g = ctx.createGain()
   osc.connect(g); g.connect(ctx.destination); osc.type = 'sine'
@@ -90,7 +93,7 @@ const mpPlayLock = () => {
 const mpPlayGarbageIn = () => { _mpNote(180, 0.22, 0.18, 'sawtooth'); _mpNoise(400, 0.15, 0.09, 0.02) }
 
 // ─── Opponent mini-board ───────────────────────────────────────────────────────
-function OpponentBoard({ snapshot, displayName, score, wins = 0, isTarget = false, onClick, compact = false }) {
+function OpponentBoard({ snapshot, displayName, badge, score, wins = 0, isTarget = false, onClick, compact = false }) {
   const canvasRef = useRef(null)
 
   useEffect(() => {
@@ -124,7 +127,7 @@ function OpponentBoard({ snapshot, displayName, score, wins = 0, isTarget = fals
           ctx.fillRect(c * cw + 0.5, vr * ch + 0.5, cw - 1, ch - 1)
         }
       }
-    } else if (snapshot?.board) {
+            ctx.fillStyle = '#06060f'
       // Back-compat for old nested-array snapshots
       for (let r = 2; r < rows + 2; r++) {
         for (let c = 0; c < cols; c++) {
@@ -168,7 +171,10 @@ function OpponentBoard({ snapshot, displayName, score, wins = 0, isTarget = fals
     <div onClick={onClick}
       style={{ background: 'rgba(5,5,20,0.9)', border: '1px solid rgba(255,255,255,0.1)', cursor: onClick ? 'pointer' : 'default', borderRadius: 5, padding: '3px 3px 2px', width: '100%' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-        <div style={{ fontSize: '0.48rem', color: '#777', letterSpacing: '0.07em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 54 }}>{displayName}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 3, minWidth: 0 }}>
+          <div style={{ fontSize: '0.48rem', color: '#777', letterSpacing: '0.07em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 54 }}>{displayName}</div>
+          {badge && <span style={{ fontSize: '0.42rem', color: '#c084fc', border: '1px solid #c084fc55', borderRadius: 3, padding: '0 3px', letterSpacing: '0.08em' }}>{String(badge).replace('badge_', '').toUpperCase()}</span>}
+        </div>
         <div style={{ fontSize: '0.52rem', color: '#f97316', fontWeight: 700 }}>×{wins}</div>
       </div>
       <div style={{ position: 'relative', width: CW, height: CH, margin: '0 auto' }}>
@@ -279,7 +285,7 @@ function JoinScreen({ onJoin }) {
 }
 
 // ─── Waiting room ─────────────────────────────────────────────────────────────
-function WaitingRoom({ lobby, isHost, onStart, onLeave, onBestOfChange, selfUid, lobbyCode }) {
+function WaitingRoom({ lobby, isHost, onStart, onLeave, onBestOfChange, selfUid, lobbyCode, selfDisplayName, playerProfiles = {} }) {
   const joinUrl = new URL(`${import.meta.env.BASE_URL}multiplayer?join=${lobby.code}`, window.location.origin).href
   const bestOf  = lobby.bestOf ?? 3
   const me = lobby.players.find(p => p.uid === selfUid)
@@ -287,6 +293,26 @@ function WaitingRoom({ lobby, isHost, onStart, onLeave, onBestOfChange, selfUid,
   const myNerf = me?.nerf ?? 0
   const setBuff = (v) => updateLobbyPlayer(lobbyCode, selfUid, { buff: v, nerf: v > 0 ? 0 : (me?.nerf ?? 0) })
   const setNerf = (v) => updateLobbyPlayer(lobbyCode, selfUid, { nerf: v, buff: v > 0 ? 0 : (me?.buff ?? 0) })
+
+  const [friends, setFriends] = useState([])
+  const [inviteState, setInviteState] = useState({}) // uid → 'sending'|'sent'|'error'
+  const [showFriends, setShowFriends] = useState(false)
+
+  useEffect(() => {
+    if (!selfUid) return
+    getFriends(selfUid).then(setFriends).catch(() => {})
+  }, [selfUid])
+
+  const handleInvite = async (friend) => {
+    if (inviteState[friend.uid]) return
+    setInviteState(prev => ({ ...prev, [friend.uid]: 'sending' }))
+    try {
+      await sendLobbyInvite(selfUid, friend.uid, lobby.code, selfDisplayName)
+      setInviteState(prev => ({ ...prev, [friend.uid]: 'sent' }))
+    } catch {
+      setInviteState(prev => ({ ...prev, [friend.uid]: 'error' }))
+    }
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.4rem', padding: '2rem', maxWidth: 360, margin: '0 auto' }}>
@@ -367,7 +393,12 @@ function WaitingRoom({ lobby, isHost, onStart, onLeave, onBestOfChange, selfUid,
             <div style={{ width: 28, height: 28, borderRadius: '50%', background: i === 0 ? 'linear-gradient(135deg,#f97316,#ef4444)' : 'linear-gradient(135deg,#00d4ff,#a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 900, flexShrink: 0 }}>
               {p.displayName[0].toUpperCase()}
             </div>
-            <span style={{ flex: 1, fontSize: '0.82rem', color: '#ddd', letterSpacing: '0.06em' }}>{p.displayName}</span>
+            <span style={{ flex: 1, fontSize: '0.82rem', color: '#ddd', letterSpacing: '0.06em', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.displayName}</span>
+              {playerProfiles[p.uid]?.selectedBadge && (
+                <span style={{ fontSize: '0.55rem', color: '#c084fc', border: '1px solid #c084fc55', borderRadius: 3, padding: '1px 4px', letterSpacing: '0.10em' }}>{String(playerProfiles[p.uid]?.selectedBadge).replace('badge_', '').toUpperCase()}</span>
+              )}
+            </span>
             {tag ? (
               <span style={{ fontSize: '0.6rem', color: tag.color, background: tag.bg, border: `1px solid ${tag.border}`, padding: '2px 6px', borderRadius: 6, marginRight: 6, letterSpacing: '0.08em' }}>{tag.label}</span>
             ) : (
@@ -378,10 +409,54 @@ function WaitingRoom({ lobby, isHost, onStart, onLeave, onBestOfChange, selfUid,
         )})}
         {lobby.players.length < 2 && (
           <div style={{ textAlign: 'center', fontSize: '0.65rem', color: '#555', letterSpacing: '0.12em', padding: '8px', border: '1px dashed rgba(255,255,255,0.1)', borderRadius: 8 }}>
-            Waiting for players… ({lobby.players.length}/4)
+            Waiting for players… ({lobby.players.length}/8)
           </div>
         )}
       </div>
+
+      {/* Invite Friends */}
+      {friends.length > 0 && (
+        <div style={{ width: '100%' }}>
+          <button
+            onClick={() => setShowFriends(v => !v)}
+            style={{ width: '100%', background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.25)', color: '#c084fc', borderRadius: 8, padding: '8px 14px', fontSize: '0.65rem', letterSpacing: '0.12em', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+          >
+            <span>👥 INVITE FRIENDS</span>
+            <span style={{ color: '#a855f7' }}>{showFriends ? '▲' : '▼'}</span>
+          </button>
+          <AnimatePresence>
+            {showFriends && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                style={{ overflow: 'hidden' }}
+              >
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingTop: 8 }}>
+                  {friends.map(f => {
+                    const st = inviteState[f.uid]
+                    const alreadyIn = lobby.players.some(p => p.uid === f.uid)
+                    return (
+                      <div key={f.uid} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 7, padding: '7px 10px' }}>
+                        <div style={{ flex: 1, fontSize: '0.75rem', color: '#ddd', letterSpacing: '0.06em' }}>{f.displayName || f.uid?.slice(0, 8)}</div>
+                        {alreadyIn ? (
+                          <span style={{ fontSize: '0.6rem', color: '#22c55e', letterSpacing: '0.08em' }}>In lobby</span>
+                        ) : (
+                          <button
+                            onClick={() => handleInvite(f)}
+                            disabled={!!st}
+                            style={{ background: st === 'sent' ? 'rgba(34,197,94,0.1)' : 'rgba(168,85,247,0.15)', border: `1px solid ${st === 'sent' ? '#22c55e55' : 'rgba(168,85,247,0.4)'}`, color: st === 'sent' ? '#22c55e' : st === 'error' ? '#f87171' : '#c084fc', borderRadius: 6, padding: '3px 10px', fontSize: '0.62rem', cursor: st ? 'default' : 'pointer', fontFamily: 'inherit', letterSpacing: '0.08em' }}
+                          >
+                            {st === 'sending' ? '…' : st === 'sent' ? '✓ Sent' : st === 'error' ? '✗' : 'Invite'}
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: 10, width: '100%', justifyContent: 'center' }}>
         {isHost && lobby.players.length >= 2 && (
@@ -415,9 +490,18 @@ export default function MultiplayerPage() {
   const [isHost,      setIsHost]      = useState(false)
   const [myState,     setMyState]     = useState(null)
   // No pause in multiplayer; keep state for overlay suppression
-  const [paused,      setPaused]      = useState(false)
+  const [_paused, setPaused] = useState(false)
   const [muted,       setMuted]       = useState(false)
   const [roundResult, setRoundResult] = useState(null)
+  const [showFriendsPanel, setShowFriendsPanel] = useState(false)
+  const [friends, setFriends] = useState([])
+  const [friendRequests, setFriendRequests] = useState([])
+  const [frLoading, setFrLoading] = useState(false)
+  const [frAction, setFrAction] = useState({}) // id -> 'accepting'|'declining'
+  const [playerProfiles, setPlayerProfiles] = useState({}) // uid -> { selectedBadge }
+  const [lobbyInvites, setLobbyInvites] = useState([])
+  const [dismissedInvites, setDismissedInvites] = useState(new Set())
+  const [focus, setFocus] = useState(() => { try { return localStorage.getItem('vs-focus-mode') === '1' } catch { return false } })
 
   const engine = useMemo(() => new TetrisEngine(), [])
 
@@ -456,6 +540,12 @@ export default function MultiplayerPage() {
   // Keep refs in sync with state
   useEffect(() => { screenRef.current = screen }, [screen])
   useEffect(() => { lobbyRef.current  = lobby  }, [lobby])
+
+  // Load lobby invites once when user is available
+  useEffect(() => {
+    if (!user) return
+    getLobbyInvites(user.uid).then(setLobbyInvites).catch(() => {})
+  }, [user])
   useEffect(() => {
     const onResize = () => setGridCols(window.innerWidth > 1024 ? 4 : window.innerWidth > 768 ? 3 : 2)
     window.addEventListener('resize', onResize)
@@ -463,6 +553,13 @@ export default function MultiplayerPage() {
   }, [])
   const toggleCompact = useCallback(() => {
     setCompactPreviews(v => { const n = !v; localStorage.setItem('vs-compact-previews', JSON.stringify(n)); return n })
+  }, [])
+  // Persist focus mode + F hotkey
+  useEffect(() => { try { localStorage.setItem('vs-focus-mode', focus ? '1' : '0') } catch {} }, [focus])
+  useEffect(() => {
+    const onKey = (e) => { if (e.code === 'KeyF') setFocus(f => !f) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
   }, [])
   // Auto-disable compact when there are 4 or fewer opponents
   useEffect(() => {
@@ -484,14 +581,61 @@ export default function MultiplayerPage() {
     try {
       const cfg = JSON.parse(localStorage.getItem('tetris-config') ?? '{}')
       _mpSfxVol = cfg.sfxEnabled !== false ? (cfg.sfxVolume ?? 2.0) : 0
+      setSfxVolume(_mpSfxVol)
+      if (cfg.musicVolume !== undefined) mpSetMusicVolume(cfg.musicVolume)
     } catch {}
     return () => {
       clearTimeout(roundTimerRef.current)
       _mpMusicMgr?.stop()
+      mpStopMusic()
     }
   }, [])
 
+  // ── Lobby / match music ───────────────────────────────────────────────────────
+  useEffect(() => {
+    if (screen === SCREEN.LOBBY) {
+      mpPlayLobbyMusic()
+    } else if (screen === SCREEN.GAME) {
+      mpStopMusic()          // match music handled by _mpMusicMgr below
+    } else {
+      mpStopMusic()          // PICK / CREATE / JOIN / ROUND_END / RESULT
+    }
+  }, [screen])
+
+  // Load friends + pending requests once for panel
+  useEffect(() => {
+    if (!user) return
+    setFrLoading(true)
+    Promise.all([getFriends(user.uid), getFriendRequests(user.uid)])
+      .then(([fs, reqs]) => { setFriends(fs); setFriendRequests(reqs) })
+      .catch(() => {})
+      .finally(() => setFrLoading(false))
+  }, [user])
+
+  const handleAcceptReq = useCallback(async (req) => {
+    if (!user) return
+    setFrAction(p => ({ ...p, [req.id]: 'accepting' }))
+    try {
+      await acceptFriendRequest(user.uid, req.id, req, displayName)
+      setFriendRequests(list => list.filter(r => r.id !== req.id))
+      setFriends(list => [...list, { uid: req.fromUid, displayName: req.fromName }])
+    } finally { setFrAction(p => ({ ...p, [req.id]: undefined })) }
+  }, [user, displayName])
+
+  const handleDeclineReq = useCallback(async (req) => {
+    if (!user) return
+    setFrAction(p => ({ ...p, [req.id]: 'declining' }))
+    try { await declineFriendRequest(user.uid, req.id); setFriendRequests(list => list.filter(r => r.id !== req.id)) }
+    finally { setFrAction(p => ({ ...p, [req.id]: undefined })) }
+  }, [user])
+
   // ── Apply DAS / ARR from user config ──────────────────────────────────────────
+    // Load public profiles for current lobby players to show badges
+    useEffect(() => {
+      const uids = (lobby?.players || []).map(p => p.uid).filter(Boolean)
+      if (!uids.length) { setPlayerProfiles({}); return }
+      getPublicProfiles(uids).then(setPlayerProfiles).catch(() => {})
+    }, [lobby])
   useEffect(() => {
     try {
       const cfg = JSON.parse(localStorage.getItem('tetris-config') ?? '{}')
@@ -512,13 +656,17 @@ export default function MultiplayerPage() {
     setMuted(mute)
     if (mute) {
       _mpMusicMgr?.setVolume(0)
+      mpMuteMusic(true)
       _mpSfxVol = 0
+      setSfxVolume(0)
     } else {
       try {
         const cfg = JSON.parse(localStorage.getItem('tetris-config') ?? '{}')
         _mpMusicMgr?.setVolume(cfg.musicVolume ?? 1.0)
+        mpMuteMusic(false)
         _mpSfxVol = cfg.sfxVolume ?? 2.0
-      } catch { _mpMusicMgr?.setVolume(1.0); _mpSfxVol = 2.0 }
+        setSfxVolume(_mpSfxVol)
+      } catch { _mpMusicMgr?.setVolume(1.0); mpMuteMusic(false); _mpSfxVol = 2.0 }
     }
   }, [])
   const toggleMute = useCallback(() => applyMute(!mutedRef.current), [applyMute])
@@ -662,7 +810,7 @@ export default function MultiplayerPage() {
 
     unsubRef.current = unsub
     return () => unsub()
-  }, [lobbyCode, isHost, user, engine, pickTarget]) // eslint-disable-line
+  }, [lobbyCode, isHost, user, engine, pickTarget])  
 
   // ── Game rAF loop ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -683,14 +831,15 @@ export default function MultiplayerPage() {
 
       // SFX triggers (edge detection against prev frame)
       if (prev) {
-        if (ns.hardDropped)               mpPlayHardDrop()
-        else if (ns.pieceLocked)          mpPlayLock()
-        if (ns.lastClear?.lines > 0)      mpPlayClear(ns.lastClear.lines)
-        if (ns.pieceHeld)                 mpPlayHold()
+        const theme = 'classic'
+        if (ns.hardDropped)               playHardDropSFX(theme)
+        else if (ns.pieceLocked)          playLockSFX(theme)
+        if (ns.lastClear?.lines > 0)      { (ns.lastClear.lines >= 4 ? playTetrisSFX : playLineClearSFX)(theme) }
+        if (ns.pieceHeld)                 playHoldSFX(theme)
         // Move / rotate: only fire when the SAME piece is moving (not on spawn)
         if (prev.current?.type === ns.current?.type) {
-          if (ns.current?.x !== prev.current?.x)          mpPlayMove()
-          else if (ns.current?.rotation !== prev.current?.rotation) mpPlayRotate()
+          if (ns.current?.x !== prev.current?.x)          playMoveSFX(theme)
+          else if (ns.current?.rotation !== prev.current?.rotation) playRotateSFX(theme)
         }
       }
       prevStateRef.current = ns
@@ -752,7 +901,6 @@ export default function MultiplayerPage() {
       if (b.held) heldRef.current[b.held] = true
       if (b.action) {
         if (b.action === 'mute') toggleMute()
-        else if (b.action === 'mute') toggleMute()
         else actionRef.current[b.action] = true
       }
     }
@@ -838,6 +986,22 @@ export default function MultiplayerPage() {
         </button>
         <h1 style={{ margin: 0, fontSize: '1rem', fontWeight: 900, letterSpacing: '0.2em', color: '#f97316' }}>VERSUS</h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 60, justifyContent: 'flex-end' }}>
+          {screen === SCREEN.GAME && !focus && (
+            <button
+              onClick={() => triggerAction('activateZone')}
+              disabled={myState?.zoneMeter < ZONE_MIN_METER || myState?.zoneActive}
+              title={myState?.zoneActive ? 'Zone Active' : (myState?.zoneMeter >= ZONE_MIN_METER ? 'Activate Zone' : 'Zone charging')}
+              style={{
+                background: myState?.zoneActive ? 'rgba(0,229,255,0.18)' : (myState?.zoneMeter ?? 0) >= ZONE_MIN_METER ? 'rgba(0,229,255,0.12)' : 'rgba(255,255,255,0.04)',
+                border: `1px solid ${myState?.zoneActive ? '#00e5ff' : (myState?.zoneMeter ?? 0) >= ZONE_MIN_METER ? '#22d3ee' : 'rgba(255,255,255,0.1)'}`,
+                color: myState?.zoneActive ? '#00e5ff' : (myState?.zoneMeter ?? 0) >= ZONE_MIN_METER ? '#80eaff' : '#555',
+                cursor: (myState?.zoneMeter ?? 0) >= ZONE_MIN_METER && !myState?.zoneActive ? 'pointer' : 'default',
+                fontSize: '0.62rem', padding: '2px 8px', borderRadius: 6, fontFamily: 'inherit'
+              }}
+            >
+              ⚡ {myState?.zoneActive ? `${Math.ceil((myState?.zoneTimer || 0)/1000)}s` : 'ZONE'}
+            </button>
+          )}
           {screen === SCREEN.GAME && (
             <button onClick={toggleMute} title={muted ? 'Unmute (M)' : 'Mute (M)'}
               style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)', color: muted ? '#444' : '#999', cursor: 'pointer', fontSize: '0.7rem', padding: '4px 8px', borderRadius: 4, fontFamily: 'inherit' }}>
@@ -849,6 +1013,21 @@ export default function MultiplayerPage() {
 
       {/* Content */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
+        {/* Friends quick access on PICK */}
+        {screen === SCREEN.PICK && (
+          <div style={{ position: 'absolute', top: 10, right: 12, zIndex: 5 }}>
+            <button
+              onClick={() => setShowFriendsPanel(true)}
+              style={{ position: 'relative', background: 'none', border: '1px solid rgba(255,255,255,0.12)', color: '#888', borderRadius: 6, padding: '3px 8px', cursor: 'pointer', fontSize: '0.62rem', fontFamily: 'inherit', letterSpacing: '0.1em' }}
+              title="Friends"
+            >
+              👥 Friends
+              {friendRequests.length > 0 && (
+                <span style={{ position: 'absolute', top: -6, right: -6, background: '#ef4444', color: '#000', borderRadius: 10, padding: '0 5px', fontSize: '0.55rem', border: '1px solid #000' }}>{Math.min(99, friendRequests.length)}</span>
+              )}
+            </button>
+          </div>
+        )}
         <AnimatePresence mode="wait">
 
           {/* ── Pick ─────────────────────────────────────────────────────── */}
@@ -857,7 +1036,7 @@ export default function MultiplayerPage() {
               style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem', padding: '2rem' }}>
               <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
                 <div style={{ fontSize: '1.2rem', fontWeight: 900, letterSpacing: '0.12em' }}>ONLINE VERSUS</div>
-                <div style={{ fontSize: '0.65rem', color: '#555', marginTop: 6, letterSpacing: '0.1em' }}>Up to 4 players — send garbage, survive</div>
+                <div style={{ fontSize: '0.65rem', color: '#555', marginTop: 6, letterSpacing: '0.1em' }}>Up to 8 players — send garbage, survive</div>
               </div>
               {[
                 { label: 'CREATE LOBBY', sub: 'Generate a room code',    color: '#f97316', onClick: () => setScreen(SCREEN.CREATE) },
@@ -869,10 +1048,41 @@ export default function MultiplayerPage() {
                   <div style={{ fontSize: '0.62rem', color: '#555', marginTop: 4, letterSpacing: '0.1em' }}>{btn.sub}</div>
                 </motion.button>
               ))}
+              {/* Lobby invites from friends */}
+              {lobbyInvites.filter(inv => !dismissedInvites.has(inv.id)).length > 0 && (
+                <div style={{ width: '100%', maxWidth: 300 }}>
+                  <div style={{ fontSize: '0.52rem', letterSpacing: '0.2em', color: '#a855f7', marginBottom: 6, textTransform: 'uppercase' }}>Lobby Invites</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {lobbyInvites.filter(inv => !dismissedInvites.has(inv.id)).map(inv => (
+                      <div key={inv.id} style={{ background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.3)', borderRadius: 10, padding: '9px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: '0.7rem', color: '#ddd', letterSpacing: '0.06em' }}>{inv.fromName || 'A friend'}</div>
+                          <div style={{ fontSize: '0.55rem', color: '#a855f7', letterSpacing: '0.1em', marginTop: 1 }}>Code: {inv.lobbyCode}</div>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            await dismissLobbyInvite(user.uid, inv.id).catch(() => {})
+                            setDismissedInvites(prev => new Set([...prev, inv.id]))
+                            // Pre-fill join with code; navigate to join screen
+                            setScreen(SCREEN.JOIN)
+                          }}
+                          style={{ background: 'rgba(168,85,247,0.2)', border: '1px solid rgba(168,85,247,0.5)', color: '#c084fc', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.62rem', fontFamily: 'inherit', letterSpacing: '0.08em' }}
+                        >Join</button>
+                        <button
+                          onClick={async () => {
+                            await dismissLobbyInvite(user.uid, inv.id).catch(() => {})
+                            setDismissedInvites(prev => new Set([...prev, inv.id]))
+                          }}
+                          style={{ background: 'none', border: '1px solid rgba(255,255,255,0.1)', color: '#555', borderRadius: 6, padding: '4px 7px', cursor: 'pointer', fontSize: '0.62rem', fontFamily: 'inherit' }}
+                        >✕</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </motion.div>
           )}
 
-          {/* ── Create ───────────────────────────────────────────────────── */}
           {screen === SCREEN.CREATE && (
             <motion.div key="create" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
               style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -891,7 +1101,7 @@ export default function MultiplayerPage() {
           {/* ── Lobby ────────────────────────────────────────────────────── */}
           {screen === SCREEN.LOBBY && lobby && (
             <motion.div key="lobby" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ flex: 1, overflowY: 'auto' }}>
-              <WaitingRoom lobby={lobby} lobbyCode={lobbyCode} selfUid={user?.uid} isHost={isHost} onStart={handleStart} onLeave={handleLeave} onBestOfChange={handleBestOfChange} />
+              <WaitingRoom lobby={lobby} lobbyCode={lobbyCode} selfUid={user?.uid} selfDisplayName={displayName} isHost={isHost} onStart={handleStart} onLeave={handleLeave} onBestOfChange={handleBestOfChange} playerProfiles={playerProfiles} />
             </motion.div>
           )}
 
@@ -912,10 +1122,16 @@ export default function MultiplayerPage() {
                   </span>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-                  <span style={{ color: '#00d4ff', fontWeight: 700, fontSize: '0.72rem' }}>{myState.score.toLocaleString()}</span>
+                  <span style={{ color: '#00d4ff', fontWeight: 700, fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {myState.score.toLocaleString()}
+                    {userProfile?.selectedBadge && (
+                      <span style={{ fontSize: '0.55rem', color: '#c084fc', border: '1px solid #c084fc55', borderRadius: 3, padding: '0 4px', letterSpacing: '0.10em' }}>{String(userProfile.selectedBadge).replace('badge_', '').toUpperCase()}</span>
+                    )}
+                  </span>
                   <span style={{ fontSize: '0.44rem', color: '#555', letterSpacing: '0.08em' }}>LVL {myState.level}</span>
                 </div>
                 <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                  {/* Removed top focus toggle per request */}
                   <button onClick={toggleMute} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.18)', color: muted ? '#444' : '#888', cursor: 'pointer', fontSize: '0.56rem', padding: '2px 6px', borderRadius: 4, fontFamily: 'inherit' }}>
                     {muted ? '🔇' : '🔊'}
                   </button>
@@ -926,6 +1142,7 @@ export default function MultiplayerPage() {
               <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'stretch' }}>
 
                 {/* Left column: opponent boards (grid) */}
+                {!focus && (
                 <div style={{ width: leftWidth, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'stretch', padding: '8px 6px', gap: 6, background: 'rgba(0,0,0,0.5)', overflowY: 'auto' }}>
 
                   {opponents.length === 0 && (
@@ -937,6 +1154,7 @@ export default function MultiplayerPage() {
                         key={opp.uid}
                         snapshot={opp.boardSnapshot}
                         displayName={opp.displayName}
+                        badge={playerProfiles[opp.uid]?.selectedBadge || null}
                         score={opp.score}
                         wins={roundWins[opp.uid] ?? 0}
                         isTarget={opp.uid === (targetUid || currentTargetRef.current)}
@@ -963,50 +1181,69 @@ export default function MultiplayerPage() {
                     </div>
                   )}
                 </div>
+                )}
 
                 {/* Canvas */}
                 <div className="mobile-canvas-wrap" style={{ background: 'transparent', flex: 1, minWidth: 0 }}>
-                  <div style={{ position: 'relative', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ position: 'relative', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>
                     <GameCanvas
                       state={myState}
                       onTap={() => triggerAction('rotateCW')}
-                      onTwoFingerTap={() => {}}
+                      onTwoFingerTap={() => triggerAction('activateZone')}
                       onDragBegin={handleDragBegin}
                       onDragEnd={handleDragEnd}
                       onHardDrop={handleHardDrop}
                     />
+                    {/* Small right-side focus toggle for mobile */}
+                    <button
+                      onClick={() => setFocus(f => !f)}
+                      className="ui-toggle-tab"
+                      title={focus ? 'Exit Focus' : 'Enter Focus'}
+                      aria-label={focus ? 'Exit Focus' : 'Enter Focus'}
+                      style={{ right: 0 }}
+                    >
+                      {focus ? '▲' : '▼'}
+                    </button>
+                    {focus && (
+                      <>
+                        {(() => {
+                          const zoneReady = (myState?.zoneMeter ?? 0) >= ZONE_MIN_METER && !myState?.zoneActive
+                          const zoneFillPct = Math.max(0, Math.min(100, myState?.zoneActive ? 100 : (myState?.zoneMeter || 0)))
+                          return (
+                            <div className="fullscreen-mini-hud" style={{ right: 0 }}>
+                              <div className="fmh-hold">
+                                <div className="fmh-label">Hold</div>
+                                <PieceMini type={myState?.hold} size={8} />
+                              </div>
+                              <div className="fmh-zone-wrap">
+                                <div className={`fmh-zone-bar${myState?.zoneActive ? ' zone-active' : ''}${zoneReady && !myState?.zoneActive ? ' zone-ready' : ''}`} style={{ height: `${zoneFillPct}%` }} />
+                              </div>
+                              <div className="fmh-next">
+                                <div className="fmh-label">Next</div>
+                                {(myState?.queue ?? []).slice(0, 3).map((t, i) => (
+                                  <PieceMini key={i} type={t} size={7} />
+                                ))}
+                              </div>
+                            </div>
+                          )
+                        })()}
+                        {(() => {
+                          const garFrac = Math.min(1, Math.max(0, (myState?.pendingGarbage || 0) / BOARD_HEIGHT))
+                          const hPct = Math.round(garFrac * 100)
+                          return (
+                            <>
+                              <div style={{ position: 'absolute', left: 0, bottom: 0, width: 6, height: `${hPct}%`, background: '#f87171', opacity: 0.85, boxShadow: '0 0 10px #f87171aa' }} />
+                              <div style={{ position: 'absolute', right: 0, bottom: 0, width: 6, height: `${hPct}%`, background: '#f87171', opacity: 0.85, boxShadow: '0 0 10px #f87171aa' }} />
+                            </>
+                          )
+                        })()}
+                      </>
+                    )}
                     {/* Pause overlay removed in Versus */}
                   </div>
                 </div>
 
-                {/* Right column: Hold + Next + Zone meter */}
-                <div style={{ width: 72, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '10px 6px', gap: 8, background: 'rgba(0,0,0,0.5)' }}>
-                  <div style={{ fontSize: '0.45rem', color: '#555', letterSpacing: '0.12em' }}>HOLD</div>
-                  <PieceMini type={myState.hold} size={10} />
-                  <div style={{ flex: 1 }} />
-                  <div style={{ fontSize: '0.45rem', color: '#555', letterSpacing: '0.12em' }}>NEXT</div>
-                  {(myState.queue ?? []).slice(0, 3).map((type, i) => (
-                    <PieceMini key={i} type={type} size={i === 0 ? 10 : 8} />
-                  ))}
-                  {/* Zone controls moved here */}
-                  <button
-                    onClick={() => triggerAction('activateZone')}
-                    disabled={myState.zoneMeter < ZONE_MIN_METER || myState.zoneActive}
-                    style={{
-                      background: myState.zoneActive ? 'rgba(0,229,255,0.18)' : myState.zoneMeter >= ZONE_MIN_METER ? 'rgba(0,180,255,0.22)' : 'rgba(255,255,255,0.04)',
-                      border: `1px solid ${myState.zoneActive ? '#00e5ff' : myState.zoneMeter >= ZONE_MIN_METER ? '#00aaff' : 'rgba(255,255,255,0.1)'}`,
-                      color: myState.zoneActive ? '#00e5ff' : myState.zoneMeter >= ZONE_MIN_METER ? '#80d4ff' : '#444',
-                      borderRadius: 5, padding: '4px 6px',
-                      cursor: myState.zoneMeter >= ZONE_MIN_METER && !myState.zoneActive ? 'pointer' : 'default',
-                      fontSize: '0.52rem', letterSpacing: '0.08em', fontFamily: 'inherit', width: '100%', transition: 'all 0.2s',
-                    }}
-                  >
-                    {myState.zoneActive ? '◈ ON' : 'ZONE'}
-                  </button>
-                  <div style={{ width: 10, height: 64, background: 'rgba(255,255,255,0.06)', borderRadius: 4, overflow: 'hidden', position: 'relative' }}>
-                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: `${myState.zoneMeter}%`, background: myState.zoneActive ? '#00e5ff' : `hsl(${200 + myState.zoneMeter * 0.4}, 90%, 60%)`, transition: 'height 0.15s ease' }} />
-                  </div>
-                </div>
+                {/* Right column removed per request to maximize board area */}
               </div>
 
               {showOnScreenControls && <TouchControls onPress={handlePress} onRelease={handleRelease} />}
@@ -1086,6 +1323,64 @@ export default function MultiplayerPage() {
 
         </AnimatePresence>
       </div>
+      {/* Friends Panel Modal */}
+      <AnimatePresence>
+        {showFriendsPanel && (
+          <motion.div key="friends-panel" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 400 }}
+            onClick={() => setShowFriendsPanel(false)}
+          >
+            <motion.div initial={{ y: 12, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 8, opacity: 0 }} onClick={(e) => e.stopPropagation()}
+              style={{ width: 'min(420px, 92vw)', background: '#0f1120', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12, padding: '1rem', fontFamily: '"Courier New", monospace' }}>
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+                <div style={{ fontSize: '0.7rem', letterSpacing: '0.2em', color: '#a855f7', textTransform: 'uppercase' }}>Friends</div>
+                <button onClick={() => setShowFriendsPanel(false)} style={{ marginLeft: 'auto', background: 'none', border: '1px solid rgba(255,255,255,0.15)', color: '#888', borderRadius: 6, padding: '4px 9px', cursor: 'pointer', fontSize: '0.65rem', fontFamily: 'inherit' }}>✕</button>
+              </div>
+              {frLoading ? (
+                <div style={{ padding: '1rem', color: '#666', fontSize: '0.7rem' }}>Loading…</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {friendRequests.length > 0 && (
+                    <div>
+                      <div style={{ fontSize: '0.6rem', color: '#eab308', letterSpacing: '0.18em', marginBottom: 6 }}>Pending Requests</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {friendRequests.map(req => (
+                          <div key={req.id} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '8px 10px' }}>
+                            <div style={{ flex: 1, color: '#ddd', fontSize: '0.78rem' }}>{req.fromName || req.fromUid?.slice(0,8)}</div>
+                            <button onClick={() => handleAcceptReq(req)} disabled={frAction[req.id] === 'accepting'} style={{ background: 'rgba(34,197,94,0.12)', border: '1px solid #22c55e55', color: '#22c55e', borderRadius: 6, padding: '3px 9px', fontSize: '0.62rem', cursor: 'pointer' }}>{frAction[req.id] === 'accepting' ? '…' : 'Accept'}</button>
+                            <button onClick={() => handleDeclineReq(req)} disabled={frAction[req.id] === 'declining'} style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid #f8717155', color: '#f87171', borderRadius: 6, padding: '3px 9px', fontSize: '0.62rem', cursor: 'pointer' }}>{frAction[req.id] === 'declining' ? '…' : 'Decline'}</button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div>
+                    <div style={{ fontSize: '0.6rem', color: '#555', letterSpacing: '0.18em', marginBottom: 6 }}>Friends List</div>
+                    <div style={{ border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, overflow: 'hidden' }}>
+                      {friends.length === 0 ? (
+                        <div style={{ padding: '0.9rem', textAlign: 'center', color: '#666', fontSize: '0.7rem' }}>No friends yet</div>
+                      ) : friends.map((f, i) => (
+                        <div key={f.uid || i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderBottom: i < friends.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
+                          <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg,#00d4ff44,#a855f744)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700 }}>
+                            {(f.displayName || '?')[0].toUpperCase()}
+                          </div>
+                          <div style={{ flex: 1, color: '#ddd', fontSize: '0.78rem' }}>{f.displayName || f.uid?.slice(0,8)}</div>
+                          {screen === SCREEN.LOBBY ? (
+                            <button
+                              onClick={() => sendLobbyInvite(user?.uid, f.uid, lobbyCode, displayName)}
+                              style={{ background: 'rgba(168,85,247,0.15)', border: '1px solid rgba(168,85,247,0.4)', color: '#c084fc', borderRadius: 6, padding: '3px 9px', fontSize: '0.62rem', cursor: 'pointer' }}
+                            >Invite</button>
+                          ) : <span style={{ fontSize: '0.6rem', color: '#555' }}>—</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

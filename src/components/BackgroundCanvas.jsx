@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import catImageUrl from '../meme/oiia_cat_assets_by_awesomeconsoles7_djwlgwe-fullview.png'
 
 // ── Base fill colour per bgType ───────────────────────────────────────────────
 const BG_BASE = {
@@ -9,7 +10,7 @@ const BG_BASE = {
   // New types
   forest:'#000802', glacier:'#000a18', volcano:'#150200',
   inferno:'#100000', aurora:'#000410', warp:'#000008', abyss:'#000000',
-  oiia:'#0a0010',
+  oiia:'#0a0010', nyancat:'#020008', custom:'#000006',
 }
 
 // ── Layer 1: Animated ambient gradient ───────────────────────────────────────
@@ -601,11 +602,106 @@ function drawForeground(ctx, bgType, w, h, t, beat = 0) {
   }
 }
 
+// ── Auto-Vanta map: bgType → { type, ...vantaOptions } ───────────────────────
+// Covers cosmic/water/crystal bgTypes. Fire/earth/jungle keep the canvas painter.
+const BGTYPE_VANTA_CONFIG = {
+  // NET — space, digital, void
+  stars:     { type: 'net', color: 0x00ccff, backgroundColor: 0x000008, points: 14, maxDistance: 22, spacing: 16, showDots: true },
+  nebula:    { type: 'net', color: 0x9933ff, backgroundColor: 0x030008, points: 12, maxDistance: 18, spacing: 18, showDots: false },
+  warp:      { type: 'net', color: 0x3366ff, backgroundColor: 0x000008, points: 16, maxDistance: 25, spacing: 13, showDots: true },
+  blackhole: { type: 'net', color: 0x550088, backgroundColor: 0x000002, points: 8,  maxDistance: 14, spacing: 22, showDots: false },
+  abyss:     { type: 'net', color: 0x220044, backgroundColor: 0x000000, points: 6,  maxDistance: 10, spacing: 28, showDots: false },
+  matrix:    { type: 'net', color: 0x00ff44, backgroundColor: 0x000500, points: 18, maxDistance: 20, spacing: 12, showDots: true },
+  // WAVES — water, ocean, storm
+  ocean:     { type: 'waves', color: 0x004488, backgroundColor: 0x00050f, shininess: 28, waveHeight: 25, waveSpeed: 1.0, zoom: 0.65 },
+  bubbles:   { type: 'waves', color: 0x0099bb, backgroundColor: 0x00060c, shininess: 55, waveHeight: 18, waveSpeed: 1.5, zoom: 0.75 },
+  storm:     { type: 'waves', color: 0x112244, backgroundColor: 0x040608, shininess: 5,  waveHeight: 35, waveSpeed: 2.5, zoom: 0.55 },
+  // CELLS — crystalline, ice, aurora
+  crystal:   { type: 'cells', color1: 0x2244aa, color2: 0x00ddff, size: 1.5, speed: 0.7 },
+  glacier:   { type: 'cells', color1: 0x8899cc, color2: 0xbbddff, size: 2.2, speed: 0.3 },
+  aurora:    { type: 'cells', color1: 0x003322, color2: 0x00ffaa, size: 1.2, speed: 1.2 },
+}
+
+// Module-level cache for loaded Vanta effect factories (avoids re-importing)
+const _vantaModCache = {}
+
 // ── Component ─────────────────────────────────────────────────────────────────
-export default function BackgroundCanvas({ bgType = 'stars', style, beatRef = null }) {
+export default function BackgroundCanvas({ bgType = 'stars', style, beatRef: _beatRef = null, useVanta = false, vantaType = null, vantaOptions = null }) {
   const canvasRef = useRef(null)
+  const vantaElRef = useRef(null)
+  const vantaInstRef = useRef(null)
+  const customImgRef = useRef(null)
+  const lastUrlRef = useRef('')
+  const nyanImgRef = useRef(null)
+
+  // Determine active Vanta type: explicit prop > bgType auto-map > null (canvas)
+  const autoCfg = BGTYPE_VANTA_CONFIG[bgType] || null
+  const activeType = (useVanta && vantaType) ? vantaType : (autoCfg?.type ?? null)
+  // Build merged options for Vanta (strip 'type' key from autoCfg before merging)
+  let activeOpts = {}
+  if (activeType) {
+    if (autoCfg) { const { type: _t, ...rest } = autoCfg; activeOpts = rest }
+    if (useVanta && vantaType && vantaOptions) Object.assign(activeOpts, vantaOptions)
+  }
+
+  // Vanta initialization — runs whenever activeType or bgType changes
+  useEffect(() => {
+    if (!activeType || !vantaElRef.current) return
+    let disposed = false
+    // Cleanup any existing instance
+    try { vantaInstRef.current?.destroy?.() } catch {}
+    vantaInstRef.current = null
+    ;(async () => {
+      try {
+        // Load THREE (cached by browser module system)
+        const threeModule = await import('three')
+        const THREE = threeModule.default || threeModule
+        // Load Vanta effect factory (cached in module-level map)
+        if (!_vantaModCache[activeType]) {
+          let mod
+          if (activeType === 'waves') mod = await import('vanta/dist/vanta.waves.min')
+          else if (activeType === 'cells') mod = await import('vanta/dist/vanta.cells.min')
+          else if (activeType === 'net')   mod = await import('vanta/dist/vanta.net.min')
+          if (mod) _vantaModCache[activeType] = mod.default || mod
+        }
+        const VANTA = _vantaModCache[activeType]
+        if (!VANTA || disposed || !vantaElRef.current) return
+        vantaInstRef.current = VANTA({
+          el: vantaElRef.current,
+          THREE,
+          mouseControls: false,
+          touchControls: false,
+          gyroControls: false,
+          minHeight: 200,
+          minWidth: 200,
+          scale: 1.0,
+          scaleMobile: 1.0,
+          ...activeOpts,
+        })
+      } catch (e) { console.warn('[BackgroundCanvas] Vanta error:', e) }
+    })()
+    return () => {
+      disposed = true
+      try { vantaInstRef.current?.destroy?.() } catch {}
+      vantaInstRef.current = null
+    }
+  }, [activeType, bgType]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    // Load/refresh custom image when bgType is 'custom'
+    if (bgType === 'custom') {
+      try {
+        const url = localStorage.getItem('custom-bg-url') || ''
+        if (url && url !== lastUrlRef.current) {
+          const img = new Image()
+          img.crossOrigin = 'anonymous'
+          img.src = url
+          customImgRef.current = img
+          lastUrlRef.current = url
+        }
+      } catch {}
+    }
+    if (activeType) return // Vanta handles rendering
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
@@ -632,30 +728,77 @@ export default function BackgroundCanvas({ bgType = 'stars', style, beatRef = nu
       ctx.fillStyle = BG_BASE[bgType] || '#000'
       ctx.fillRect(0,0,w,hh)
 
-      ctx.globalAlpha = 1
-      drawAmbient(ctx, bgType, w, hh, t)
-
-      ctx.globalAlpha = 1
-      for (let i=particles.length-1;i>=0;i--) {
-        const dead = updateParticle(particles[i], bgType, w, hh, dt)
-        if (dead) particles[i] = makeParticle(bgType, w, hh, false)
-        drawParticle(ctx, particles[i], bgType, w, hh)
+      // Special: Nyancat background — rainbow diagonals + cat sprite
+      if (bgType === 'nyancat') {
+        // Rainbow bands moving diagonally
+        const bands = ['#ff0000','#ff7f00','#ffff00','#00ff00','#0000ff','#4b0082','#8f00ff']
+        const speed = 0.08
+        const off = (t*speed) % 40
+        ctx.save()
+        ctx.globalAlpha = 0.9
+        for (let i= -w; i < w*2; i += 40) {
+          const x = i - off
+          for (let b=0;b<bands.length;b++) {
+            ctx.fillStyle = bands[b]
+            ctx.fillRect(x + b*5, 0, 5, hh)
+          }
+        }
+        ctx.globalAlpha = 1
+        ctx.restore()
+        // Small cat sprite gliding with gentle bob
+        if (!nyanImgRef.current) { const img = new Image(); img.src = catImageUrl; nyanImgRef.current = img }
+        const img = nyanImgRef.current
+        if (img && img.complete) {
+          const pathY = hh*0.4 + Math.sin(t*0.0013)*hh*0.05
+          const pathX = (t*0.12) % (w+120) - 120
+          const iw = 96, ih = 96
+          try { ctx.drawImage(img, 0, 0, img.width, img.height, pathX, pathY, iw, ih) } catch {}
+        }
       }
 
-      ctx.globalAlpha = 1
-      drawForeground(ctx, bgType, w, hh, t)
+      // Draw custom image layer (cover) if available
+      if (bgType === 'custom' && customImgRef.current && customImgRef.current.complete) {
+        try {
+          const img = customImgRef.current
+          const iw = img.naturalWidth || img.width
+          const ih = img.naturalHeight || img.height
+          if (iw && ih) {
+            const scale = Math.max(w/iw, hh/ih)
+            const dw = iw*scale, dh = ih*scale
+            const dx = (w - dw)/2, dy = (hh - dh)/2
+            ctx.globalAlpha = 0.96
+            ctx.drawImage(img, dx, dy, dw, dh)
+            ctx.globalAlpha = 1
+          }
+        } catch {}
+      }
+
+      if (bgType !== 'nyancat') {
+        ctx.globalAlpha = 1
+        drawAmbient(ctx, bgType, w, hh, t)
+        ctx.globalAlpha = 1
+        for (let i=particles.length-1;i>=0;i--) {
+          const dead = updateParticle(particles[i], bgType, w, hh, dt)
+          if (dead) particles[i] = makeParticle(bgType, w, hh, false)
+          drawParticle(ctx, particles[i], bgType, w, hh)
+        }
+        ctx.globalAlpha = 1
+        drawForeground(ctx, bgType, w, hh, t)
+      }
 
       ctx.globalAlpha = 1
       animId = requestAnimationFrame(tick)
     }
     animId = requestAnimationFrame(tick)
     return () => { cancelAnimationFrame(animId); window.removeEventListener('resize', resize) }
-  }, [bgType])
+  }, [bgType, activeType])  
 
+  // Always render both; CSS display toggles which is visible
+  const sharedStyle = { position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', ...style }
   return (
-    <canvas
-      ref={canvasRef}
-      style={{ position:'absolute', inset:0, width:'100%', height:'100%', pointerEvents:'none', ...style }}
-    />
+    <>
+      <div ref={vantaElRef} style={{ ...sharedStyle, display: activeType ? 'block' : 'none' }} />
+      <canvas ref={canvasRef} style={{ ...sharedStyle, display: activeType ? 'none' : 'block' }} />
+    </>
   )
 }

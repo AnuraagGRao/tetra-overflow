@@ -130,7 +130,7 @@ export default function StoryMapPage() {
   const zoomY = selectedPoint ? (50 - selectedPoint.y) * 2.4 : 0
 
   // How many chapters unlocked
-  const unlockedChapters = STORY_CHAPTERS.filter((_, i) => isLevelUnlocked(i, 0, progress))
+  const _unlockedChapters = STORY_CHAPTERS.filter((_, i) => isLevelUnlocked(i, 0, progress))
   const completedChapters = STORY_CHAPTERS.filter(ch =>
     ch.levels.every(lv => !!progress[`${ch.id}_${lv.id}_completed`])
   )

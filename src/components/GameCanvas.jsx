@@ -10,7 +10,7 @@ const ZONE_COLOR     = PIECES.ZONE.color
 const GBG_COLOR      = PIECES.GBG.color
 
 const CELL_SIZE = 26
-const BOARD_BASE_ALPHA = 0.82 // increased transparency so backgrounds/particles show through
+const BOARD_BASE_ALPHA = 0.32 // lighter board so backgrounds show through
 
 // ── Theme colour maps ────────────────────────────────────────────────────────
 const DMG_MAP = {
@@ -56,12 +56,16 @@ export const PIECE_COLOR_MAPS = {
   circuit:    { I:'#ffd700',O:'#ffaa00',T:'#ddaa00',S:'#aa8800',Z:'#ffcc44',J:'#886600',L:'#ffee88',INF:'#ff2222',ZONE:'#00ff88',GBG:'#224422' },
   lego:       { I:'#d01010',O:'#f8c400',T:'#0044aa',S:'#009940',Z:'#ff8c00',J:'#551a8b',L:'#e8a000',INF:'#cc0000',ZONE:'#ffcc00',GBG:'#888888' },
   copper:     { I:'#b87333',O:'#c8a020',T:'#a06020',S:'#d09040',Z:'#8b5a2b',J:'#704214',L:'#cc8844',INF:'#802020',ZONE:'#f0c840',GBG:'#604020' },
+  // New purchasable themes
+  midnight:   { I:'#4fd1ff',O:'#ffd166',T:'#a78bfa',S:'#34d399',Z:'#f87171',J:'#60a5fa',L:'#f59e0b',INF:'#ff4477',ZONE:'#80eaff',GBG:'#0b1020' },
+  pastel:     { I:'#a7f3d0',O:'#fde68a',T:'#f0abfc',S:'#bfdbfe',Z:'#fecaca',J:'#ddd6fe',L:'#fcd34d',INF:'#f87171',ZONE:'#93c5fd',GBG:'#1a1f2a' },
 }
 const CANVAS_BG_DARK  = {
   dmg:'#0f380f', blueprint:'#001A44', sketch:'#2A2820', bauhaus:'#1A1A12', stone:'#1A1A1A', wood:'#0D2818',
   obsidian:'#040006', biolume:'#010c16', frozen:'#060c14', terracotta:'#120800', amber:'#0c0800',
-  ukiyo:'#08060e', vaporwave:'#140626', stained:'#080610', popart:'#fffae0',
-  terminal:'#000000', circuit:'#0a1408', lego:'#f0f0f0', copper:'#0c0804',
+  ukiyo:'#08060e', vaporwave:'#140626', stained:'#080610', popart:'#1a1a1a',
+  terminal:'#000000', circuit:'#0a1408', lego:'#121212', copper:'#0c0804',
+  midnight:'#04060e', pastel:'#0f1420',
 }
 const CANVAS_BG_LIGHT = {
   classic:'#1e2230', dmg:'#1a4a0a', blueprint:'#0A2D6E', sketch:'#FAFAF0', bauhaus:'#F5F5E8', stone:'#BEBEBE', wood:'#1A4528',
@@ -71,8 +75,9 @@ const THEME_GRID = {
   bauhaus:'rgba(0,0,0,0.12)', stone:'rgba(255,255,255,0.04)', wood:'rgba(0,0,0,0.12)',
   obsidian:'rgba(160,40,255,0.09)', biolume:'rgba(0,220,180,0.06)', frozen:'rgba(150,200,255,0.10)',
   terracotta:'rgba(190,95,50,0.10)', amber:'rgba(190,135,20,0.10)',
-  ukiyo:'rgba(80,100,180,0.10)', vaporwave:'rgba(255,100,200,0.07)', stained:'rgba(255,200,0,0.08)', popart:'rgba(0,0,0,0.14)',
-  terminal:'rgba(0,255,65,0.13)', circuit:'rgba(0,160,80,0.09)', lego:'rgba(0,0,0,0.09)', copper:'rgba(180,115,50,0.10)',
+  ukiyo:'rgba(80,100,180,0.10)', vaporwave:'rgba(255,100,200,0.07)', stained:'rgba(255,200,0,0.08)', popart:'rgba(255,255,255,0.06)',
+  terminal:'rgba(0,255,65,0.13)', circuit:'rgba(0,160,80,0.09)', lego:'rgba(255,255,255,0.06)', copper:'rgba(180,115,50,0.10)',
+  midnight:'rgba(80,170,255,0.08)', pastel:'rgba(255,255,255,0.06)'
 }
 
 const adjustHex = (hex, amt) => {
@@ -92,17 +97,36 @@ const HARD_DROP_VEL_PX_MS = 0.45 // px/ms threshold for hard-drop vs soft-drop
 
 export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, onDragEnd, onHardDrop, themeOverride, boardAlpha }) {
   const { theme: contextTheme, colorMode, bgTheme } = useTheme()
-  // If a world background is active and no explicit override is provided,
-  // align piece theming with the story mapping used in Story mode.
-  const mappedTheme = bgTheme ? (BG_TYPE_TO_PIECE_THEME[bgTheme] ?? contextTheme) : contextTheme
-  const theme = themeOverride ?? mappedTheme
+  // Solo/Casual: allow mixing — use explicit theme unless an override is passed
+  const theme = themeOverride ?? contextTheme
   const canvasRef = useRef(null)
   const touchRef = useRef(null)
   const pulseRef = useRef(0)
-  const tapCountRef = useRef(0)
-  const tapTimerRef = useRef(null)
+  const tapCountRef = useRef(0) // eslint-disable-line no-unused-vars
+  const tapTimerRef = useRef(null) // eslint-disable-line no-unused-vars
   const activePointersRef = useRef(new Map())
   const TAP_MULTI_WINDOW_MS = 420
+  const selectedEffectRef = useRef([])
+  const trailsRef = useRef([])
+
+  // Read equipped visual effect (persisted by Store) and listen for changes
+  useEffect(() => {
+    const readEffects = () => {
+      try {
+        const arr = JSON.parse(localStorage.getItem('selectedEffects') || '[]')
+        if (Array.isArray(arr)) { selectedEffectRef.current = arr; return }
+      } catch {}
+      // Fallback legacy single key
+      try {
+        const single = localStorage.getItem('selectedEffect')
+        selectedEffectRef.current = single ? [single] : []
+      } catch { selectedEffectRef.current = [] }
+    }
+    readEffects()
+    const onStorage = (e) => { if (e.key === 'selectedEffects' || e.key === 'selectedEffect') readEffects() }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [])
 
   // ── Touch constants ──────────────────────────────────────────────────────────
   // (DRAG_START_PX, TAP_MAX_PX, HARD_DROP_VEL_PX_MS defined at module level)
@@ -117,12 +141,12 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
 
 
     pulseRef.current += 0.05
-    const ghostAlpha = 0.12 + 0.08 * Math.sin(pulseRef.current)
+    const _ghostAlpha = 0.12 + 0.08 * Math.sin(pulseRef.current)
 
     // ── Theme helpers ───────────────────────────────────────────────────────
     const isCustomTheme = theme in PIECE_COLOR_MAPS
     const colorMap = PIECE_COLOR_MAPS[theme] ?? {}
-    const isLightTheme = theme === 'bauhaus' || theme === 'sketch' || theme === 'popart' || theme === 'lego'
+    const isLightTheme = theme === 'bauhaus'
 
     const drawCell = (ctx, x, y, rawColor, alpha = 1, blur = 12, pieceKey = null) => {
       const color = (isCustomTheme && pieceKey) ? (colorMap[pieceKey] ?? rawColor) : rawColor
@@ -595,11 +619,9 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
     const themeBg = (colorMode === 'light' ? CANVAS_BG_LIGHT : CANVAS_BG_DARK)[theme]
     const isUltimateMode = state.mode === GAME_MODE.ULTIMATE
     if (boardAlpha !== undefined) {
-      // Caller-provided alpha (story mode: beat-synced transparency)
-      ctx.globalAlpha = boardAlpha
-      ctx.fillStyle = '#04060e'
-      ctx.fillRect(-20, -20, canvas.width + 40, canvas.height + 40)
-      ctx.globalAlpha = 1
+      // External background active: keep matrix fully clear, no dark fill
+      // Grid opacity is handled below via boardAlpha; cells draw normally.
+      // Intentionally do not paint a background here so world effects show through.
     } else if (bgTheme) {
       // Semi-transparent board when a world background is active
       ctx.globalAlpha = 0.48
@@ -800,7 +822,12 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
     }
 
     // Grid lines
+    ctx.save()
     ctx.strokeStyle = THEME_GRID[theme] ?? 'rgba(89, 105, 153, 0.2)'
+    const gridAlpha = (boardAlpha !== undefined)
+      ? Math.min(1, boardAlpha * 0.7)
+      : (bgTheme ? 0.25 : 1)
+    ctx.globalAlpha = gridAlpha
     for (let x = 0; x <= BOARD_WIDTH; x += 1) {
       ctx.beginPath()
       ctx.moveTo(x * CELL_SIZE, 0)
@@ -813,6 +840,7 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
       ctx.lineTo(BOARD_WIDTH * CELL_SIZE, y * CELL_SIZE)
       ctx.stroke()
     }
+    ctx.restore()
 
     // Board cells
     state.board.forEach((row, y) => {
@@ -899,6 +927,88 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
         }
       })
     })
+
+    // ── Visual Effects (equipped) ─────────────────────────────────────────
+    const effs = Array.isArray(selectedEffectRef.current) ? selectedEffectRef.current : []
+    // Helpers for trails effect
+    const drawTrails = () => {
+      const items = trailsRef.current
+      for (let i = items.length - 1; i >= 0; i--) {
+        const t = items[i]
+        ctx.globalAlpha = t.a
+        ctx.fillStyle = t.color
+        ctx.fillRect(t.x + 4, t.y + 4, CELL_SIZE - 8, CELL_SIZE - 8)
+        t.a *= 0.90
+        if (t.a < 0.03) items.splice(i, 1)
+      }
+      ctx.globalAlpha = 1
+    }
+    const pushTrailFromCurrent = () => {
+      const cur = state.current
+      if (!cur || !cur.matrix) return
+      const col = (PIECE_COLOR_MAPS[theme]?.[cur.type]) || (PIECES[cur.type]?.color) || '#fff'
+      // Capture a few blocks (sparse) to avoid heavy overdraw
+      for (let ry = 0; ry < cur.matrix.length; ry++) {
+        for (let rx = 0; rx < cur.matrix[ry].length; rx++) {
+          if (!cur.matrix[ry][rx]) continue
+          const px = (cur.x + rx) * CELL_SIZE
+          const py = (cur.y + ry) * CELL_SIZE
+          if (py >= 0) trailsRef.current.push({ x: px, y: py, a: 0.40, color: col })
+        }
+      }
+    }
+    if (effs.includes('effect_trails')) {
+      pushTrailFromCurrent()
+      drawTrails()
+    }
+    if (effs.includes('effect_holographic')) {
+      const g = ctx.createLinearGradient(0, 0, canvas.width, canvas.height)
+      g.addColorStop(0, 'rgba(0,255,255,0.08)')
+      g.addColorStop(0.5, 'rgba(255,0,255,0.06)')
+      g.addColorStop(1, 'rgba(0,255,128,0.08)')
+      ctx.globalCompositeOperation = 'screen'
+      ctx.globalAlpha = 0.35 + 0.15 * Math.sin(pulseRef.current * 0.7)
+      ctx.fillStyle = g
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      ctx.globalAlpha = 1
+      ctx.globalCompositeOperation = 'source-over'
+    }
+    if (effs.includes('effect_retro_crt')) {
+      // Scanlines
+      ctx.globalAlpha = 0.08
+      ctx.fillStyle = '#000'
+      for (let y = 0; y < canvas.height; y += 3) ctx.fillRect(0, y, canvas.width, 1)
+      // Vignette overlay
+      const vg = ctx.createRadialGradient(canvas.width/2, canvas.height/2, Math.min(canvas.width,canvas.height)*0.35, canvas.width/2, canvas.height/2, Math.max(canvas.width,canvas.height)*0.65)
+      vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.20)')
+      ctx.globalAlpha = 1
+      ctx.fillStyle = vg
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+    }
+    if (effs.includes('effect_gridpulse')) {
+      const a = 0.03 + 0.03 * (0.5 + 0.5 * Math.sin(pulseRef.current * 0.9))
+      ctx.save()
+      ctx.globalAlpha = a
+      ctx.strokeStyle = 'rgba(255,255,255,0.25)'
+      for (let x = 0; x <= BOARD_WIDTH; x += 1) { ctx.beginPath(); ctx.moveTo(x * CELL_SIZE, 0); ctx.lineTo(x * CELL_SIZE, BOARD_HEIGHT * CELL_SIZE); ctx.stroke() }
+      for (let y = 0; y <= BOARD_HEIGHT; y += 1) { ctx.beginPath(); ctx.moveTo(0, y * CELL_SIZE); ctx.lineTo(BOARD_WIDTH * CELL_SIZE, y * CELL_SIZE); ctx.stroke() }
+      ctx.restore()
+    }
+    if (effs.includes('effect_sparkles')) {
+      ctx.save()
+      const seed = Math.floor(pulseRef.current * 10)
+      const step = 24
+      for (let y = step; y < canvas.height; y += step) {
+        for (let x = step; x < canvas.width; x += step) {
+          const on = ((x + y + seed * 17) % 97) < 3
+          if (!on) continue
+          ctx.globalAlpha = 0.5
+          ctx.fillStyle = '#ffffff'
+          ctx.fillRect(x, y, 1, 1)
+        }
+      }
+      ctx.restore()
+    }
 
     // Zone ambient glow overlay (default themes only)
     if (state.zoneActive && !isCustomTheme) {

@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
-import { getUserStats, getLeaderboard, getCoinHistory } from '../firebase/db'
+import { getUserStats, getLeaderboard, getCoinHistory, getPublicProfile, getPublicStats, getPublicProfiles, getFriends, getFriendRequests, acceptFriendRequest, declineFriendRequest, sendFriendRequest } from '../firebase/db'
 import { GAME_MODE } from '../logic/gameEngine'
 
 // Include all solo modes (excluding multiplayer/versus)
@@ -10,12 +10,9 @@ const MODES = [
   { key: GAME_MODE.NORMAL,   label: 'NORMAL',   color: '#00d4ff' },
   { key: GAME_MODE.SPRINT,   label: 'SPRINT',   color: '#22c55e' },
   { key: GAME_MODE.BLITZ,    label: 'BLITZ',    color: '#f97316' },
-  { key: GAME_MODE.MASTER,   label: 'MASTER',   color: '#eab308' },
   { key: GAME_MODE.PURIFY,   label: 'PURIFY',   color: '#a855f7' },
   { key: GAME_MODE.ULTIMATE, label: 'ULTIMATE', color: '#ef4444' },
   { key: 'story',            label: 'STORY',    color: '#ffd700' },
-  // ZEN is endless and does not auto-submit scores; included for completeness
-  { key: GAME_MODE.ZEN,      label: 'ZEN',      color: '#60a5fa' },
 ]
 
 function StatCard({ label, value, sub, color = '#00d4ff' }) {
@@ -58,6 +55,107 @@ function BestScoreRow({ mode, score, max }) {
   )
 }
 
+function NoobBadge() {
+  return (
+    <span style={{ fontSize: '0.5rem', letterSpacing: '0.18em', color: '#f87171', border: '1px solid #f8717155', borderRadius: 4, padding: '1px 5px', background: 'rgba(248,113,113,0.08)', marginLeft: 6, verticalAlign: 'middle', fontWeight: 700 }}>
+      NOOB
+    </span>
+  )
+}
+
+function PlayerProfileModal({ uid, onClose, myUid, myDisplayName, friends }) {
+  const [profile, setProfile] = useState(null)
+  const [pStats, setPStats] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [addState, setAddState] = useState('idle') // idle | sending | sent | error
+  const isAlreadyFriend = friends?.some(f => f.uid === uid)
+
+  useEffect(() => {
+    if (!uid) return
+    Promise.all([getPublicProfile(uid), getPublicStats(uid)]).then(([p, s]) => {
+      setProfile(p); setPStats(s); setLoading(false)
+    })
+  }, [uid])
+
+  const handleAdd = async () => {
+    if (addState !== 'idle') return
+    setAddState('sending')
+    try {
+      await sendFriendRequest(myUid, uid, myDisplayName)
+      setAddState('sent')
+    } catch (e) {
+      setAddState(e?.message === 'Request already sent' ? 'sent' : 'error')
+    }
+  }
+
+  const name = profile?.displayName || `player_${uid.slice(0, 5)}`
+  const badge = profile?.selectedBadge || null
+  const bestScores = MODES.filter(m => pStats?.[`best_${m.key}`] > 0).map(m => ({ ...m, score: pStats[`best_${m.key}`] || 0 }))
+  const maxBS = Math.max(...bestScores.map(m => m.score), 1)
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.82)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem' }}
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.9, y: 20, opacity: 0 }} animate={{ scale: 1, y: 0, opacity: 1 }} exit={{ scale: 0.9, y: 10, opacity: 0 }}
+        onClick={e => e.stopPropagation()}
+        style={{ background: '#0d0d1e', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 16, padding: '1.6rem', width: 'min(360px, 90vw)', maxHeight: '80vh', overflowY: 'auto', fontFamily: '"Courier New", monospace' }}
+      >
+        {loading ? (
+          <div style={{ color: '#555', textAlign: 'center', padding: '2rem', letterSpacing: '0.14em', fontSize: '0.72rem' }}>LOADING…</div>
+        ) : (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.2rem' }}>
+              <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'linear-gradient(135deg,#00d4ff,#a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', fontWeight: 900, flexShrink: 0 }}>
+                {name[0].toUpperCase()}
+              </div>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '0.9rem', letterSpacing: '0.1em', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+                  <span>{name}</span>
+                  {badge && <span style={{ fontSize: '0.55rem', color: '#c084fc', border: '1px solid #c084fc55', borderRadius: 3, padding: '1px 5px', letterSpacing: '0.12em' }}>{badge.replace('badge_', '').toUpperCase()}</span>}
+                  {profile?.hasPlayedEasy && <NoobBadge />}
+                </div>
+                <div style={{ fontSize: '0.6rem', color: '#555', marginTop: 2 }}>
+                  {pStats?.totalGames || 0} games · {(pStats?.totalLines || 0).toLocaleString()} lines
+                </div>
+              </div>
+              <button onClick={onClose} style={{ marginLeft: 'auto', background: 'none', border: '1px solid rgba(255,255,255,0.15)', color: '#888', borderRadius: 6, padding: '4px 9px', cursor: 'pointer', fontSize: '0.65rem', fontFamily: 'inherit' }}>✕</button>
+            </div>
+
+            {bestScores.length > 0 && (
+              <div style={{ marginBottom: '1.2rem' }}>
+                <div style={{ fontSize: '0.55rem', letterSpacing: '0.22em', color: '#555', marginBottom: 8 }}>BEST SCORES</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {bestScores.map(m => <BestScoreRow key={m.key} mode={m} score={m.score} max={maxBS} />)}
+                </div>
+              </div>
+            )}
+
+            {uid !== myUid && (
+              <button
+                onClick={handleAdd}
+                disabled={isAlreadyFriend || addState !== 'idle'}
+                style={{
+                  width: '100%', background: isAlreadyFriend ? 'rgba(34,197,94,0.1)' : addState === 'sent' ? 'rgba(34,197,94,0.1)' : 'rgba(0,212,255,0.12)',
+                  border: `1px solid ${isAlreadyFriend ? '#22c55e55' : addState === 'sent' ? '#22c55e66' : 'rgba(0,212,255,0.35)'}`,
+                  color: isAlreadyFriend ? '#22c55e' : addState === 'sent' ? '#22c55e' : addState === 'error' ? '#f87171' : '#00d4ff',
+                  borderRadius: 8, padding: '9px', cursor: (isAlreadyFriend || addState !== 'idle') ? 'default' : 'pointer',
+                  fontSize: '0.72rem', letterSpacing: '0.1em', fontFamily: 'inherit', fontWeight: 700,
+                }}
+              >
+                {isAlreadyFriend ? '✓ Friends' : addState === 'sending' ? 'Sending…' : addState === 'sent' ? '✓ Request Sent' : addState === 'error' ? '✗ Error' : '+ Add Friend'}
+              </button>
+            )}
+          </>
+        )}
+      </motion.div>
+    </motion.div>
+  )
+}
+
 export default function StatsPage() {
   const navigate = useNavigate()
   const { user, userProfile } = useAuth()
@@ -68,6 +166,12 @@ export default function StatsPage() {
   const [loading, setLoading] = useState(true)
   const [narrow, setNarrow] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 420 : false))
   const [coinHistory, setCoinHistory] = useState([])
+  const [lbProfiles, setLbProfiles] = useState({}) // uid → { displayName, hasPlayedEasy }
+  const [profileModal, setProfileModal] = useState(null) // uid | null
+  const [friends, setFriends] = useState([])
+  const [friendRequests, setFriendRequests] = useState([])
+  const [friendsLoading, setFriendsLoading] = useState(false)
+  const [requestAction, setRequestAction] = useState({}) // requestId → 'accepting'|'declining'|'done'
 
   // Responsive flag for very small screens to avoid horizontal overflow
   useEffect(() => {
@@ -84,15 +188,58 @@ export default function StatsPage() {
       getCoinHistory(user.uid, 25),
     ]).then(([s, lb, hist]) => {
       setStats(s)
-      setLeaderboard(lb)
+      const dedupedLb = Object.values(
+        lb.reduce((acc, entry) => {
+          if (!acc[entry.uid] || entry.score > acc[entry.uid].score) acc[entry.uid] = entry;
+          return acc;
+        }, {})
+      );
+      setLeaderboard(dedupedLb);
       setCoinHistory(hist)
       setLoading(false)
+      // Fetch public profiles for leaderboard entries
+      const uids = [...new Set(lb.map(e => e.uid).filter(Boolean))]
+      if (uids.length > 0) {
+        getPublicProfiles(uids).then(setLbProfiles).catch(() => {})
+      }
     })
   }, [user, lbMode, lbLimit])
+
+  // Load friends + requests once
+  useEffect(() => {
+    if (!user) return
+    setFriendsLoading(true)
+    Promise.all([getFriends(user.uid), getFriendRequests(user.uid)]).then(([f, r]) => {
+      setFriends(f)
+      setFriendRequests(r)
+      setFriendsLoading(false)
+    }).catch(() => setFriendsLoading(false))
+  }, [user])
+
+  const handleAccept = useCallback(async (req) => {
+    setRequestAction(prev => ({ ...prev, [req.id]: 'accepting' }))
+    try {
+      await acceptFriendRequest(user.uid, req.id, req, userProfile?.displayName || user?.displayName || 'Player')
+      setFriendRequests(prev => prev.filter(r => r.id !== req.id))
+      setFriends(prev => [...prev, { uid: req.fromUid, displayName: req.fromName }])
+    } catch {}
+    setRequestAction(prev => ({ ...prev, [req.id]: 'done' }))
+  }, [user, userProfile])
+
+  const handleDecline = useCallback(async (req) => {
+    setRequestAction(prev => ({ ...prev, [req.id]: 'declining' }))
+    try {
+      await declineFriendRequest(user.uid, req.id)
+      setFriendRequests(prev => prev.filter(r => r.id !== req.id))
+    } catch {}
+    setRequestAction(prev => ({ ...prev, [req.id]: 'done' }))
+  }, [user])
 
   const displayName = userProfile?.displayName || user?.displayName || 'Player'
   const bestScores = MODES.map(m => ({ ...m, score: stats?.[`best_${m.key}`] || 0 }))
   const maxBest = Math.max(...bestScores.map(m => m.score), 1)
+  const isNoob = !!userProfile?.hasPlayedEasy
+  const myBadge = userProfile?.selectedBadge || null
 
   const relTime = (d) => {
     if (!d) return ''
@@ -130,7 +277,13 @@ export default function StatsPage() {
                 {displayName[0].toUpperCase()}
               </div>
               <div>
-                <div style={{ fontWeight: 700, fontSize: '1rem', letterSpacing: '0.1em' }}>{displayName}</div>
+                <div style={{ fontWeight: 700, fontSize: '1rem', letterSpacing: '0.1em', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+                  {displayName}
+                  {myBadge && (
+                    <span style={{ fontSize: '0.55rem', color: '#c084fc', border: '1px solid #c084fc55', borderRadius: 3, padding: '1px 5px', letterSpacing: '0.12em', marginLeft: 6 }}>{myBadge.replace('badge_', '').toUpperCase()}</span>
+                  )}
+                  {isNoob && <NoobBadge />}
+                </div>
                 <div style={{ fontSize: '0.65rem', color: '#555', marginTop: 3, letterSpacing: '0.12em' }}>
                   {stats?.totalGames || 0} GAMES PLAYED
                 </div>
@@ -197,14 +350,26 @@ export default function StatsPage() {
                   const dt = ts?.toDate ? ts.toDate() : (typeof ts?.seconds === 'number' ? new Date(ts.seconds * 1000) : null)
                   const bg = i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent'
                   const rankColor = i === 0 ? '#eab308' : i === 1 ? '#9ca3af' : i === 2 ? '#b45309' : '#555'
-                  const name = isMe ? (userProfile?.displayName || 'You') : `player_${(entry.uid||'').slice(0,5)}`
+                  const p = lbProfiles[entry.uid]
+                  const name = isMe ? (userProfile?.displayName || 'You') : (p?.displayName || `player_${(entry.uid||'').slice(0,5)}`)
+                  const hasNoob = isMe ? isNoob : !!p?.hasPlayedEasy
+                  const badge = isMe ? (userProfile?.selectedBadge || null) : (p?.selectedBadge || null)
                   return (
-                    <div key={entry.id} style={{ display: 'grid', gridTemplateColumns: narrow ? '32px minmax(0,1fr) auto' : '40px minmax(0,1fr) 110px 80px 86px', gap: 8, alignItems: 'center', padding: '8px 10px', borderBottom: i < leaderboard.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', background: bg }}>
+                    <div
+                      key={entry.id}
+                      onClick={() => !isMe && entry.uid && setProfileModal(entry.uid)}
+                      title={!isMe ? 'View profile' : undefined}
+                      style={{ display: 'grid', gridTemplateColumns: narrow ? '32px minmax(0,1fr) auto' : '40px minmax(0,1fr) 110px 80px 86px', gap: 8, alignItems: 'center', padding: '8px 10px', borderBottom: i < leaderboard.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', background: bg, cursor: !isMe ? 'pointer' : 'default', transition: 'background 0.12s' }}
+                      onMouseEnter={e => { if (!isMe) e.currentTarget.style.background = 'rgba(0,212,255,0.05)' }}
+                      onMouseLeave={e => { e.currentTarget.style.background = bg }}
+                    >
                       <div style={{ color: rankColor, fontWeight: 700, fontSize: '0.75rem' }}>#{i + 1}</div>
-                      <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0, color: isMe ? '#00d4ff' : '#ddd' }}>
-                        {name}
+                      <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0, color: isMe ? '#00d4ff' : '#ddd', display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</span>
+                        {badge && <span style={{ fontSize: '0.45rem', color: '#c084fc', border: '1px solid #c084fc55', borderRadius: 3, padding: '0 4px', background: 'rgba(192,132,252,0.08)', flexShrink: 0, letterSpacing: '0.1em' }}>{badge.replace('badge_', '').toUpperCase()}</span>}
+                        {hasNoob && <span style={{ fontSize: '0.45rem', color: '#f87171', border: '1px solid #f8717155', borderRadius: 3, padding: '0 4px', background: 'rgba(248,113,113,0.08)', flexShrink: 0, letterSpacing: '0.1em' }}>NOOB</span>}
                         {narrow && (
-                          <div style={{ fontSize: '0.6rem', color: '#666', letterSpacing: '0.06em', marginTop: 2 }}>
+                          <div style={{ fontSize: '0.6rem', color: '#666', letterSpacing: '0.06em', marginTop: 2, display: 'block' }}>
                             L {entry.lines ?? '—'} • {relTime(dt)}
                           </div>
                         )}
@@ -244,9 +409,76 @@ export default function StatsPage() {
                 })}
               </div>
             </div>
+
+            {/* Friends section */}
+            <div>
+              <div style={{ fontSize: '0.6rem', letterSpacing: '0.22em', color: '#555', margin: '0.75rem 0' }}>Friends</div>
+
+              {/* Pending requests */}
+              {friendRequests.length > 0 && (
+                <div style={{ marginBottom: '0.8rem' }}>
+                  <div style={{ fontSize: '0.55rem', letterSpacing: '0.16em', color: '#eab30888', marginBottom: 6 }}>PENDING REQUESTS</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {friendRequests.map(req => (
+                      <div key={req.id} style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#0f1120', border: '1px solid rgba(234,179,8,0.15)', borderRadius: 10, padding: '8px 12px' }}>
+                        <div style={{ flex: 1, fontSize: '0.78rem', color: '#eee', letterSpacing: '0.06em' }}>{req.fromName || `player_${req.fromUid?.slice(0, 5)}`}</div>
+                        <button
+                          disabled={requestAction[req.id] === 'accepting'}
+                          onClick={() => handleAccept(req)}
+                          style={{ background: 'rgba(34,197,94,0.12)', border: '1px solid #22c55e55', color: '#22c55e', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.65rem', fontFamily: 'inherit', letterSpacing: '0.08em' }}
+                        >{requestAction[req.id] === 'accepting' ? '…' : 'Accept'}</button>
+                        <button
+                          disabled={requestAction[req.id] === 'declining'}
+                          onClick={() => handleDecline(req)}
+                          style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid #f8717155', color: '#f87171', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.65rem', fontFamily: 'inherit', letterSpacing: '0.08em' }}
+                        >{requestAction[req.id] === 'declining' ? '…' : 'Decline'}</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Friends list */}
+              <div style={{ background: '#0f1120', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, overflow: 'hidden' }}>
+                {friendsLoading ? (
+                  <div style={{ padding: '1.2rem', textAlign: 'center', fontSize: '0.7rem', color: '#555', letterSpacing: '0.12em' }}>LOADING…</div>
+                ) : friends.length === 0 ? (
+                  <div style={{ padding: '1.2rem', textAlign: 'center', fontSize: '0.72rem', color: '#555', letterSpacing: '0.1em' }}>NO FRIENDS YET — click a leaderboard player to add them!</div>
+                ) : (
+                  friends.map((f, i) => (
+                    <div
+                      key={f.uid || i}
+                      onClick={() => f.uid && setProfileModal(f.uid)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderBottom: i < friends.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', cursor: 'pointer', transition: 'background 0.12s' }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,212,255,0.05)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'linear-gradient(135deg,#00d4ff44,#a855f744)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', fontWeight: 700, flexShrink: 0 }}>
+                        {(f.displayName || '?')[0].toUpperCase()}
+                      </div>
+                      <div style={{ flex: 1, fontSize: '0.78rem', color: '#ddd', letterSpacing: '0.06em' }}>{f.displayName || `player_${f.uid?.slice(0, 5)}`}</div>
+                      <div style={{ fontSize: '0.6rem', color: '#555' }}>›</div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
         )}
       </div>
+
+      {/* Player profile modal */}
+      <AnimatePresence>
+        {profileModal && (
+          <PlayerProfileModal
+            uid={profileModal}
+            onClose={() => setProfileModal(null)}
+            myUid={user?.uid}
+            myDisplayName={userProfile?.displayName || user?.displayName || 'Player'}
+            friends={friends}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }

@@ -295,3 +295,132 @@ export const voteArtwork = async (uid, trackId, vote) => {
     }
   })
 }
+
+// ─── Easy mode NOOB brand ─────────────────────────────────────────────────────
+/** Mark that this user has played Easy mode (shows NOOB badge on their profile). */
+export const markEasyModePlayed = async (uid) => {
+  await updateDoc(doc(db, 'users', uid), { hasPlayedEasy: true })
+}
+
+// ─── Public profiles ──────────────────────────────────────────────────────────
+/** Fetch only the public fields of a user's profile. */
+export const getPublicProfile = async (uid) => {
+  const snap = await getDoc(doc(db, 'users', uid))
+  if (!snap.exists()) return null
+  const { displayName, hasPlayedEasy, selectedBadge, createdAt } = snap.data()
+  return { uid, displayName: displayName || `player_${uid.slice(0, 5)}`, hasPlayedEasy: !!hasPlayedEasy, selectedBadge: selectedBadge || null, createdAt }
+}
+
+/** Batch-fetch public profiles for a list of UIDs. */
+export const getPublicProfiles = async (uids) => {
+  const results = {}
+  await Promise.all(uids.map(async (uid) => {
+    const snap = await getDoc(doc(db, 'users', uid))
+    if (snap.exists()) {
+      const { displayName, hasPlayedEasy, selectedBadge } = snap.data()
+      results[uid] = { uid, displayName: displayName || `player_${uid.slice(0, 5)}`, hasPlayedEasy: !!hasPlayedEasy, selectedBadge: selectedBadge || null }
+    } else {
+      results[uid] = { uid, displayName: `player_${uid.slice(0, 5)}`, hasPlayedEasy: false, selectedBadge: null }
+    }
+  }))
+  return results
+}
+
+/** Get public stats (best scores) for any user. */
+export const getPublicStats = async (uid) => {
+  const snap = await getDoc(doc(db, 'stats', uid))
+  return snap.exists() ? snap.data() : {}
+}
+
+// ─── Friends system ───────────────────────────────────────────────────────────
+/** Send a friend request to another user. */
+export const sendFriendRequest = async (fromUid, toUid, fromName) => {
+  // Prevent duplicate requests: check if one already exists
+  const existing = await getDocs(
+    query(collection(db, 'users', toUid, 'friend_requests'), where('fromUid', '==', fromUid), limit(1))
+  )
+  if (!existing.empty) throw new Error('Request already sent')
+  const reqRef = doc(collection(db, 'users', toUid, 'friend_requests'))
+  await setDoc(reqRef, { fromUid, fromName, status: 'pending', createdAt: serverTimestamp() })
+  return reqRef.id
+}
+
+/** Get pending friend requests for a user (inbox). */
+export const getFriendRequests = async (uid) => {
+  const q = query(collection(db, 'users', uid, 'friend_requests'), where('status', '==', 'pending'), orderBy('createdAt', 'desc'), limit(20))
+  const snap = await getDocs(q)
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+}
+
+/** Accept a pending friend request — adds both users to each other's friends list. */
+export const acceptFriendRequest = async (uid, requestId, request, myDisplayName) => {
+  const reqRef = doc(db, 'users', uid, 'friend_requests', requestId)
+  await updateDoc(reqRef, { status: 'accepted' })
+  await Promise.all([
+    setDoc(doc(db, 'users', uid, 'friends', request.fromUid), {
+      uid: request.fromUid, displayName: request.fromName, addedAt: serverTimestamp(),
+    }),
+    setDoc(doc(db, 'users', request.fromUid, 'friends', uid), {
+      uid, displayName: myDisplayName || `player_${uid.slice(0, 5)}`, addedAt: serverTimestamp(),
+    }),
+  ])
+}
+
+/** Decline a pending friend request. */
+export const declineFriendRequest = async (uid, requestId) => {
+  await updateDoc(doc(db, 'users', uid, 'friend_requests', requestId), { status: 'declined' })
+}
+
+/** Get the accepted friends list for a user. */
+export const getFriends = async (uid) => {
+  const snap = await getDocs(collection(db, 'users', uid, 'friends'))
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+}
+
+// ─── Profile badges ──────────────────────────────────────────────────────────
+/** Set the active badge (title) on the user's profile. */
+export const setActiveBadge = async (uid, badgeId) => {
+  await updateDoc(doc(db, 'users', uid), { selectedBadge: badgeId })
+}
+
+/** Set the active visual effect on the user's profile. */
+export const setActiveEffect = async (uid, effectId) => {
+  await updateDoc(doc(db, 'users', uid), { selectedEffect: effectId })
+}
+
+/** Replace the user's active effects (multi-select). */
+export const setActiveEffects = async (uid, effects) => {
+  await updateDoc(doc(db, 'users', uid), { selectedEffects: Array.isArray(effects) ? effects : [] })
+}
+
+/** Toggle a single effect on/off in the user's active effects. */
+export const toggleEffect = async (uid, effectId, enable) => {
+  const ref = doc(db, 'users', uid)
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref)
+    if (!snap.exists()) throw new Error('User not found')
+    const cur = snap.data().selectedEffects || []
+    const next = enable ? (cur.includes(effectId) ? cur : [...cur, effectId]) : cur.filter(e => e !== effectId)
+    tx.update(ref, { selectedEffects: next })
+  })
+}
+
+// ─── Lobby invites ────────────────────────────────────────────────────────────
+/** Send a lobby invite to a friend. */
+export const sendLobbyInvite = async (fromUid, toUid, lobbyCode, fromName) => {
+  const invRef = doc(collection(db, 'users', toUid, 'lobby_invites'))
+  await setDoc(invRef, { fromUid, fromName, lobbyCode, createdAt: serverTimestamp() })
+}
+
+/** Get unread lobby invites for a user (last 10). */
+export const getLobbyInvites = async (uid) => {
+  const q = query(collection(db, 'users', uid, 'lobby_invites'), orderBy('createdAt', 'desc'), limit(10))
+  const snap = await getDocs(q)
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+}
+
+/** Delete a lobby invite (dismiss). */
+export const dismissLobbyInvite = async (uid, inviteId) => {
+  const { deleteDoc } = await import('firebase/firestore')
+  await deleteDoc(doc(db, 'users', uid, 'lobby_invites', inviteId))
+}

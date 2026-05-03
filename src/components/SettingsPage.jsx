@@ -2,7 +2,7 @@ import { useTheme } from '../contexts/ThemeContext'
 
 export default function SettingsPage({ config, onConfig, onClose }) {
   const set = (key, val) => onConfig(prev => ({ ...prev, [key]: val }))
-  const { colorMode, setColorMode } = useTheme()
+  const { colorMode: _colorMode, setColorMode: _setColorMode } = useTheme()
 
   return (
     <div className="about-overlay" onClick={onClose}>
@@ -11,20 +11,7 @@ export default function SettingsPage({ config, onConfig, onClose }) {
 
         <div className="settings-title">⚙ Settings</div>
 
-        {/* Display section */}
-        <div className="settings-section">
-          <div className="settings-section-title">Display</div>
-          <div className="settings-row">
-            <span className="settings-label">Light Mode</span>
-            <button
-              type="button"
-              className={`settings-toggle${colorMode === 'light' ? ' on' : ''}`}
-              onClick={() => setColorMode(colorMode === 'light' ? 'dark' : 'light')}
-            >
-              {colorMode === 'light' ? '☀ ON' : '☾ OFF'}
-            </button>
-          </div>
-        </div>
+        {/* Display section (light mode removed) */}
 
         {/* Sound section */}
         <div className="settings-section">

@@ -125,7 +125,7 @@ function MenuCard({ item, index, onClick }) {
   )
 }
 
-function UserDropdown({ displayName, coins, onStats, onStore, onSignOut }) {
+function UserDropdown({ displayName, coins: _coins, onStats, onStore, onSignOut }) {
   return (
     <div style={{ position: 'absolute', right: 0, top: '110%', background: '#12121e', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '6px', minWidth: 170, zIndex: 200, boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}>
       <div style={{ padding: '8px 10px 4px', fontSize: '0.7rem', color: '#555', letterSpacing: '0.12em', borderBottom: '1px solid rgba(255,255,255,0.07)', marginBottom: 4 }}>

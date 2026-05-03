@@ -66,6 +66,9 @@ export default function InfoPage() {
   }
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2000) }
+  const GPay_UPI  = import.meta.env.VITE_GPAY_UPI || ''
+  const GPay_NAME = import.meta.env.VITE_GPAY_NAME || 'Tetra Overflow'
+  const gpayUrl   = GPay_UPI ? `upi://pay?pa=${encodeURIComponent(GPay_UPI)}&pn=${encodeURIComponent(GPay_NAME)}&cu=INR` : ''
 
   const CRYPTO_ADDRESSES = [
     { icon: '₿',  symbol: 'Bitcoin (BTC)',      address: 'bc1qwxqgk58am7s6te39pe9wde2kcczwhtpr2jf2z0' },
@@ -102,8 +105,9 @@ export default function InfoPage() {
         {/* About */}
         <Section title="About" accent="#00d4ff">
           <p style={{ margin: 0, fontSize: '0.72rem', color: '#94a3b8', lineHeight: 1.7, letterSpacing: '0.04em' }}>
-            Guideline-accurate Tetris with 7 game modes, Zone mechanic, SRS+ rotation,
-            procedural BGM, 20 custom themes, story campaign, online multiplayer, and full touch support.
+            Guideline-accurate Tetris with multiple game modes including <strong style={{ color: '#22c55e' }}>Easy mode</strong> for beginners,
+            Zone mechanic, SRS+ rotation, procedural BGM, 20 custom themes, story campaign,
+            online multiplayer, <strong style={{ color: '#a855f7' }}>friends &amp; social system</strong>, XP rewards, and full touch support.
             Built as a mobile-first PWA — install it on your home screen for the best experience.
           </p>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
@@ -127,19 +131,38 @@ export default function InfoPage() {
         {/* Game Modes */}
         <Section title="Game Modes" accent="#22c55e">
           {[
-            { icon: '▦', mode: 'SOLO',     desc: 'Classic free-play with Normal · Sprint · Blitz · Master · Purify · Zen · Ultimate · Tower' },
-            { icon: '◈', mode: 'STORY',    desc: '7 chapters of escalating Tetris challenges with unique mechanics and theme unlocks' },
-            { icon: '⚡', mode: 'VERSUS',   desc: 'Online real-time multiplayer — up to 4 players, garbage sends, round-based scoring' },
-            { icon: '🗼', mode: 'TOWER',    desc: 'Survive escalating garbage waves. Clear lines to advance floors. How high can you climb?' },
+            { icon: '▦',  mode: 'SOLO',     desc: 'Play Normal, Sprint, Blitz, Purify, Zen, and Ultimate.' },
+            { icon: '◈',  mode: 'STORY',    desc: '7 chapters of escalating Tetris challenges with narrative, unique mechanics, and theme unlocks.' },
+            { icon: '⚡',  mode: 'VERSUS',   desc: 'Online real-time multiplayer — up to 4 players, garbage sends, round-based scoring.' },
           ].map(({ icon, mode, desc }) => (
             <div key={mode} style={{ display: 'flex', gap: 10, padding: '7px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-              <span style={{ fontSize: '1rem', width: 20, textAlign: 'center', flexShrink: 0, color: '#22c55e' }}>{icon}</span>
+              <span style={{ fontSize: '1rem', width: 22, textAlign: 'center', flexShrink: 0 }}>{icon}</span>
               <div>
                 <div style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.12em', color: '#e2e8f0', marginBottom: 2 }}>{mode}</div>
                 <div style={{ fontSize: '0.6rem', color: '#666', letterSpacing: '0.04em', lineHeight: 1.5 }}>{desc}</div>
               </div>
             </div>
           ))}
+        </Section>
+
+        {/* Social */}
+        <Section title="Friends &amp; Social" accent="#a855f7">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {[
+              { icon: '👥', title: 'Friends', desc: 'Add friends from the leaderboard. Send and accept friend requests from the Stats page.' },
+              { icon: '📨', title: 'Lobby Invites', desc: 'Invite friends directly to your multiplayer lobby from inside a game room.' },
+              { icon: '🏅', title: 'NOOB Badge', desc: 'Play in Easy mode and earn the legendary NOOB badge visible on your profile and leaderboard.' },
+              { icon: '🔍', title: 'Player Profiles', desc: 'Click any leaderboard entry to view their profile, best scores, and badges.' },
+            ].map(({ icon, title, desc }) => (
+              <div key={title} style={{ display: 'flex', gap: 10 }}>
+                <span style={{ fontSize: '1rem', width: 22, textAlign: 'center', flexShrink: 0 }}>{icon}</span>
+                <div>
+                  <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#c4b5fd', letterSpacing: '0.1em', marginBottom: 2 }}>{title}</div>
+                  <div style={{ fontSize: '0.6rem', color: '#666', lineHeight: 1.5 }}>{desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
         </Section>
 
         {/* Install PWA */}
@@ -172,7 +195,7 @@ export default function InfoPage() {
             Tetra Overflow Ultra is free and open-source. If you enjoy it and want to support future
             development, any contribution is deeply appreciated!
           </p>
-
+          
           {/* PayPal */}
           <a
             href="https://paypal.me/RadiCalzMad"
@@ -192,6 +215,29 @@ export default function InfoPage() {
             </div>
             <span style={{ marginLeft: 'auto', fontSize: '0.6rem', color: '#555' }}>↗</span>
           </a>
+
+          {/* Google Pay (UPI) */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+            background: 'rgba(52,168,83,0.10)', border: '1px solid rgba(52,168,83,0.35)',
+            borderRadius: 10, marginBottom: 14,
+          }}>
+            <span style={{ fontSize: '1.4rem' }}>🅖</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#34d399', letterSpacing: '0.1em' }}>Google Pay (UPI)</div>
+              <div style={{ fontSize: '0.58rem', color: '#555', letterSpacing: '0.06em', overflow: 'hidden', textOverflow: 'ellipsis' }}>{GPay_UPI || 'Set VITE_GPAY_UPI in .env'}</div>
+            </div>
+            <button
+              onClick={async () => { if (!GPay_UPI) return; try { await navigator.clipboard?.writeText(GPay_UPI); showToast('✓ UPI copied'); } catch {} }}
+              disabled={!GPay_UPI}
+              style={{ background: 'rgba(52,168,83,0.15)', border: '1px solid rgba(52,168,83,0.45)', color: '#34d399', borderRadius: 8, padding: '6px 10px', fontSize: '0.62rem', cursor: GPay_UPI ? 'pointer' : 'not-allowed', fontFamily: 'inherit', letterSpacing: '0.08em' }}
+            >Copy UPI</button>
+            <a
+              href={gpayUrl || undefined}
+              onClick={(e) => { if (!gpayUrl) e.preventDefault() }}
+              style={{ marginLeft: 6, background: 'linear-gradient(135deg,#34d399,#22c55e)', border: 'none', color: '#000', borderRadius: 8, padding: '7px 10px', fontSize: '0.62rem', textDecoration: 'none', cursor: gpayUrl ? 'pointer' : 'not-allowed', opacity: gpayUrl ? 1 : 0.6, fontWeight: 700, letterSpacing: '0.08em' }}
+            >Pay with GPay</a>
+          </div>
 
           {/* Crypto */}
           <div style={{ fontSize: '0.55rem', letterSpacing: '0.2em', color: '#666', textTransform: 'uppercase', marginBottom: 8 }}>

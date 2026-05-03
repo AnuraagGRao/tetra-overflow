@@ -1,6 +1,6 @@
 // ─── Store catalog ─────────────────────────────────────────────────────────────
 // itemId matches the key used in user.inventory array in Firestore
-// type: 'theme' | 'music' | 'effect'
+// type: 'theme' | 'badge' | 'effect' | 'bg'
 // themeKey (for type==='theme'): value passed to setTheme()
 
 export const STORE_ITEMS = [
@@ -13,69 +13,79 @@ export const STORE_ITEMS = [
   {
     id: 'theme_dmg', type: 'theme', themeKey: 'dmg',
     name: 'DMG', description: 'Game Boy green phosphor. Pure nostalgia.',
-    price: 100, emoji: '🟢', accent: '#9bbc0f',
+    price: 1000, emoji: '🟢', accent: '#9bbc0f',
   },
   {
     id: 'theme_blueprint', type: 'theme', themeKey: 'blueprint',
     name: 'BLUEPRINT', description: 'Technical drawings on indigo.',
-    price: 150, emoji: '📐', accent: '#88DDFF',
+    price: 1500, emoji: '📐', accent: '#88DDFF',
   },
   {
     id: 'theme_sketch', type: 'theme', themeKey: 'sketch',
     name: 'SKETCH', description: 'Hand-drawn, imperfect, alive.',
-    price: 150, emoji: '✏️', accent: '#C08AE0',
+    price: 1500, emoji: '✏️', accent: '#C08AE0',
   },
   {
     id: 'theme_bauhaus', type: 'theme', themeKey: 'bauhaus',
     name: 'BAUHAUS', description: 'Primary geometry. Form follows function.',
-    price: 200, emoji: '🔴', accent: '#E81414',
+    price: 2000, emoji: '🔴', accent: '#E81414',
   },
   {
     id: 'theme_stone', type: 'theme', themeKey: 'stone',
     name: 'STONE', description: 'Grayscale monolith. Brutalist.',
-    price: 200, emoji: '🪨', accent: '#B4B4B4',
+    price: 2000, emoji: '🪨', accent: '#B4B4B4',
   },
   {
     id: 'theme_wood', type: 'theme', themeKey: 'wood',
     name: 'WOOD', description: 'Warm grain and amber tones.',
-    price: 200, emoji: '🪵', accent: '#C8A96E',
+    price: 2000, emoji: '🪵', accent: '#C8A96E',
+  },
+  // New purchasable themes
+  {
+    id: 'theme_midnight', type: 'theme', themeKey: 'midnight',
+    name: 'MIDNIGHT', description: 'Deep blue neon on starless skies.',
+    price: 2200, emoji: '🌌', accent: '#4fd1ff',
+  },
+  {
+    id: 'theme_pastel', type: 'theme', themeKey: 'pastel',
+    name: 'PASTEL', description: 'Soft hues with gentle contrast.',
+    price: 2200, emoji: '🧁', accent: '#a7f3d0',
   },
 
-  // ── Music Packs ──────────────────────────────────────────────────────────────
-  {
-    id: 'music_lofi', type: 'music',
-    name: 'LO-FI ZONE', description: 'Chill lo-fi beats for long sessions.',
-    price: 300, emoji: '🎷', accent: '#a855f7',
-    preview: null, // tracks provided later
-  },
-  {
-    id: 'music_synthwave', type: 'music',
-    name: 'SYNTHWAVE DREAMS', description: '80s-inspired synth pads and arpeggios.',
-    price: 300, emoji: '🌆', accent: '#f97316',
-    preview: null,
-  },
-  {
-    id: 'music_acoustic', type: 'music',
-    name: 'ACOUSTIC GARDEN', description: 'Organic instruments, calm focus.',
-    price: 300, emoji: '🌿', accent: '#22c55e',
-    preview: null,
-  },
+  // ── Badges / Titles (purchasable) ───────────────────────────────────────────
+  { id: 'badge_champion',    type: 'badge', name: 'CHAMPION',    description: 'Wear your crown in leaderboards.',        price: 4000, emoji: '👑', accent: '#ffd700' },
+  { id: 'badge_speedrunner', type: 'badge', name: 'SPEEDRUNNER', description: 'Sprint addict — fast hands, fast mind.',  price: 3000, emoji: '🏎️', accent: '#f97316' },
+  { id: 'badge_blitzlord',   type: 'badge', name: 'BLITZ LORD',  description: 'Master of the 120s frenzy.',            price: 3000, emoji: '⚡', accent: '#22c55e' },
+  { id: 'badge_zenmaster',   type: 'badge', name: 'ZEN MASTER',  description: 'Calm stacker with perfect flow.',       price: 2500, emoji: '🧘', accent: '#60a5fa' },
+  { id: 'badge_purifier',    type: 'badge', name: 'PURIFIER',    description: 'Kept the infection at bay.',            price: 2500, emoji: '☣️', accent: '#a855f7' },
+  { id: 'badge_ultra',       type: 'badge', name: 'ULTRA',       description: 'For those who beat the ultimate.',     price: 5000, emoji: '💀', accent: '#ef4444' },
+  { id: 'badge_noob',        type: 'badge', name: 'NOOB',        description: 'Played story on easy mode. At least you tried.', price: 5000, emoji: '🐣', accent: '#a855f7' },
 
   // ── Effects ──────────────────────────────────────────────────────────────────
   {
     id: 'effect_trails', type: 'effect',
     name: 'PARTICLE TRAILS', description: 'Pieces leave glowing trails as they move.',
-    price: 250, emoji: '✨', accent: '#eab308',
+    price: 2500, emoji: '✨', accent: '#eab308',
   },
   {
     id: 'effect_holographic', type: 'effect',
     name: 'HOLOGRAPHIC BOARD', description: 'The board shimmers with iridescent light.',
-    price: 350, emoji: '💠', accent: '#00d4ff',
+    price: 3500, emoji: '💠', accent: '#00d4ff',
   },
   {
     id: 'effect_retro_crt', type: 'effect',
     name: 'RETRO CRT', description: 'Scanlines and screen curvature filter.',
-    price: 200, emoji: '📺', accent: '#22c55e',
+    price: 2000, emoji: '📺', accent: '#22c55e',
+  },
+  {
+    id: 'effect_gridpulse', type: 'effect',
+    name: 'GRID PULSE', description: 'Subtle pulsing grid overlay effect.',
+    price: 1800, emoji: '🧭', accent: '#60a5fa',
+  },
+  {
+    id: 'effect_sparkles', type: 'effect',
+    name: 'SPARKLES', description: 'Tiny twinkles across the matrix.',
+    price: 1600, emoji: '✨', accent: '#a855f7',
   },
   // ─── World / background themes (unlocked via story, not purchasable) ──────
   { id: 'bg_quake',     type: 'bg', bgType: 'quake',     name: 'QUAKE',      description: 'Cracked earth glowing with magma veins.',   price: 0, emoji: '🪨', accent: '#c87820', storyUnlock: true },
@@ -97,7 +107,9 @@ export const STORE_ITEMS = [
   { id: 'bg_blackhole', type: 'bg', bgType: 'blackhole', name: 'BLACK HOLE', description: 'Accretion disk orbiting a singularity.',     price: 0, emoji: '🕳️', accent: '#a855f7', storyUnlock: true },
   { id: 'bg_abyss',     type: 'bg', bgType: 'abyss',     name: 'ABYSS',      description: 'Breathing darkness with ghost wisps.',       price: 0, emoji: '👁️', accent: '#6366f1', storyUnlock: true },
   { id: 'bg_matrix',    type: 'bg', bgType: 'matrix',    name: 'MATRIX',     description: 'Cascading katakana in the digital rain.',    price: 0, emoji: '🟩', accent: '#22c55e', storyUnlock: true },
-  { id: 'bg_oiia',      type: 'bg', bgType: 'oiia',      name: 'OIIA CAT',   description: 'OIIA OIIA spinning cats everywhere.',        price: 0, emoji: '🐱', accent: '#ff6eb4' },
+  { id: 'bg_oiia',      type: 'bg', bgType: 'oiia',      name: 'OIIA CAT',   description: 'OIIA OIIA spinning cats everywhere.',        price: 3600, emoji: '🐱', accent: '#ff6eb4' },
+  { id: 'bg_nyancat',  type: 'bg', bgType: 'nyancat',   name: 'NYAN CAT',   description: 'Rainbow trails across the stars. Meow!',     price: 4000, emoji: '🌈', accent: '#ff66cc' },
+  { id: 'bg_custom',    type: 'bg', bgType: 'custom',    name: 'CUSTOM IMAGE', description: 'Apply any image/GIF as your background (cost per image).',  price: 600, emoji: '🖼️', accent: '#eab308' },
 
   // ── Story Piece Themes (unlocked by completing specific levels) ───────────
   {
@@ -180,4 +192,4 @@ export const STORE_ITEMS = [
   },
 ]
 
-export const ITEM_TYPES = ['theme', 'music', 'effect', 'bg']
+export const ITEM_TYPES = ['theme', 'badge', 'effect', 'bg']

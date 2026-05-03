@@ -2,11 +2,11 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
-import { purchaseItem } from '../firebase/db'
+import { purchaseItem, setActiveBadge, toggleEffect } from '../firebase/db'
 import { STORE_ITEMS, ITEM_TYPES } from '../logic/storeData'
 import { useTheme } from '../contexts/ThemeContext'
 
-const TAB_LABELS = { theme: 'THEMES', music: 'MUSIC', effect: 'EFFECTS' }
+const TAB_LABELS = { theme: 'THEMES', badge: 'BADGES', effect: 'EFFECTS', bg: 'BACKGROUNDS' }
 
 function CoinBadge({ coins }) {
   return (
@@ -22,7 +22,7 @@ function ItemCard({ item, owned, active, onBuy, onEquip, coins }) {
 
   let actionLabel, actionFn, actionDisabled = false, actionColor = item.accent
   if (item.price === 0 || owned) {
-    if (item.type === 'theme') {
+    if (item.type === 'theme' || item.type === 'badge' || item.type === 'effect' || item.type === 'bg') {
       actionLabel = active ? 'EQUIPPED' : 'EQUIP'
       actionFn = onEquip
       actionDisabled = active
@@ -101,6 +101,8 @@ export default function StorePage() {
 
   const coins = userProfile?.coins ?? 0
   const inventory = userProfile?.inventory ?? ['theme_classic']
+  const selectedBadge = userProfile?.selectedBadge || null
+  const selectedEffects = Array.isArray(userProfile?.selectedEffects) ? userProfile.selectedEffects : []
 
   const showToast = (msg, color = '#22c55e') => {
     setToast({ msg, color })
@@ -122,9 +124,35 @@ export default function StorePage() {
     }
   }
 
-  const handleEquip = (item) => {
-    if (item.type === 'theme') setTheme(item.themeKey)
-    showToast(`Theme applied: ${item.name}`)
+  const handleEquip = async (item) => {
+    if (item.type === 'theme') {
+      setTheme(item.themeKey)
+      showToast(`Theme applied: ${item.name}`)
+    } else if (item.type === 'badge') {
+      if (!user) return
+      try {
+        await setActiveBadge(user.uid, item.id)
+        await refreshProfile()
+        showToast(`Badge equipped: ${item.name}`)
+      } catch (e) {
+        showToast(e?.message || 'Failed to equip badge', '#f87171')
+      }
+    } else if (item.type === 'effect') {
+      if (!user) return
+      const isActive = selectedEffects.includes(item.id)
+      try {
+        await toggleEffect(user.uid, item.id, !isActive)
+        // Persist multi-effect list to localStorage
+        const next = isActive ? selectedEffects.filter(e => e !== item.id) : [...selectedEffects, item.id]
+        try { localStorage.setItem('selectedEffects', JSON.stringify(next)) } catch {}
+        // Keep legacy single key for backward-compat
+        try { if (next.length) localStorage.setItem('selectedEffect', next[next.length - 1]); else localStorage.removeItem('selectedEffect') } catch {}
+        await refreshProfile()
+        showToast(`${isActive ? 'Effect removed' : 'Effect equipped'}: ${item.name}`)
+      } catch (e) {
+        showToast(e?.message || 'Failed to toggle effect', '#f87171')
+      }
+    }
   }
 
   // Story-unlocked items are not available in the store
@@ -177,7 +205,7 @@ export default function StorePage() {
             key={item.id}
             item={item}
             owned={item.price === 0 || inventory.includes(item.id)}
-            active={item.type === 'theme' && item.themeKey === theme}
+            active={(item.type === 'theme' && item.themeKey === theme) || (item.type === 'badge' && item.id === selectedBadge) || (item.type === 'effect' && selectedEffects.includes(item.id))}
             coins={coins}
             onBuy={() => handleBuy(item)}
             onEquip={() => handleEquip(item)}
@@ -192,7 +220,7 @@ export default function StorePage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
-            style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: '#12121e', border: `1px solid ${toast.color}`, borderRadius: 8, padding: '10px 20px', color: toast.color, fontSize: '0.8rem', letterSpacing: '0.08em', zIndex: 500, whiteSpace: 'nowrap' }}
+            style={{ position: 'fixed', bottom: 24, left: 0, right: 0, margin: '0 auto', width: 'max-content', maxWidth: '90vw', textAlign: 'center', background: '#12121e', border: `1px solid ${toast.color}`, borderRadius: 8, padding: '10px 20px', color: toast.color, fontSize: '0.8rem', letterSpacing: '0.08em', zIndex: 500, whiteSpace: 'nowrap' }}
           >
             {toast.msg}
           </motion.div>

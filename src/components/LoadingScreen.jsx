@@ -55,7 +55,7 @@ export default function LoadingScreen({ onDone }) {
     }, lastDelay))
 
     return () => timers.forEach(clearTimeout)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [])  // run once on mount only
 
   return (

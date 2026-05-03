@@ -2,10 +2,11 @@ import { createBag } from './randomBag'
 import { I_KICKS, JLSTZ_KICKS } from './srs'
 import { BOARD_HEIGHT, BOARD_WIDTH, PIECES } from './tetrominoes'
 
-export const GAME_MODE = { NORMAL: 'normal', SPRINT: 'sprint', BLITZ: 'blitz', MASTER: 'master', PURIFY: 'purify', VERSUS: 'versus', ZEN: 'zen', ULTIMATE: 'ultimate' /*, TOWER: 'tower' — merged into ULTIMATE */ }
+export const GAME_MODE = { NORMAL: 'normal', SPRINT: 'sprint', BLITZ: 'blitz', MASTER: 'master', PURIFY: 'purify', VERSUS: 'versus', ZEN: 'zen', ULTIMATE: 'ultimate', EASY: 'easy' /*, TOWER: 'tower' — merged into ULTIMATE */ }
 export const PURIFY_DURATION_MS = 180000
 export const BLITZ_DURATION_MS  = 120000
 export const SPRINT_LINES       = 40
+export const EASY_SPRINT_LINES  = 20  // Easy mode clears only 20 lines to finish
 // Ultimate base garbage interval is randomized per run between 10–20s
 export const ULTIMATE_BASE_MIN_MS = 14000
 export const ULTIMATE_BASE_MAX_MS = 26000
@@ -59,7 +60,7 @@ const DEFAULT_SETTINGS = {
 const createEmptyBoard = () =>
   Array.from({ length: BOARD_HEIGHT }, () => Array.from({ length: BOARD_WIDTH }, () => null))
 
-const createInfectedRow = () => {
+const _createInfectedRow = () => {
   const row = Array(BOARD_WIDTH).fill(null)
   const holes = new Set()
   while (holes.size < 3) holes.add(Math.floor(Math.random() * BOARD_WIDTH))
@@ -574,8 +575,12 @@ export class TetrisEngine {
         this.score += 50 * this.combo * this.level
       }
 
-      // Sprint end check
+      // Sprint / Easy end check
       if (this.mode === GAME_MODE.SPRINT && this.lines >= SPRINT_LINES) {
+        this.gameOver = true
+        this.gameOverReason = 'complete'
+      }
+      if (this.mode === GAME_MODE.EASY && this.lines >= EASY_SPRINT_LINES) {
         this.gameOver = true
         this.gameOverReason = 'complete'
       }
@@ -849,6 +854,7 @@ export class TetrisEngine {
     const base = 0.6 * Math.pow(1.22, this.level - 1)
     if (this.mode === GAME_MODE.BLITZ) return Math.min(20, base * 1.25)
     if (this.mode === GAME_MODE.ULTIMATE) return Math.min(20, base * 1.05)
+    if (this.mode === GAME_MODE.EASY) return Math.min(20, base * 0.45)  // ~half speed
     return Math.min(20, base)
   }
 

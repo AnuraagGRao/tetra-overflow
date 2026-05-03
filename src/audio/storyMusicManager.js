@@ -174,7 +174,7 @@ export class StoryMusicManager {
     // Schedule crossfade before end, if buffer is known and we're playing
     try { clearTimeout(this._xFadeTimer) } catch {}
     const sec = buf.duration
-    const startAt = this.ctx.currentTime
+    const _startAt = this.ctx.currentTime
     // Use setTimeout wall clock; okay for approximate scheduling
     const lead = Math.max(0.2, this._xfadeSec)
     const waitMs = Math.max(0, (sec - lead) * 1000)
@@ -250,7 +250,7 @@ export class StoryMusicManager {
   // ── Public API ──────────────────────────────────────────────────────────────
 
   /** Start chapter playlist at a random track, with a 1.2 s fade-in. */
-  playForLevel(chapterId, levelId) { // levelId kept for API compat — not used for selection
+  playForLevel(chapterId, _levelId) { // _levelId kept for API compat — not used for selection
     if (this.ctx.state === 'suspended') this.ctx.resume()
     this._playing    = true
     this._ensurePlaylist(chapterId)

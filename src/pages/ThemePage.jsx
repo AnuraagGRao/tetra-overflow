@@ -1,26 +1,217 @@
-import { useState } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
+import { purchaseItem } from '../firebase/db'
 import { useTheme, THEMES } from '../contexts/ThemeContext'
 import { STORE_ITEMS } from '../logic/storeData'
 import BackgroundCanvas from '../components/BackgroundCanvas'
 
 const BG_ITEMS = STORE_ITEMS.filter(i => i.type === 'bg')
 const THEME_STORE_ITEMS = STORE_ITEMS.filter(i => i.type === 'theme')
-// Map themeId → store item (for lock/unlock info)
 const THEME_STORE_MAP = Object.fromEntries(THEME_STORE_ITEMS.map(i => [i.themeKey, i]))
 const MAX_FAVS = 7
+const CUSTOM_PRICE = BG_ITEMS.find(i => i.bgType === 'custom')?.price ?? 600
+
+// Compress an image File to a JPEG data-URL, capped at maxSide px
+function compressImage(file, maxSide = 1440, quality = 0.72) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      const scale = Math.min(1, maxSide / Math.max(img.width, img.height))
+      const w = Math.round(img.width * scale)
+      const h = Math.round(img.height * scale)
+      const canvas = document.createElement('canvas')
+      canvas.width = w; canvas.height = h
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(img, 0, 0, w, h)
+      // GIFs lose animation after compress; keep as-is for gif
+      const isGif = file.type === 'image/gif'
+      if (isGif) {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result)
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      } else {
+        resolve(canvas.toDataURL('image/jpeg', quality))
+      }
+    }
+    img.onerror = reject
+    img.src = url
+  })
+}
+
+// ─── Custom Image Modal ────────────────────────────────────────────────────────
+function CustomImageModal({ coins, onConfirm, onClose, busy }) {
+  const [dragOver, setDragOver] = useState(false)
+  const [preview, setPreview] = useState(null) // { url, file }
+  const [error, setError] = useState('')
+  const fileRef = useRef(null)
+
+  const handleFile = useCallback((file) => {
+    if (!file || !file.type.startsWith('image/')) {
+      setError('Please select an image or GIF file.')
+      return
+    }
+    setError('')
+    const url = URL.createObjectURL(file)
+    setPreview(prev => { if (prev) URL.revokeObjectURL(prev.url); return { url, file } })
+  }, [])
+
+  const onDrop = useCallback((e) => {
+    e.preventDefault(); setDragOver(false)
+    const file = e.dataTransfer?.files?.[0]
+    if (file) handleFile(file)
+  }, [handleFile])
+
+  const canAfford = coins >= CUSTOM_PRICE
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 200,
+      background: 'rgba(0,0,0,0.82)', backdropFilter: 'blur(6px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: '1rem',
+    }}>
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+        style={{
+          background: '#0d0d1a', border: '1px solid #eab30840',
+          borderRadius: 16, padding: '1.5rem', width: '100%', maxWidth: 380,
+          fontFamily: '"Courier New", monospace', color: '#ccc',
+          display: 'flex', flexDirection: 'column', gap: '1rem',
+        }}
+      >
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ fontWeight: 900, fontSize: '0.88rem', letterSpacing: '0.2em', color: '#eab308' }}>🖼️ CUSTOM IMAGE</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: '1rem' }}>✕</button>
+        </div>
+
+        {/* Cost */}
+        <div style={{
+          background: canAfford ? 'rgba(234,179,8,0.08)' : 'rgba(248,113,113,0.08)',
+          border: `1px solid ${canAfford ? 'rgba(234,179,8,0.3)' : 'rgba(248,113,113,0.3)'}`,
+          borderRadius: 8, padding: '0.5rem 0.85rem', fontSize: '0.7rem',
+          color: canAfford ? '#eab308' : '#f87171', letterSpacing: '0.08em',
+        }}>
+          {canAfford
+            ? `Cost: ◆ ${CUSTOM_PRICE} coins · You have ◆ ${coins}`
+            : `Not enough coins — need ◆ ${CUSTOM_PRICE}, have ◆ ${coins}`}
+        </div>
+
+        {/* Drop zone / preview */}
+        <div
+          onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={onDrop}
+          onClick={() => fileRef.current?.click()}
+          style={{
+            height: preview ? 'auto' : 140, minHeight: 80,
+            border: `2px dashed ${dragOver ? '#eab308' : preview ? '#eab30855' : '#333'}`,
+            borderRadius: 10, display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center', gap: 8,
+            cursor: 'pointer', overflow: 'hidden', transition: 'border-color 0.2s',
+            background: dragOver ? 'rgba(234,179,8,0.05)' : 'transparent',
+          }}
+        >
+          {preview ? (
+            <img
+              src={preview.url}
+              alt="preview"
+              style={{ width: '100%', maxHeight: 200, objectFit: 'cover', borderRadius: 8, display: 'block' }}
+            />
+          ) : (
+            <>
+              <div style={{ fontSize: '2rem', opacity: 0.5 }}>📂</div>
+              <div style={{ fontSize: '0.65rem', color: '#666', textAlign: 'center', letterSpacing: '0.1em' }}>
+                Drop image / GIF here<br />or click to browse
+              </div>
+            </>
+          )}
+        </div>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          style={{ display: 'none' }}
+          onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = '' }}
+        />
+
+        {preview && (
+          <div style={{ fontSize: '0.6rem', color: '#666', letterSpacing: '0.08em' }}>
+            {preview.file.name} · {(preview.file.size / 1024).toFixed(0)} KB
+            {preview.file.type !== 'image/gif' && ' → compressed to JPEG'}
+          </div>
+        )}
+
+        {error && <div style={{ fontSize: '0.62rem', color: '#f87171' }}>{error}</div>}
+
+        {/* Actions */}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={onClose}
+            style={{
+              flex: 1, padding: '0.6rem', borderRadius: 8,
+              border: '1px solid #333', background: 'transparent',
+              color: '#666', cursor: 'pointer', fontFamily: 'inherit',
+              fontSize: '0.7rem', letterSpacing: '0.1em',
+            }}
+          >CANCEL</button>
+          <motion.button
+            whileTap={!busy && preview && canAfford ? { scale: 0.96 } : {}}
+            disabled={!preview || !canAfford || busy}
+            onClick={() => preview && onConfirm(preview.file)}
+            style={{
+              flex: 2, padding: '0.6rem', borderRadius: 8,
+              border: `1px solid ${preview && canAfford ? '#eab308' : '#333'}`,
+              background: preview && canAfford ? 'rgba(234,179,8,0.14)' : 'transparent',
+              color: preview && canAfford ? '#eab308' : '#444',
+              cursor: preview && canAfford && !busy ? 'pointer' : 'default',
+              fontFamily: 'inherit', fontSize: '0.72rem',
+              letterSpacing: '0.12em', fontWeight: 700,
+            }}
+          >
+            {busy ? 'APPLYING…' : `APPLY  ◆ ${CUSTOM_PRICE}`}
+          </motion.button>
+        </div>
+      </motion.div>
+    </div>
+  )
+}
 
 export default function ThemePage() {
   const navigate = useNavigate()
-  const { userProfile } = useAuth()
+  const { user, userProfile, refreshProfile } = useAuth()
   const { theme, setTheme, bgTheme, setBgTheme, favThemes, setFavThemes } = useTheme()
 
-  // Which favorite slot is currently selected for assignment (-1 = none)
   const [selectedSlot, setSelectedSlot] = useState(-1)
+  const [customModalOpen, setCustomModalOpen] = useState(false)
+  const [customBusy, setCustomBusy] = useState(false)
 
   const inventory = userProfile?.inventory || []
+  const coins = userProfile?.coins ?? 0
+
+  const handleCustomConfirm = async (file) => {
+    setCustomBusy(true)
+    try {
+      if (!user) throw new Error('Sign in required')
+      await purchaseItem(user.uid, `bg_custom_use_${Date.now()}`, CUSTOM_PRICE)
+      await refreshProfile?.()
+      const dataUrl = await compressImage(file)
+      try { localStorage.setItem('custom-bg-url', dataUrl) } catch {
+        throw new Error('Image too large for local storage — try a smaller file')
+      }
+      setBgTheme('custom')
+      setCustomModalOpen(false)
+    } catch (e) {
+      window.alert(e?.message || 'Failed to apply custom image')
+    } finally {
+      setCustomBusy(false)
+    }
+  }
 
   const handleSlotClick = (idx) => {
     if (selectedSlot === idx) {
@@ -46,12 +237,8 @@ export default function ThemePage() {
   }
 
   const applyTheme = (id) => {
-    if (id.startsWith('bg_')) {
-      setBgTheme(id.replace('bg_', ''))
-    } else {
-      setTheme(id)
-      setBgTheme(null)
-    }
+    if (id.startsWith('bg_')) setBgTheme(id.replace('bg_', ''))
+    else setTheme(id)
   }
 
   const slotItems = Array.from({ length: MAX_FAVS }, (_, i) => favThemes[i] || null)
@@ -64,6 +251,17 @@ export default function ThemePage() {
       fontFamily: '"Courier New", monospace',
       overflowY: 'auto',
     }}>
+      {/* Custom image modal */}
+      <AnimatePresence>
+        {customModalOpen && (
+          <CustomImageModal
+            coins={coins}
+            busy={customBusy}
+            onConfirm={handleCustomConfirm}
+            onClose={() => !customBusy && setCustomModalOpen(false)}
+          />
+        )}
+      </AnimatePresence>
       {/* Live bg preview */}
       {bgTheme && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none' }}>
@@ -140,7 +338,7 @@ export default function ThemePage() {
               const storeItem = THEME_STORE_MAP[t.id]
               // classic is always free; store items need inventory check
               const isOwned = t.id === 'classic' || !storeItem || inventory.includes(storeItem.id)
-              const isActive = theme === t.id && !bgTheme
+              const isActive = theme === t.id
               const isAssigning = selectedSlot >= 0
               const accent = storeItem?.accent
               return (
@@ -199,8 +397,12 @@ export default function ThemePage() {
                 <motion.button
                   key={item.id}
                   whileTap={unlocked ? { scale: 0.94 } : {}}
-                  onClick={() => {
+                  onClick={async () => {
                     if (!unlocked) return
+                    if (item.bgType === 'custom') {
+                      setCustomModalOpen(true)
+                      return
+                    }
                     isAssigning ? assignToSlot(item.id) : applyTheme(item.id)
                   }}
                   style={{

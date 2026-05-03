@@ -2,12 +2,14 @@ import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
-import { saveStoryProgress, unlockItem, saveGameResult } from '../firebase/db'
+import { saveStoryProgress, unlockItem, saveGameResult, markEasyModePlayed, setActiveBadge } from '../firebase/db'
 import SettingsPage from '../components/SettingsPage'
 import { findLevel, getNextLevel } from '../logic/storyData'
 import { PIECES } from '../logic/tetrominoes'
 import { TetrisEngine, GAME_MODE, ZONE_MIN_METER } from '../logic/gameEngine'
+import { setSfxVolume, playMoveSFX, playRotateSFX, playHoldSFX, playHardDropSFX, playLockSFX, playLineClearSFX, playTetrisSFX, playZoneActivateSFX } from '../audio/gameSfx'
 import GameCanvas, { PIECE_COLOR_MAPS } from '../components/GameCanvas'
+import FocusHud from '../components/FocusHud'
 import { BG_TYPE_TO_PIECE_THEME } from '../logic/themeMappings'
 import TouchControls from '../components/TouchControls'
 import BackgroundCanvas from '../components/BackgroundCanvas'
@@ -20,48 +22,7 @@ function getPieceColor(type, theme) {
   return (PIECE_COLOR_MAPS[theme]?.[type]) ?? PIECES[type]?.color ?? '#888888'
 }
 
-// ─── Local SFX (Web Audio) ──────────────────────────────────────────────────
-let _stAudioCtx = null
-let _stSfxVol   = 2.0
-const getStAudio = () => {
-  const Ctx = window.AudioContext || window.webkitAudioContext
-  if (!Ctx) return null
-  if (!_stAudioCtx) _stAudioCtx = new Ctx()
-  if (_stAudioCtx.state === 'suspended') _stAudioCtx.resume()
-  return _stAudioCtx
-}
-const stNote = (freq, dur, gain, type = 'triangle', offset = 0) => {
-  const ctx = getStAudio(); if (!ctx) return
-  const osc = ctx.createOscillator(), g = ctx.createGain()
-  osc.connect(g); g.connect(ctx.destination)
-  osc.type = type; osc.frequency.value = freq
-  const t = ctx.currentTime + offset
-  g.gain.setValueAtTime(Math.max(0, gain) * _stSfxVol, t)
-  g.gain.exponentialRampToValueAtTime(0.001, t + dur)
-  osc.start(t); osc.stop(t + dur + 0.01)
-}
-const stNoise = (lpFreq, gain, dur, offset = 0) => {
-  const ctx = getStAudio(); if (!ctx) return
-  const len = Math.ceil(ctx.sampleRate * Math.min(dur, 0.5))
-  const buf = ctx.createBuffer(1, len, ctx.sampleRate)
-  const d = buf.getChannelData(0)
-  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1
-  const src = ctx.createBufferSource(); src.buffer = buf
-  const flt = ctx.createBiquadFilter(); flt.type = 'lowpass'; flt.frequency.value = lpFreq
-  const g = ctx.createGain(); src.connect(flt); flt.connect(g); g.connect(ctx.destination)
-  const t = ctx.currentTime + offset
-  g.gain.setValueAtTime(Math.max(0, gain) * _stSfxVol, t)
-  g.gain.exponentialRampToValueAtTime(0.001, t + dur)
-  src.start(t); src.stop(t + dur + 0.01)
-}
-let _lastStMoveBeep = 0
-const sfxMove     = () => { const n = performance.now(); if (n - _lastStMoveBeep < 75) return; _lastStMoveBeep = n; stNote(380, 0.022, 0.026, 'triangle') }
-const sfxRotate   = () => { stNote(1100, 0.032, 0.22, 'triangle'); stNote(750, 0.020, 0.16, 'sine', 0.010) }
-const sfxHold     = () =>   stNote(660, 0.018, 0.15, 'triangle')
-const sfxHardDrop = () => { stNote(75, 0.18, 0.44, 'sine'); stNote(410, 0.06, 0.14, 'triangle', 0.010); stNoise(900, 0.18, 0.06, 0.012) }
-const sfxClear    = (lines = 1) => { stNoise(9000, 0.18, 0.11); (lines >= 4 ? [392,523,659,784,1047] : [392,523,659,784]).forEach((f,i)=>stNote(f,0.095,0.18,'sine',i*0.062)) }
-const sfxLock     = () => { const ctx = getStAudio(); if (!ctx) return; const osc = ctx.createOscillator(), g = ctx.createGain(); osc.connect(g); g.connect(ctx.destination); osc.type='sine'; const t=ctx.currentTime; osc.frequency.setValueAtTime(110,t); osc.frequency.exponentialRampToValueAtTime(52,t+0.07); g.gain.setValueAtTime(0.18*_stSfxVol,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.10); osc.start(t); osc.stop(t+0.11) }
-const sfxZoneOn   = () => { stNote(784,0.18,0.16,'triangle'); stNote(1047,0.22,0.14,'triangle',0.10) }
+// (SFX volume is managed inside the component via config effects)
 
 const KEY_BINDINGS = {
   ArrowLeft:  { held: 'left' },
@@ -203,10 +164,10 @@ function useStoryGameLoop(engine, targetLines, levelStartLinesRef, levelKey, onC
 }
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
-const PHASE = { STORY: 'story', GAME: 'game', TRANSITION: 'transition', COMPLETE: 'complete', FAIL: 'fail' }
+const PHASE = { STORY: 'story', GAME: 'game', TRANSITION: 'transition', COMPLETE: 'complete', FAIL: 'fail', ENDING: 'ending' }
 
 function MediaControls({ storyMusicRef, chapterColor }) {
-  const [bump, setBump] = useState(0)
+  const [_bump, setBump] = useState(0)
   const m = storyMusicRef?.current
   const now = m?.getNowPlaying?.()
   const shuffle = m?.getShuffleEachLoop?.() ?? true
@@ -246,15 +207,21 @@ export default function StoryLevelPage() {
 
   const found     = useMemo(() => findLevel(currentChapterId, currentLevelId), [currentChapterId, currentLevelId])
   const nextLevel = useMemo(() => getNextLevel(currentChapterId, currentLevelId), [currentChapterId, currentLevelId])
+  // Compute piece theme early so effects and callbacks can safely reference it
+  const pieceTheme = BG_TYPE_TO_PIECE_THEME[found?.level?.bgType] ?? 'classic'
 
   const [phase,      setPhase]      = useState(PHASE.STORY)
   const [finalLines, setFinalLines] = useState(0)
   const [finalScore, setFinalScore] = useState(0)
   const [saving,     setSaving]     = useState(false)
   const [storyCountdown, setStoryCountdown] = useState(null) // auto-begin countdown
+  const [transitionCountdown, setTransitionCountdown] = useState(null) // countdown to auto-advance
+  const transitionAdvanceRef = useRef(null) // stores the advance fn so CONTINUE button can call it
+  const [focus, setFocus] = useState(() => { try { return localStorage.getItem('focus-mode') === '1' } catch { return false } })
+  const [easyMode, setEasyMode] = useState(() => { try { return localStorage.getItem('story-easy') === '1' } catch { return false } })
 
   // Engine persists across seamless level transitions — never reset between levels
-  const engine = useMemo(() => new TetrisEngine(), []) // eslint-disable-line
+  const engine = useMemo(() => new TetrisEngine(), [])  
 
   // Line baseline: how many lines were cleared when the current level started
   const levelStartLinesRef = useRef(0)
@@ -263,7 +230,7 @@ export default function StoryLevelPage() {
 
   const storyMusicRef = useRef(null)
   const beatRef       = useRef(0)
-  const [musicTick, setMusicTick] = useState(0) // force UI refresh on media actions
+  const [_musicTick, _setMusicTick] = useState(0) // force UI refresh on media actions
   const [storyMuted, setStoryMuted] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const CONFIG_KEY = 'tetris-config'
@@ -275,7 +242,7 @@ export default function StoryLevelPage() {
   useEffect(() => { try { localStorage.setItem(CONFIG_KEY, JSON.stringify(config)) } catch {} }, [config])
   useEffect(() => { try { engine.setSettings({ das: config.das, arr: config.arr }) } catch {} }, [config.das, config.arr, engine])
   useEffect(() => { try { storyMusicRef.current?.setVolume?.(config.musicVolume) } catch {} }, [config.musicVolume])
-  useEffect(() => { _stSfxVol = config.sfxVolume ?? 2.0 }, [config.sfxVolume])
+  useEffect(() => { setSfxVolume(config.sfxVolume ?? 1.0) }, [config.sfxVolume])
 
   // Apply DAS / ARR config
   useEffect(() => {
@@ -300,6 +267,17 @@ export default function StoryLevelPage() {
   // Cleanup music on unmount
   useEffect(() => () => { storyMusicRef.current?.stop() }, [])
 
+  // Persist focus mode and hotkey (F)
+  useEffect(() => { try { localStorage.setItem('focus-mode', focus ? '1' : '0') } catch {} }, [focus])
+  useEffect(() => {
+    const onKey = (e) => { if (e.code === 'KeyF') setFocus(f => !f) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  // Persist easy mode toggle
+  useEffect(() => { try { localStorage.setItem('story-easy', easyMode ? '1' : '0') } catch {} }, [easyMode])
+
   // Engine reset — only for fresh starts and explicit retries (not seamless transitions)
   useEffect(() => {
     if (phase === PHASE.GAME && pendingResetRef.current) {
@@ -307,9 +285,10 @@ export default function StoryLevelPage() {
       engine.reset(GAME_MODE.NORMAL)
       levelStartLinesRef.current = 0
       const gm = found?.level?.gravityMult ?? 1.0
-      engine.level = Math.max(3, Math.round(gm * 5 + 1))
+      const gravFactor = easyMode ? 0.6 : 1.0
+      engine.level = Math.max(1, Math.round(gm * gravFactor * 5 + 1))
     }
-  }, [phase, engine, found])
+  }, [phase, engine, found, easyMode])
 
   // Story auto-begin: count down from 13 s and auto-start the game
   useEffect(() => {
@@ -328,23 +307,42 @@ export default function StoryLevelPage() {
     return () => clearInterval(id)
   }, [phase, currentChapterId, currentLevelId]) // reset timer on each new level story screen
 
-  // Seamless transition: advance to next level after 2.5 s overlay
+  // Seamless transition: pause to let the player read storyAfter text, then advance
   useEffect(() => {
-    if (phase !== PHASE.TRANSITION) return
+    if (phase !== PHASE.TRANSITION) { setTransitionCountdown(null); return }
     const next = getNextLevel(currentChapterId, currentLevelId)
     if (!next) return
-    const timer = setTimeout(() => {
+
+    // Boss levels get more reading time
+    const isBossLevel = found?.level?.isBoss
+    const delay = isBossLevel ? 9 : 7 // seconds
+
+    setTransitionCountdown(delay)
+    let remaining = delay
+
+    const doAdvance = () => {
       const nextFound = findLevel(next.chapterId, next.levelId)
       const gm = nextFound?.level?.gravityMult ?? 1.0
-      engine.level = Math.max(3, Math.round(gm * 5 + 1))
+        const gravFactor = easyMode ? 0.6 : 1.0
+        engine.level = Math.max(1, Math.round(gm * gravFactor * 5 + 1))
       levelStartLinesRef.current = engine.getState().lines
       engine.togglePause()  // resume
       setCurrentChapterId(next.chapterId)
       setCurrentLevelId(next.levelId)
       setPhase(PHASE.GAME)
-    }, 2500)
-    return () => clearTimeout(timer)
-  }, [phase, currentChapterId, currentLevelId, engine])
+    }
+
+    // Store so CONTINUE button can call it immediately
+    transitionAdvanceRef.current = doAdvance
+
+    const id = setInterval(() => {
+      remaining -= 1
+      setTransitionCountdown(remaining)
+      if (remaining <= 0) { clearInterval(id); doAdvance() }
+    }, 1000)
+
+    return () => { clearInterval(id); transitionAdvanceRef.current = null }
+  }, [phase, currentChapterId, currentLevelId, engine]) // eslint-disable-line
 
   const showOnScreenControls = (() => {
     try { return JSON.parse(localStorage.getItem('tetris-config') ?? '{}').showOnScreenControls ?? false }
@@ -362,6 +360,10 @@ export default function StoryLevelPage() {
     }
 
     // Save progress for the completed level
+    if (user && easyMode) {
+      markEasyModePlayed(user.uid).catch(() => {})
+      setActiveBadge(user.uid, 'badge_noob').catch(() => {})
+    }
     if (user && found) {
       setSaving(true)
       const unlocks = [
@@ -383,17 +385,25 @@ export default function StoryLevelPage() {
     if (next) {
       engine.togglePause()   // freeze board during cinematic overlay
       setPhase(PHASE.TRANSITION)
+    } else if (currentChapterId === 'ch7' && currentLevelId === 'l5') {
+      // Final level of the entire story — show the grand ending screen
+      engine.togglePause()
+      setPhase(PHASE.ENDING)
     } else {
       engine.togglePause()   // freeze on last level too
       setPhase(PHASE.COMPLETE)
     }
-  }, [user, currentChapterId, currentLevelId, found, engine])
+  }, [user, currentChapterId, currentLevelId, found, engine, easyMode])
 
   const levelKey = `${currentChapterId}-${currentLevelId}`
 
+  const effectiveTargetLines = easyMode && found?.level?.targetLines > 0
+    ? Math.round(found.level.targetLines * 0.75)
+    : (found?.level?.targetLines || 0)
+
   const { state, paused, triggerAction, handlePress, handleRelease, togglePause } = useStoryGameLoop(
     engine,
-    found?.level?.targetLines || 0,
+    effectiveTargetLines,
     levelStartLinesRef,
     levelKey,
     handleComplete,
@@ -402,10 +412,17 @@ export default function StoryLevelPage() {
   )
 
   const handleDragBegin = useCallback((dir) => {
-    if (dir === 'left' || dir === 'right') handlePress(dir, true)
-    else if (dir === 'down') handlePress('softDrop', true)
-    else if (dir === 'up') triggerAction('hold')
-  }, [handlePress, triggerAction])
+    if (dir === 'left' || dir === 'right') {
+      if (config?.sfxEnabled && !paused) try { playMoveSFX(pieceTheme || 'classic') } catch {}
+      handlePress(dir, true)
+    } else if (dir === 'down') {
+      if (config?.sfxEnabled && !paused) try { playMoveSFX(pieceTheme || 'classic') } catch {}
+      handlePress('softDrop', true)
+    } else if (dir === 'up') {
+      if (config?.sfxEnabled && !paused) try { playHoldSFX(pieceTheme || 'classic') } catch {}
+      triggerAction('hold')
+    }
+  }, [handlePress, triggerAction, config?.sfxEnabled, paused, pieceTheme])
 
   const handleDragEnd = useCallback((dir) => {
     if (dir === 'left' || dir === 'right') handleRelease(dir)
@@ -413,9 +430,31 @@ export default function StoryLevelPage() {
   }, [handleRelease])
 
   const handleHardDrop = useCallback(() => {
+    if (config?.sfxEnabled && !paused) try { playHardDropSFX(pieceTheme || 'classic') } catch {}
     handleRelease('softDrop')
     triggerAction('hardDrop')
-  }, [handleRelease, triggerAction])
+  }, [handleRelease, triggerAction, config?.sfxEnabled, paused, pieceTheme])
+
+  
+
+  // Immediate SFX parity with Solo on keydown (in addition to state-driven SFX)
+  useEffect(() => {
+    const onKeySfx = (ev) => {
+      if (ev.repeat) return
+      try {
+        if (!config?.sfxEnabled || paused) return
+        const b = KEY_BINDINGS[ev.code]; if (!b) return
+        const th = pieceTheme || 'classic'
+        if (b.held === 'left' || b.held === 'right') playMoveSFX(th)
+        if (b.action === 'rotateCW' || b.action === 'rotateCCW' || b.action === 'rotate180') playRotateSFX(th)
+        if (b.action === 'hardDrop') playHardDropSFX(th)
+        if (b.action === 'hold')     playHoldSFX(th)
+        if (b.action === 'activateZone') playZoneActivateSFX(th)
+      } catch {}
+    }
+    window.addEventListener('keydown', onKeySfx)
+    return () => window.removeEventListener('keydown', onKeySfx)
+  }, [config?.sfxEnabled, pieceTheme, paused])
 
   // ── SFX triggers (edge-detected) ───────────────────────────────────────────
   const prevStateRef = useRef(null)
@@ -423,15 +462,16 @@ export default function StoryLevelPage() {
     if (!config.sfxEnabled) { prevStateRef.current = state; return }
     const prev = prevStateRef.current
     if (prev) {
-      if (state.hardDropped)               sfxHardDrop()
-      else if (state.pieceLocked)          sfxLock()
-      if (state.lastClear?.lines > 0)      sfxClear(state.lastClear.lines)
-      if (state.pieceHeld)                 sfxHold()
-      if (prev.zoneActive !== state.zoneActive && state.zoneActive) sfxZoneOn()
+      const theme = pieceTheme || 'classic'
+      if (state.hardDropped)               playHardDropSFX(theme)
+      else if (state.pieceLocked)          playLockSFX(theme)
+      if (state.lastClear?.lines > 0)      { (state.lastClear.lines >= 4 ? playTetrisSFX : playLineClearSFX)(theme) }
+      if (state.pieceHeld)                 playHoldSFX(theme)
+      if (prev.zoneActive !== state.zoneActive && state.zoneActive) playZoneActivateSFX(theme)
       // Move / rotate only when the same piece is active
       if (prev.current?.type === state.current?.type) {
-        if (state.current?.x !== prev.current?.x)          sfxMove()
-        else if (state.current?.rotation !== prev.current?.rotation) sfxRotate()
+        if (state.current?.x !== prev.current?.x)          playMoveSFX(theme)
+        else if (state.current?.rotation !== prev.current?.rotation) playRotateSFX(theme)
       }
     }
     prevStateRef.current = state
@@ -446,7 +486,6 @@ export default function StoryLevelPage() {
   }
 
   const { chapter, level } = found
-  const pieceTheme     = BG_TYPE_TO_PIECE_THEME[level.bgType] ?? 'classic'
   const linesThisLevel = state.lines - levelStartLinesRef.current
 
   // Board alpha syncs to bass beat energy — pulses more transparent on heavy hits
@@ -491,9 +530,17 @@ export default function StoryLevelPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
                 {level.targetLines > 0 && (
                   <div style={{ fontSize: '0.65rem', color: '#666', letterSpacing: '0.14em', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, padding: '5px 14px' }}>
-                    CLEAR {level.targetLines} LINES
+                    CLEAR {easyMode ? Math.round(level.targetLines * 0.75) : level.targetLines} LINES
                   </div>
                 )}
+                {/* Easy mode toggle */}
+                <button
+                  onClick={() => setEasyMode(m => !m)}
+                  style={{ background: easyMode ? 'rgba(168,85,247,0.18)' : 'rgba(255,255,255,0.05)', border: `1px solid ${easyMode ? '#a855f7' : 'rgba(255,255,255,0.12)'}`, color: easyMode ? '#a855f7' : '#555', borderRadius: 6, padding: '5px 14px', cursor: 'pointer', fontSize: '0.62rem', letterSpacing: '0.16em', fontFamily: 'inherit', textTransform: 'uppercase', transition: 'all 0.2s' }}
+                >
+                  🐣 {easyMode ? 'Easy Mode ON' : 'Easy Mode'}
+                </button>
+                {easyMode && <div style={{ fontSize: '0.55rem', color: '#a855f7', letterSpacing: '0.1em', opacity: 0.8 }}>🐣 NOOB badge will be equipped</div>}
                 {/* Auto-begin progress bar */}
                 {storyCountdown !== null && storyCountdown > 0 && (
                   <div style={{ width: 200, height: 3, background: 'rgba(255,255,255,0.08)', borderRadius: 2, overflow: 'hidden', marginBottom: 2 }}>
@@ -520,60 +567,107 @@ export default function StoryLevelPage() {
       {(phase === PHASE.GAME || phase === PHASE.TRANSITION) && (
         <div style={{ position: 'absolute', inset: 0, zIndex: 10, display: 'flex', flexDirection: 'column', pointerEvents: phase === PHASE.TRANSITION ? 'none' : 'auto' }}>
           {/* HUD bar */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 14px', background: 'rgba(0,0,0,0.55)', color: '#fff', fontSize: '0.72rem', letterSpacing: '0.1em', flexShrink: 0, backdropFilter: 'blur(6px)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: '0.5rem', letterSpacing: '0.14em', color: chapter.color, fontWeight: 700 }}>{chapter.title}</span>
-              <span style={{ color: '#333' }}>›</span>
-              <span style={{ color: '#ccc' }}>{level.title}</span>
+          {!focus && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 14px', background: 'rgba(0,0,0,0.55)', color: '#fff', fontSize: '0.72rem', letterSpacing: '0.1em', flexShrink: 0, backdropFilter: 'blur(6px)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: '0.5rem', letterSpacing: '0.14em', color: chapter.color, fontWeight: 700 }}>{chapter.title}</span>
+                <span style={{ color: '#333' }}>›</span>
+                <span style={{ color: '#ccc' }}>{level.title}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button
+                  onClick={() => triggerAction('activateZone')}
+                  disabled={state.zoneMeter < ZONE_MIN_METER || state.zoneActive}
+                  title={state.zoneActive ? 'Zone Active' : (state.zoneMeter >= ZONE_MIN_METER ? 'Activate Zone' : 'Zone charging')}
+                  style={{
+                    background: state.zoneActive ? 'rgba(0,229,255,0.18)' : state.zoneMeter >= ZONE_MIN_METER ? 'rgba(0,229,255,0.12)' : 'rgba(255,255,255,0.04)',
+                    border: `1px solid ${state.zoneActive ? '#00e5ff' : state.zoneMeter >= ZONE_MIN_METER ? '#22d3ee' : 'rgba(255,255,255,0.1)'}`,
+                    color: state.zoneActive ? '#00e5ff' : state.zoneMeter >= ZONE_MIN_METER ? '#80eaff' : '#555',
+                    cursor: state.zoneMeter >= ZONE_MIN_METER && !state.zoneActive ? 'pointer' : 'default',
+                    fontSize: '0.62rem', padding: '2px 8px', borderRadius: 6, fontFamily: 'inherit'
+                  }}
+                >
+                  ⚡ {state.zoneActive ? `${Math.ceil(state.zoneTimer/1000)}s` : 'ZONE'}
+                </button>
+                {level.targetLines > 0 && (
+                  <span style={{ color: '#555', fontSize: '0.62rem' }}>
+                    {Math.min(linesThisLevel, effectiveTargetLines)} / {effectiveTargetLines} lines
+                  </span>
+                )}
+                <span style={{ color: '#00d4ff', fontWeight: 700 }}>{state.score.toLocaleString()}</span>
+                <button
+                  onClick={togglePause}
+                  style={{ background: 'none', border: '1px solid rgba(255,255,255,0.2)', color: '#aaa', cursor: 'pointer', fontSize: '0.6rem', padding: '3px 8px', borderRadius: 4, fontFamily: 'inherit', letterSpacing: '0.1em' }}
+                >
+                  {paused ? '▶' : '⏸'}
+                </button>
+              </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              {level.targetLines > 0 && (
-                <span style={{ color: '#555', fontSize: '0.62rem' }}>
-                  {Math.min(linesThisLevel, level.targetLines)} / {level.targetLines} lines
-                </span>
-              )}
-              <span style={{ color: '#00d4ff', fontWeight: 700 }}>{state.score.toLocaleString()}</span>
-              <button
-                onClick={togglePause}
-                style={{ background: 'none', border: '1px solid rgba(255,255,255,0.2)', color: '#aaa', cursor: 'pointer', fontSize: '0.6rem', padding: '3px 8px', borderRadius: 4, fontFamily: 'inherit', letterSpacing: '0.1em' }}
-              >
-                {paused ? '▶' : '⏸'}
-              </button>
-            </div>
-          </div>
+          )}
 
           {/* Lines progress bar */}
-          {level.targetLines > 0 && (
+          {!focus && level.targetLines > 0 && (
             <div style={{ height: 3, background: 'rgba(255,255,255,0.08)', flexShrink: 0 }}>
-              <div style={{ height: '100%', background: chapter.color, width: `${Math.min(100, (linesThisLevel / level.targetLines) * 100)}%`, transition: 'width 0.3s ease' }} />
+              <div style={{ height: '100%', background: chapter.color, width: `${Math.min(100, (linesThisLevel / effectiveTargetLines) * 100)}%`, transition: 'width 0.3s ease' }} />
             </div>
           )}
 
           {/* Middle: slim-left | canvas | hold+zone+next-right */}
           <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'stretch' }}>
             {/* Left strip: slim score / mode accent (no controls) */}
-            <div style={{ width: 6, flexShrink: 0, background: chapter.color, opacity: 0.25 }} />
+            {!focus && (<div style={{ width: 6, flexShrink: 0, background: chapter.color, opacity: 0.25 }} />)}
 
             {/* Canvas */}
             <div className="mobile-canvas-wrap" style={{ background: 'transparent', flex: 1, minWidth: 0 }}>
-              <div style={{ position: 'relative', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ position: 'relative', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>
                 <GameCanvas
                   state={state}
-                  onTap={() => triggerAction('rotateCW')}
-                  onTwoFingerTap={() => {}}
+                  onTap={() => { if (config?.sfxEnabled && !paused) try { playRotateSFX(pieceTheme || 'classic') } catch {}; triggerAction('rotateCW') }}
+                  onTwoFingerTap={() => { if (config?.sfxEnabled && !paused) try { playZoneActivateSFX(pieceTheme || 'classic') } catch {}; triggerAction('activateZone') }}
                   onDragBegin={handleDragBegin}
                   onDragEnd={handleDragEnd}
                   onHardDrop={handleHardDrop}
                   themeOverride={pieceTheme}
                   boardAlpha={boardAlpha}
                 />
+                {/* Focus toggle styled like Solo's UI tab */}
+                <button
+                  onClick={() => setFocus(f => !f)}
+                  className="ui-toggle-tab"
+                  title={focus ? 'Exit Focus' : 'Enter Focus'}
+                  aria-label={focus ? 'Exit Focus' : 'Enter Focus'}
+                  style={{ right: 0 }}
+                >
+                  {focus ? '▲' : '▼'}
+                </button>
+                {focus && (() => {
+                  const zoneReady = state.zoneMeter >= ZONE_MIN_METER && !state.zoneActive
+                  const zoneFillPct = Math.max(0, Math.min(100, state.zoneActive ? 100 : (state.zoneMeter || 0)))
+                  return (
+                    <div className="fullscreen-mini-hud" style={{ right: 0 }}>
+                      <div className="fmh-hold">
+                        <div className="fmh-label">Hold</div>
+                        <PieceMini type={state.hold} pieceTheme={pieceTheme} size={8} />
+                      </div>
+                      <div className="fmh-zone-wrap">
+                        <div className={`fmh-zone-bar${state.zoneActive ? ' zone-active' : ''}${zoneReady && !state.zoneActive ? ' zone-ready' : ''}`} style={{ height: `${zoneFillPct}%` }} />
+                      </div>
+                      <div className="fmh-next">
+                        <div className="fmh-label">Next</div>
+                        {(state.queue ?? []).slice(0, 3).map((t, i) => (
+                          <PieceMini key={i} type={t} pieceTheme={pieceTheme} size={7} />
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })()}
                 {/* Pause overlay */}
                 {paused && (
                   <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.82)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12 }}>
                     <div style={{ fontSize: '1.2rem', fontWeight: 900, letterSpacing: '0.2em', color: '#fff' }}>PAUSED</div>
                     <div style={{ fontSize: '0.58rem', color: chapter.color, letterSpacing: '0.22em' }}>{chapter.title} › {level.title}</div>
                     <div style={{ fontSize: '0.56rem', color: '#555', letterSpacing: '0.14em' }}>
-                      Lv {state.level} · {linesThisLevel} / {level.targetLines || '∞'} lines
+                      Lv {state.level} · {linesThisLevel} / {effectiveTargetLines || '∞'} lines
                     </div>
                     {/* Media controls — match Solo pause menu */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: '0.25rem', alignItems: 'center' }}>
@@ -637,37 +731,7 @@ export default function StoryLevelPage() {
               </div>
             </div>
 
-            {/* Right strip: Hold + Zone + Next (all on right side) */}
-            <div style={{ width: 64, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '8px 4px', gap: 5, background: 'rgba(0,0,0,0.48)', borderLeft: '1px solid rgba(255,255,255,0.06)' }}>
-              <div style={{ fontSize: '0.42rem', color: '#555', letterSpacing: '0.12em' }}>HOLD</div>
-              <div style={{ background: 'rgba(5,7,18,0.85)', border: '1px solid rgba(80,130,200,0.18)', borderRadius: 6, padding: '3px', display: 'grid', placeItems: 'center', minHeight: '2.2rem', width: '100%' }}>
-                <PieceMini type={state.hold} pieceTheme={pieceTheme} size={9} />
-              </div>
-              <div style={{ width: '100%', height: 1, background: 'rgba(255,255,255,0.07)', marginTop: 2 }} />
-              <button
-                onClick={() => triggerAction('activateZone')}
-                disabled={state.zoneMeter < ZONE_MIN_METER || state.zoneActive}
-                style={{
-                  background: state.zoneActive ? 'rgba(0,229,255,0.18)' : state.zoneMeter >= ZONE_MIN_METER ? 'rgba(0,180,255,0.22)' : 'rgba(255,255,255,0.04)',
-                  border: `1px solid ${state.zoneActive ? '#00e5ff' : state.zoneMeter >= ZONE_MIN_METER ? '#00aaff' : 'rgba(255,255,255,0.1)'}`,
-                  color: state.zoneActive ? '#00e5ff' : state.zoneMeter >= ZONE_MIN_METER ? '#80d4ff' : '#444',
-                  borderRadius: 6, padding: '4px 4px', cursor: state.zoneMeter >= ZONE_MIN_METER && !state.zoneActive ? 'pointer' : 'default',
-                  fontSize: '0.5rem', letterSpacing: '0.06em', fontFamily: 'inherit', width: '100%', transition: 'all 0.2s',
-                }}
-              >
-                {state.zoneActive ? `⚡ ${Math.ceil(state.zoneTimer / 1000)}s` : `ZONE ${state.zoneMeter}%`}
-              </button>
-              <div style={{ width: '100%', height: 5, background: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${state.zoneMeter}%`, background: state.zoneActive ? '#00e5ff' : `hsl(${200 + state.zoneMeter * 0.4}, 90%, 60%)`, transition: 'width 0.15s ease', boxShadow: state.zoneActive ? '0 0 6px #00e5ff' : 'none' }} />
-              </div>
-              <div style={{ width: '100%', height: 1, background: 'rgba(255,255,255,0.07)', marginTop: 2 }} />
-              <div style={{ fontSize: '0.42rem', color: '#555', letterSpacing: '0.12em' }}>NEXT</div>
-              {(state.queue ?? []).slice(0, 3).map((type, i) => (
-                <div key={i} style={{ background: 'rgba(5,7,18,0.85)', border: '1px solid rgba(80,130,200,0.18)', borderRadius: 5, padding: '2px', display: 'grid', placeItems: 'center', width: '100%' }}>
-                  <PieceMini type={type} pieceTheme={pieceTheme} size={i === 0 ? 9 : 7} />
-                </div>
-              ))}
-            </div>
+            {/* Right strip removed per request to maximize board area */}
           </div>
 
           {showOnScreenControls && (
@@ -677,7 +741,7 @@ export default function StoryLevelPage() {
       )}
 
       {/* ── Seamless level-transition overlay ─────────────────────────────── */}
-      {/* Board stays frozen underneath; this fades in for 2.5s then the next level begins */}
+      {/* Board stays frozen underneath; player reads story text then continues */}
       <AnimatePresence>
         {phase === PHASE.TRANSITION && (
           <motion.div
@@ -686,28 +750,51 @@ export default function StoryLevelPage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.55 }}
-            style={{ position: 'absolute', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.58)', backdropFilter: 'blur(3px)' }}
+            style={{ position: 'absolute', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(4px)' }}
           >
             <motion.div
-              initial={{ y: 18, opacity: 0 }}
-              animate={{ y: [18, 0, -6], opacity: [0, 1, 0] }}
-              transition={{ duration: 2.2, times: [0, 0.2, 1], ease: 'easeInOut' }}
+              initial={{ y: 24, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.5, ease: 'easeOut' }}
               style={{ textAlign: 'center', maxWidth: 440, padding: '2rem' }}
             >
               <div style={{ fontSize: '0.52rem', letterSpacing: '0.44em', color: chapter.color, marginBottom: 12, textTransform: 'uppercase' }}>
                 ✦ {level.title} CLEARED ✦
               </div>
-              <p style={{ color: '#ccc', fontSize: '0.9rem', lineHeight: 1.8, letterSpacing: '0.04em', margin: '0 0 1.8rem' }}>
+              <p style={{ color: '#ddd', fontSize: '0.92rem', lineHeight: 1.85, letterSpacing: '0.04em', margin: '0 0 1.6rem' }}>
                 {level.storyAfter}
               </p>
               {nextLevel && (() => {
                 const nf = findLevel(nextLevel.chapterId, nextLevel.levelId)
                 return nf ? (
-                  <div style={{ fontSize: '0.58rem', color: '#555', letterSpacing: '0.18em' }}>
+                  <div style={{ fontSize: '0.58rem', color: '#555', letterSpacing: '0.18em', marginBottom: '1.4rem' }}>
                     NEXT &nbsp;›&nbsp; <span style={{ color: nf.chapter.color }}>{nf.chapter.title}</span>&nbsp;/&nbsp;{nf.level.title}
                   </div>
                 ) : null
               })()}
+              {/* Countdown bar */}
+              {transitionCountdown !== null && (
+                <div style={{ width: 220, margin: '0 auto 10px', height: 3, background: 'rgba(255,255,255,0.08)', borderRadius: 2, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', background: chapter.color, borderRadius: 2, transition: 'width 0.9s linear',
+                    width: `${((( found?.level?.isBoss ? 9 : 7) - transitionCountdown) / (found?.level?.isBoss ? 9 : 7)) * 100}%` }} />
+                </div>
+              )}
+              {/* CONTINUE button — lets player proceed when ready */}
+              <motion.button
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1.5 }}
+                whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
+                onClick={() => transitionAdvanceRef.current?.()}
+                style={{ background: chapter.color, border: 'none', color: '#000', borderRadius: 8, padding: '10px 28px', fontSize: '0.8rem', fontWeight: 900, letterSpacing: '0.18em', cursor: 'pointer', fontFamily: 'inherit', textTransform: 'uppercase' }}
+              >
+                CONTINUE →
+              </motion.button>
+              {transitionCountdown !== null && transitionCountdown > 0 && (
+                <div style={{ fontSize: '0.55rem', color: '#555', letterSpacing: '0.12em', marginTop: 6 }}>
+                  Auto in {transitionCountdown}s
+                </div>
+              )}
             </motion.div>
           </motion.div>
         )}
@@ -747,7 +834,7 @@ export default function StoryLevelPage() {
                 {phase === PHASE.COMPLETE ? 'JOURNEY COMPLETE' : 'GAME OVER'}
               </div>
               <div style={{ fontSize: '0.65rem', color: '#666', letterSpacing: '0.16em', marginBottom: '1.2rem', textTransform: 'uppercase' }}>
-                {phase === PHASE.COMPLETE ? level.storyAfter : `Clear ${level.targetLines > 0 ? level.targetLines : 'all'} lines to pass.`}
+                {phase === PHASE.COMPLETE ? level.storyAfter : `Clear ${effectiveTargetLines > 0 ? effectiveTargetLines : 'all'} lines to pass.`}
               </div>
               <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#fff', marginBottom: '0.2rem' }}>
                 {finalLines} <span style={{ fontSize: '0.7rem', color: '#888', letterSpacing: '0.12em' }}>LINES</span>
@@ -773,6 +860,108 @@ export default function StoryLevelPage() {
                   {phase === PHASE.COMPLETE ? 'WORLD MAP' : 'MAP'}
                 </button>
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── GRAND ENDING — shown after the last level (ch7/l5) ───────────── */}
+      <AnimatePresence>
+        {phase === PHASE.ENDING && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            style={{ position: 'absolute', inset: 0, zIndex: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem', background: 'radial-gradient(ellipse at 50% 40%, rgba(255,215,0,0.08) 0%, rgba(0,0,0,0.96) 70%)' }}
+          >
+            <motion.div
+              initial={{ scale: 0.88, y: 32, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              transition={{ delay: 0.2, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+              style={{ textAlign: 'center', maxWidth: 460, width: '100%' }}
+            >
+              {/* Gold star */}
+              <motion.div
+                initial={{ scale: 0, rotate: -30 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ delay: 0.6, type: 'spring', stiffness: 180, damping: 14 }}
+                style={{ fontSize: '3.5rem', marginBottom: '1rem', filter: 'drop-shadow(0 0 24px #ffd700)' }}
+              >
+                ✦
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.9 }}
+                style={{ fontSize: '0.55rem', letterSpacing: '0.5em', color: '#ffd700', textTransform: 'uppercase', marginBottom: 8 }}
+              >
+                The Journey is Complete
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1.1 }}
+                style={{ fontSize: '2.2rem', fontWeight: 900, letterSpacing: '0.1em', color: '#fff', marginBottom: '0.4rem', textShadow: '0 0 32px #ffd70066' }}
+              >
+                THE END
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1.4 }}
+                style={{ fontSize: '0.58rem', color: '#ffd700', letterSpacing: '0.3em', textTransform: 'uppercase', marginBottom: '1.6rem', border: '1px solid #ffd70033', borderRadius: 4, padding: '3px 14px', display: 'inline-block' }}
+              >
+                CONVERGENCE MASTERED
+              </motion.div>
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1.8 }}
+                style={{ color: '#bbb', fontSize: '0.9rem', lineHeight: 1.85, letterSpacing: '0.04em', margin: '0 0 1.6rem' }}
+              >
+                You put down the last piece. The music stops. For one perfect moment, the board is clear.
+                <br /><br />
+                Seven chapters. Four elements. The cosmos. The void. And one pattern that never repeated itself.
+                <br /><br />
+                You are the last architect. The game remembers you.
+              </motion.p>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 2.4 }}
+                style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap', marginBottom: '1.2rem' }}
+              >
+                <div style={{ background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.25)', borderRadius: 10, padding: '10px 18px', textAlign: 'center', minWidth: 90 }}>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#ffd700' }}>{finalLines}</div>
+                  <div style={{ fontSize: '0.55rem', color: '#888', letterSpacing: '0.14em' }}>LINES</div>
+                </div>
+                <div style={{ background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.25)', borderRadius: 10, padding: '10px 18px', textAlign: 'center', minWidth: 90 }}>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#ffd700' }}>{finalScore.toLocaleString()}</div>
+                  <div style={{ fontSize: '0.55rem', color: '#888', letterSpacing: '0.14em' }}>FINAL PTS</div>
+                </div>
+              </motion.div>
+              {saving && (
+                <div style={{ fontSize: '0.6rem', color: '#888', letterSpacing: '0.12em', marginBottom: 12 }}>Saving progress…</div>
+              )}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 2.8 }}
+                style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}
+              >
+                <motion.button
+                  whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
+                  onClick={() => navigate('/story', { replace: true })}
+                  style={{ background: '#ffd700', border: 'none', color: '#000', borderRadius: 8, padding: '11px 28px', fontSize: '0.82rem', fontWeight: 900, letterSpacing: '0.18em', cursor: 'pointer', fontFamily: 'inherit', textTransform: 'uppercase' }}
+                >
+                  ★ WORLD MAP
+                </motion.button>
+                <button
+                  onClick={() => navigate('/', { replace: true })}
+                  style={{ background: 'none', border: '1px solid rgba(255,255,255,0.18)', color: '#888', borderRadius: 8, padding: '10px 20px', cursor: 'pointer', fontSize: '0.72rem', letterSpacing: '0.12em', fontFamily: 'inherit' }}
+                >
+                  Main Menu
+                </button>
+              </motion.div>
             </motion.div>
           </motion.div>
         )}

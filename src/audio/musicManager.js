@@ -258,14 +258,23 @@ export class MusicManager {
   // -- Media controls / UI helpers -----------------------------------------
   next() {
     if (!this.playing) return
+    // Null out onended BEFORE stop() so the automatic advance doesn't race
+    // with our manual advance — this was causing double-track playback & freezes
+    if (this._source) this._source.onended = null
     try { this._source?.stop() } catch {}
+    this._source = null
+    this._trackGain?.disconnect()
+    this._trackGain = null
     this.trackIndex = this._nextTrackIndex()
     this._playIndex(this.trackIndex)
   }
   prev() {
     if (!this.playing) return
-    // Restart current track (no full history available)
+    if (this._source) this._source.onended = null
     try { this._source?.stop() } catch {}
+    this._source = null
+    this._trackGain?.disconnect()
+    this._trackGain = null
     this._playIndex(this.trackIndex)
   }
   setMuted(on) {

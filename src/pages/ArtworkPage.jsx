@@ -414,7 +414,7 @@ export default function ArtworkPage() {
     } finally {
       setBusy(b => ({ ...b, [trackId]: false }))
     }
-  }, [user, busy])  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, busy])   
 
   const detailTrack = detailIndex !== null ? TRACKS[detailIndex] : null
 

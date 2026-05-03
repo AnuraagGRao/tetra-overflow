@@ -23,9 +23,10 @@ import eerie2Url from './meme/horror2.mp3'
 import eerie3Url from './meme/horror3.mp3'
 import {
   BLITZ_DURATION_MS, GAME_MODE, PURIFY_DURATION_MS,
-  SPRINT_LINES, TetrisEngine, ZONE_DURATION_MS, ZONE_MIN_METER,
+  SPRINT_LINES, EASY_SPRINT_LINES, TetrisEngine, ZONE_DURATION_MS, ZONE_MIN_METER,
   TOWER_INIT_GARBAGE_MS,
 } from './logic/gameEngine'
+import { markEasyModePlayed } from './firebase/db'
 import { PIECES } from './logic/tetrominoes'
 
 // ─── Key bindings ─────────────────────────────────────────────────────────────
@@ -163,9 +164,9 @@ const playMoveSFX = (theme = 'classic') => {
   }
 };
 
-const playTapSFX = (theme = 'classic') => {
+const _playTapSFX = (_theme = 'classic') => {
   sfxLog('tap')
-  switch (theme) {
+  switch (_theme) {
     case 'sketch':
       playNoise(3200, 0.24, 0.022);
       playNote(1250, 0.023, 0.10, 'triangle', 0.006);
@@ -195,7 +196,7 @@ const playTapSFX = (theme = 'classic') => {
 
 // Softer chaos wave cue for Ultimate (replaces harsh infection SFX)
 let _lastChaosSfx = 0
-const playChaosWaveSFX = (theme = 'classic') => {
+const _playChaosWaveSFX = (_theme = 'classic') => {
   const now = performance.now()
   // Rate-limit to avoid overlap if waves get very close together
   if (now - _lastChaosSfx < 1200) return
@@ -548,7 +549,7 @@ const playAllClearSFX = (theme = 'classic') => {
       arp([262, 330, 392, 523, 659, 784, 1047], 0.11, 0.15, 'triangle');
       playNote(392, 0.15, 0.15, 'triangle', 0.1);
       break;
-    default:
+    default: {
       // Classic: full chromatic sweep + bass boom
       const fs = [262,294,330,349,392,440,494,523,587,659,698,784,880,988,1047,1319];
       fs.forEach((f, i) => playNote(f, 0.14, 0.18, 'sine', i * 0.038));
@@ -556,6 +557,7 @@ const playAllClearSFX = (theme = 'classic') => {
       playNote(131, 0.30, 0.19, 'sine', 0.22);
       playNoise(10000, 0.23, 0.22, 0.12);
       break;
+    }
   }
 };
 
@@ -601,7 +603,7 @@ const playB2BSFX = (theme = 'classic') => {
 };
 
 // Softer floor-advance bell (separate from 'tetris' cue) — single resonant tone, not an arp
-const playFloorFanfareSFX = (theme = 'classic') => {
+const playFloorFanfareSFX = (_theme = 'classic') => {
   if (!sfxPermit('floor', 1200, 4000, 1)) return  // very restrictive — once per 1.2s, one per 4s window
   // Resonant bell: distinct from any line-clear arp so it doesn't feel like a loop
   playNote(1047, 0.28, 0.08, 'sine')
@@ -680,7 +682,7 @@ const playZoneActivateSFX = (theme = 'classic') => {
   }
 };
 
-const playGameOverSFX = (theme = 'classic') => {
+const playGameOverSFX = (_theme = 'classic') => {
   arp([523, 466, 415, 370, 330, 294, 262, 233, 220], 0.12, 0.16, 'sawtooth')
   playNote(55, 0.5, 0.14, 'sine', 0.12)
   playNoise(700, 0.10, 0.4, 0.06)
@@ -1135,7 +1137,7 @@ export default function App() {
   const checkLandscape = () => window.innerHeight < 600 && window.innerWidth > window.innerHeight && ('ontouchstart' in window || navigator.maxTouchPoints > 0)
   const [isMobile, setIsMobile]       = useState(checkMobile)
   const [isLandscape, setIsLandscape] = useState(checkLandscape)
-  const [showMobileModes, setShowMobileModes] = useState(false)
+  const [_showMobileModes, setShowMobileModes] = useState(false)
   const [zenResetting, setZenResetting] = useState(false)
   const [zoom, setZoom] = useState(() => Number(localStorage.getItem('tetris-zoom') || 1))
   const [isUiHidden, setIsUiHidden] = useState(false)
@@ -1177,8 +1179,8 @@ export default function App() {
   const jumpscareAllowedAfterRef = useRef(0)
   const jumpscareCooldownRef = useRef(60000)
   const sfxDuckTimerRef = useRef(null)
-  const chaosSfxLastRef = useRef(0)
-  const chaosSfxMutedUntilRef = useRef(0)
+  const _chaosSfxLastRef = useRef(0)
+  const _chaosSfxMutedUntilRef = useRef(0)
   const chaosCueEndAtRef = useRef(0)
   const [floorFx, setFloorFx] = useState(null) // { until, floor, burstCat }
   useEffect(() => {
@@ -1625,11 +1627,15 @@ export default function App() {
           localStorage.setItem(HS_KEY, JSON.stringify(hs))
           setHighScores({ ...hs }); setNewHigh(true)
         }
-        // Save to Firestore (coins = 1 per 1000 pts, best score updated, leaderboard)
+        // Save to Firestore (XP = 1 per 1000 pts, best score updated, leaderboard)
         if (user?.uid) {
           saveGameResult(user.uid, gameModeRef.current, ns.score, {
             lines: ns.lines, level: ns.level,
           }).then(res => setCoinDelta(res?.coinsEarned || 0)).catch(() => {})
+          // Mark NOOB brand if playing Easy mode
+          if (gameModeRef.current === GAME_MODE.EASY) {
+            markEasyModePlayed(user.uid).catch(() => {})
+          }
         }
       }
       prevGameOverRef.current = ns.gameOver
@@ -1692,7 +1698,7 @@ export default function App() {
     }
   }
 
-  const handlePress  = (key, hold) => {
+  const _handlePress  = (key, hold) => {
     const sfxOn = configRef.current.sfxEnabled
     const hapticOn = configRef.current.hapticEnabled
     if (hold) {
@@ -1703,7 +1709,7 @@ export default function App() {
       triggerAction(key)
     }
   }
-  const handleRelease = (key, hold) => { if (hold) heldRef.current[key] = false }
+  const _handleRelease = (key, hold) => { if (hold) heldRef.current[key] = false }
   const handleDragBegin = (dir) => {
     const sfxOn = configRef.current.sfxEnabled
     if (dir === 'left' || dir === 'right') {
@@ -1864,7 +1870,7 @@ export default function App() {
     setSfxVolume(config.sfxVolume ?? 1.0)
   }, [config.sfxVolume])
 
-  const setBotDiff = (d) => { setBotDifficulty(d); botDiffRef.current = d }
+  const _setBotDiff = (d) => { botDiffRef.current = d }
 
   // ─── Derived ────────────────────────────────────────────────────────────────
   const zoneReady  = state.zoneMeter >= ZONE_MIN_METER
@@ -1899,6 +1905,7 @@ export default function App() {
     let title = 'GAME OVER'
     if (isVersus) title = isP2 ? (s.gameOverReason === 'win' ? '🏆 P2 WINS' : '💀 P2 LOST') : (s.gameOverReason === 'win' ? '🏆 P1 WINS' : '💀 P1 LOST')
     else if (s.mode === GAME_MODE.SPRINT && s.gameOverReason === 'complete') title = '🏁 SPRINT DONE'
+    else if (s.mode === GAME_MODE.EASY && s.gameOverReason === 'complete') title = '🟢 EASY CLEAR!'
     else if (s.gameOverReason === 'timeout') title = "⏱ TIME'S UP"
     else if (s.gameOverReason === 'topout') title = '💀 GAME OVER'
     return (
@@ -1907,10 +1914,11 @@ export default function App() {
         {newHigh && !isP2 && <div className="overlay-new-high">🏆 New Best!</div>}
         <div className="overlay-sub">Score: {s.score.toLocaleString()}</div>
         {s.mode === GAME_MODE.SPRINT && <div className="overlay-sub">Time: {fmtElapsed(s.elapsedTime)}</div>}
+        {s.mode === GAME_MODE.EASY && <div className="overlay-sub">{s.gameOverReason === 'complete' ? `🟢 All ${EASY_SPRINT_LINES} lines cleared!` : `Lines: ${s.lines}`}</div>}
         {s.mode === GAME_MODE.PURIFY && <div className="overlay-sub">Purified: {s.blocksPurified} blocks</div>}
         {s.mode === GAME_MODE.ULTIMATE && <div className="overlay-sub">🗼 Floor {s.towerFloor} reached!</div>}
         <div className="overlay-sub">Lv {s.level} · {s.lines} lines</div>
-        {coinDelta > 0 && <div className="overlay-sub" style={{ color: '#eab308' }}>+{coinDelta} coins</div>}
+        {coinDelta > 0 && <div className="overlay-sub" style={{ color: '#eab308' }}>+{coinDelta} XP</div>}
         {!isP2 && <button type="button" className="overlay-restart" onClick={() => startGame(gameMode)}>Play Again</button>}
       </div>
     )
@@ -2001,7 +2009,7 @@ export default function App() {
   const zoneFillPct = state.zoneActive
     ? (state.zoneTimer / (state.zoneDuration || ZONE_DURATION_MS)) * 100
     : state.zoneMeter
-  const zoneFillClass = `zone-meter-fill${state.zoneActive ? ' zone-active' : ''}${zoneReady && !state.zoneActive ? ' zone-ready' : ''}`
+  const _zoneFillClass = `zone-meter-fill${state.zoneActive ? ' zone-active' : ''}${zoneReady && !state.zoneActive ? ' zone-ready' : ''}`
 
   // ─── MODES ──────────────────────────────────────────────────────────────────
   const MODES = [
@@ -2041,7 +2049,7 @@ export default function App() {
         </div>
         <div className="stat-item">
           <span className="label">Lines</span>
-          <span className="value">{state.lines}{state.mode === GAME_MODE.SPRINT ? `/${SPRINT_LINES}` : ''}</span>
+          <span className="value">{state.lines}{state.mode === GAME_MODE.SPRINT ? `/${SPRINT_LINES}` : state.mode === GAME_MODE.EASY ? `/${EASY_SPRINT_LINES}` : ''}</span>
         </div>
         {state.mode === GAME_MODE.SPRINT && (
           <div className="stat-item"><span className="label">Time</span><span className="value small">{fmtElapsed(state.elapsedTime)}</span></div>
@@ -2195,7 +2203,7 @@ export default function App() {
               <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
                 onTwoFingerTap={() => triggerAction('activateZone')}
                 onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop}
-                boardAlpha={bgTheme ? 0.42 : undefined} />
+                boardAlpha={bgTheme ? 0.32 : undefined} />
               <GlitchOverlay active={glitchActive} />
               {/* Floor FX overlay */}
               <AnimatePresence>
@@ -2326,7 +2334,7 @@ export default function App() {
           </div>
           <div className="ls-stat">
             <span className="l">Lines</span>
-            <span className="v">{state.lines}{state.mode === GAME_MODE.SPRINT ? `/${SPRINT_LINES}` : ''}</span>
+            <span className="v">{state.lines}{state.mode === GAME_MODE.SPRINT ? `/${SPRINT_LINES}` : state.mode === GAME_MODE.EASY ? `/${EASY_SPRINT_LINES}` : ''}</span>
           </div>
           {state.mode === GAME_MODE.BLITZ && (
             <div className="ls-stat">
@@ -2363,11 +2371,11 @@ export default function App() {
         )}
 
         {/* board */}
-        <div className={`ls-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`}>
+        <div className={`ls-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`} style={{ background: 'transparent' }}>
           <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
             onTwoFingerTap={() => triggerAction('activateZone')}
             onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop}
-            boardAlpha={bgTheme ? 0.42 : undefined} />
+            boardAlpha={bgTheme ? 0.32 : undefined} />
           {renderOverlay(state, false)}
           {renderPauseOverlay(state)}
           {renderZoneEnd(state)}
@@ -2407,6 +2415,7 @@ export default function App() {
         {/* mode selector */}
         <div className="ls-modes">
           {[ 
+            { mode: GAME_MODE.EASY,    label: '🟢 Easy'   },
             { mode: GAME_MODE.NORMAL,  label: 'Normal'  },
             { mode: GAME_MODE.SPRINT,  label: 'Sprint'  },
             { mode: GAME_MODE.BLITZ,   label: 'Blitz'   },
@@ -2458,7 +2467,7 @@ export default function App() {
           </div>
           <div className="mobile-stat">
             <span className="l">Lines</span>
-            <span className="v">{state.lines}{state.mode === GAME_MODE.SPRINT ? `/${SPRINT_LINES}` : ''}</span>
+            <span className="v">{state.lines}{state.mode === GAME_MODE.SPRINT ? `/${SPRINT_LINES}` : state.mode === GAME_MODE.EASY ? `/${EASY_SPRINT_LINES}` : ''}</span>
           </div>
           {state.mode === GAME_MODE.BLITZ && (
             <div className="mobile-stat">
@@ -2491,11 +2500,11 @@ export default function App() {
           <div style={{ width: `${Math.round(Math.max(0, Math.min(1, 1 - (state.ultimateTimer / (state.ultimatePeriod || 1)))) * 100)}%`, height: '100%', background: 'linear-gradient(90deg,#a855f7,#22d3ee)' }} />
         </div>
       )}
-      <div className={`mobile-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`}>
+      <div className={`mobile-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`} style={{ background: 'transparent' }}>
         <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
           onTwoFingerTap={() => triggerAction('activateZone')}
           onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop}
-          boardAlpha={bgTheme ? 0.42 : undefined} />
+          boardAlpha={bgTheme ? 0.32 : undefined} />
         <GlitchOverlay active={glitchActive} />
         {renderOverlay(state, false)}
         {renderPauseOverlay(state)}

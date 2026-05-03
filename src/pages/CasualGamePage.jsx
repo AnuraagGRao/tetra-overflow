@@ -15,12 +15,10 @@ export default function CasualGamePage() {
 
   return (
     <div style={{ position: 'relative', width: '100dvw', height: '100dvh', overflow: 'hidden' }}>
-      {/* World background */}
-      {bgTheme && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none' }}>
-          <BackgroundCanvas bgType={bgTheme} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
-        </div>
-      )}
+      {/* World background — always on; default to 'stars' when none selected */}
+      <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none' }}>
+        <BackgroundCanvas bgType={bgTheme || 'stars'} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+      </div>
 
       <App />
 
@@ -75,7 +73,7 @@ export default function CasualGamePage() {
                     title={item.label || item.name}
                     onClick={() => {
                       if (isBg) setBgTheme(item.bgType)
-                      else { setTheme(id); setBgTheme(null) }
+                      else { setTheme(id) }
                     }}
                     style={{
                       width: 36, height: 36, borderRadius: 8,
