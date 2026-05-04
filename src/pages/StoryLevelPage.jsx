@@ -460,13 +460,14 @@ export default function StoryLevelPage() {
     }
 
     const next = getNextLevel(currentChapterId, currentLevelId)
-    if (next) {
-      engine.togglePause()   // freeze board during cinematic overlay
-      setPhase(PHASE.TRANSITION)
-    } else if (currentChapterId === 'ch7' && currentLevelId === 'l5') {
-      // Final level of the entire story — show the grand ending screen
+    if (currentChapterId === 'ch7' && currentLevelId === 'l5') {
+      // Final level of the entire story — always show the grand ending screen,
+      // regardless of ch8 (secret chapter) existing in the data
       engine.togglePause()
       setPhase(PHASE.ENDING)
+    } else if (next) {
+      engine.togglePause()   // freeze board during cinematic overlay
+      setPhase(PHASE.TRANSITION)
     } else {
       engine.togglePause()   // freeze on last level too
       setPhase(PHASE.COMPLETE)
