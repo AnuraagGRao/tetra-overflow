@@ -852,6 +852,31 @@ export default function StoryLevelPage() {
               </SynesthesiaMotionLayer>
             </div>
 
+            {/* Zone end overlay — shows lines cleared + bonus when Zone deactivates */}
+            <AnimatePresence>
+              {state.zoneEndResult && (
+                <motion.div className="zone-end-overlay"
+                  initial={{ opacity: 0, scale: 0.92 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.35 }}>
+                  <div className="zone-end-number">{state.zoneEndResult.lines}</div>
+                  <div className="zone-end-label">ZONE LINES!</div>
+                  <div className="zone-end-bonus">+{state.zoneEndResult.bonus.toLocaleString()}</div>
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', gap: 4, padding: '10% 18%', pointerEvents: 'none' }}>
+                    {Array.from({ length: Math.min(12, state.zoneEndResult.lines || 0) }).map((_, i) => (
+                      <motion.div key={i}
+                        initial={{ scaleX: 1, opacity: 0.9 }}
+                        animate={{ scaleX: 0, opacity: 0 }}
+                        transition={{ delay: 0.3 + i * 0.1, duration: 0.7, ease: 'easeIn' }}
+                        style={{ height: 6, background: 'linear-gradient(90deg,#fff,#00cfff)', borderRadius: 4, filter: 'drop-shadow(0 0 6px #00cfff)' }}
+                      />
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {/* Right strip removed per request to maximize board area */}
           </div>
 

@@ -73,7 +73,7 @@ export default function StoryLorePage() {
 
   const jumpTo = (nextIdx) => {
     const target = Math.max(0, Math.min(chapters.length - 1, nextIdx))
-    secRefs.current[target]?.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' })
+    secRefs.current[target]?.current?.scrollIntoView({ behavior: 'instant', block: 'nearest', inline: 'start' })
   }
 
   const onTouchStart = (e) => {

@@ -1490,6 +1490,11 @@ export default function App() {
     setShowMobileModes(false)
   }
 
+  // ─── Stop music when component unmounts (e.g. user clicks MENU button) ──────
+  useEffect(() => {
+    return () => { if (musicOnRef.current) musicManager?.stop() }
+  }, [])
+
   // ─── Countdown ─────────────────────────────────────────────────────────────
   useEffect(() => {
     if (countdown === null) return

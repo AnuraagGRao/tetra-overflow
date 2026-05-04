@@ -360,6 +360,16 @@ export const joinLobby = async (code, uid, displayName) => {
   })
 }
 
+export const rejoinLobby = async (code, uid) => {
+  const ref = doc(db, 'lobbies', code)
+  const snap = await getDoc(ref)
+  if (!snap.exists()) throw new Error('Lobby not found')
+  const lobby = snap.data()
+  const players = Array.isArray(lobby.players) ? lobby.players : []
+  if (!players.some((player) => player.uid === uid)) throw new Error('You are not part of this lobby')
+  return lobby
+}
+
 export const updateLobbyPlayer = async (code, uid, update) => {
   const ref = doc(db, 'lobbies', code)
   const snap = await getDoc(ref)

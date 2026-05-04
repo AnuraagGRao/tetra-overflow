@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { QRCodeSVG as QRCode } from 'qrcode.react'
 import { useAuth } from '../contexts/AuthContext'
-import { createLobby, joinLobby, updateLobby, updateLobbyPlayer, setLobbyStatus, setLobbyBestOf, subscribeLobby, archiveLobby, getFriends, getFriendRequests, getSentFriendRequests, acceptFriendRequest, declineFriendRequest, sendFriendRequest, findPublicProfileByFriendCode, sendLobbyInvite, getLobbyInvites, dismissLobbyInvite, getPublicProfiles } from '../firebase/db'
+import { createLobby, joinLobby, rejoinLobby, updateLobby, updateLobbyPlayer, setLobbyStatus, setLobbyBestOf, subscribeLobby, archiveLobby, getFriends, getFriendRequests, getSentFriendRequests, acceptFriendRequest, declineFriendRequest, sendFriendRequest, findPublicProfileByFriendCode, sendLobbyInvite, getLobbyInvites, dismissLobbyInvite, getPublicProfiles } from '../firebase/db'
 import { TetrisEngine, GAME_MODE, ZONE_MIN_METER } from '../logic/gameEngine'
 import { setSfxVolume, playMoveSFX, playRotateSFX, playHoldSFX, playSoftDropSFX, playHardDropSFX, playLockSFX, playLineClearSFX, playTetrisSFX } from '../audio/gameSfx'
 import { PIECES } from '../logic/tetrominoes'
@@ -32,6 +32,7 @@ const KEY_BINDINGS = {
 const MAX_FRAME_MS     = 34
 const SNAP_INTERVAL_MS = 300  // faster board updates for smoother opponent preview
 const OPPONENTS_PER_PAGE = 4
+const LAST_LOBBY_KEY = 'vs-last-lobby-code'
 
 // ─── Audio (module-level — persists across re-renders, isolated from App.jsx) ─
 let _mpAudioCtx = null
@@ -253,10 +254,14 @@ function CreateScreen({ onCreate }) {
 }
 
 // ─── Join screen ───────────────────────────────────────────────────────────────
-function JoinScreen({ onJoin }) {
-  const [code, setCode] = useState('')
+function JoinScreen({ onJoin, initialCode = '' }) {
+  const [code, setCode] = useState(() => initialCode.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))
   const [err, setErr]   = useState('')
   const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    setCode(initialCode.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))
+  }, [initialCode])
 
   const handle = async (e) => {
     e.preventDefault(); setErr(''); setBusy(true)
@@ -511,6 +516,12 @@ export default function MultiplayerPage() {
   const [playerProfiles, setPlayerProfiles] = useState({}) // uid -> { selectedBadge }
   const [lobbyInvites, setLobbyInvites] = useState([])
   const [dismissedInvites, setDismissedInvites] = useState(new Set())
+  const [joinCodePrefill, setJoinCodePrefill] = useState('')
+  const [lastLobbyCode, setLastLobbyCode] = useState(() => {
+    try { return localStorage.getItem(LAST_LOBBY_KEY) || '' } catch { return '' }
+  })
+  const [rejoinBusy, setRejoinBusy] = useState(false)
+  const [rejoinError, setRejoinError] = useState('')
   const [focus, setFocus] = useState(() => { try { return localStorage.getItem('vs-focus-mode') === '1' } catch { return false } })
 
   const engine = useMemo(() => new TetrisEngine(), [])
@@ -1010,13 +1021,42 @@ export default function MultiplayerPage() {
   const handleCreate = async () => {
     getMpAudio()  // prime AudioContext during user gesture
     const code = await createLobby(user.uid, displayName)
+    try { localStorage.setItem(LAST_LOBBY_KEY, code) } catch {}
+    setLastLobbyCode(code)
+    setRejoinError('')
     setLobbyCode(code); setIsHost(true); setScreen(SCREEN.LOBBY)
   }
   const handleJoin = async (code) => {
     getMpAudio()  // prime AudioContext during user gesture
     await joinLobby(code, user.uid, displayName)
+    try { localStorage.setItem(LAST_LOBBY_KEY, code) } catch {}
+    setLastLobbyCode(code)
+    setRejoinError('')
     setLobbyCode(code); setIsHost(false); setScreen(SCREEN.LOBBY)
   }
+  const handleRejoin = useCallback(async () => {
+    const code = String(lastLobbyCode || '').toUpperCase().trim()
+    if (!code || !user?.uid) return
+    setRejoinBusy(true)
+    setRejoinError('')
+    try {
+      getMpAudio()
+      const lobbyData = await rejoinLobby(code, user.uid)
+      setLobby(lobbyData)
+      setLobbyCode(code)
+      setIsHost(lobbyData.hostUid === user.uid)
+      setScreen(lobbyData.status === 'waiting' ? SCREEN.LOBBY : SCREEN.LOBBY)
+    } catch (err) {
+      const message = err?.message || 'Could not rejoin the last lobby.'
+      setRejoinError(message)
+      if (message === 'Lobby not found' || message === 'You are not part of this lobby') {
+        try { localStorage.removeItem(LAST_LOBBY_KEY) } catch {}
+        setLastLobbyCode('')
+      }
+    } finally {
+      setRejoinBusy(false)
+    }
+  }, [lastLobbyCode, user])
   const handleStart = async () => {
     getMpAudio()  // warm up context before Firestore fires
     if (lobbyCode) await setLobbyStatus(lobbyCode, 'playing')
@@ -1033,6 +1073,10 @@ export default function MultiplayerPage() {
     setPaused(false)
     // Host: archive lobby before leaving
     if (isHost && lobbyCode) archiveLobby(lobbyCode, { endedBy: user?.uid }).catch(() => {})
+    if (isHost && lobbyCode) {
+      try { localStorage.removeItem(LAST_LOBBY_KEY) } catch {}
+      setLastLobbyCode('')
+    }
     setLobbyCode(null); setLobby(null)
     setScreen(SCREEN.PICK)
     _mpMusicMgr?.stop()
@@ -1221,6 +1265,17 @@ export default function MultiplayerPage() {
                   <div style={{ fontSize: '0.62rem', color: '#555', marginTop: 4, letterSpacing: '0.1em' }}>{btn.sub}</div>
                 </motion.button>
               ))}
+              {lastLobbyCode && (
+                <motion.button whileHover={{ scale: 1.03, y: -2 }} whileTap={{ scale: 0.97 }} onClick={handleRejoin}
+                  disabled={rejoinBusy}
+                  style={{ width: '100%', maxWidth: 300, background: 'rgba(168,85,247,0.10)', border: '1px solid rgba(168,85,247,0.35)', borderRadius: 12, padding: '1.1rem', cursor: rejoinBusy ? 'wait' : 'pointer', fontFamily: 'inherit', textAlign: 'left', transition: 'all 0.15s', opacity: rejoinBusy ? 0.7 : 1 }}>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 700, letterSpacing: '0.14em', color: '#c084fc' }}>{rejoinBusy ? 'REJOINING…' : 'REJOIN LAST LOBBY'}</div>
+                  <div style={{ fontSize: '0.62rem', color: '#777', marginTop: 4, letterSpacing: '0.1em' }}>Code: {lastLobbyCode}</div>
+                </motion.button>
+              )}
+              {rejoinError && (
+                <div style={{ width: '100%', maxWidth: 300, fontSize: '0.62rem', color: '#f87171', letterSpacing: '0.08em', textAlign: 'center' }}>{rejoinError}</div>
+              )}
               {/* Lobby invites from friends */}
               {lobbyInvites.filter(inv => !dismissedInvites.has(inv.id)).length > 0 && (
                 <div style={{ width: '100%', maxWidth: 300 }}>
@@ -1236,7 +1291,7 @@ export default function MultiplayerPage() {
                           onClick={async () => {
                             await dismissLobbyInvite(user.uid, inv.id).catch(() => {})
                             setDismissedInvites(prev => new Set([...prev, inv.id]))
-                            // Pre-fill join with code; navigate to join screen
+                            setJoinCodePrefill(String(inv.lobbyCode || '').toUpperCase())
                             setScreen(SCREEN.JOIN)
                           }}
                           style={{ background: 'rgba(168,85,247,0.2)', border: '1px solid rgba(168,85,247,0.5)', color: '#c084fc', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.62rem', fontFamily: 'inherit', letterSpacing: '0.08em' }}
@@ -1267,7 +1322,7 @@ export default function MultiplayerPage() {
           {screen === SCREEN.JOIN && (
             <motion.div key="join" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
               style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <JoinScreen onJoin={handleJoin} />
+              <JoinScreen onJoin={handleJoin} initialCode={joinCodePrefill} />
             </motion.div>
           )}
 
@@ -1395,8 +1450,7 @@ export default function MultiplayerPage() {
 
                 {/* Canvas */}
                 <div className="mobile-canvas-wrap" style={{ background: 'transparent', flex: 1, minWidth: 0 }}>
-                  <div style={{ position: 'relative', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>
-                    <SynesthesiaMotionLayer style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <SynesthesiaMotionLayer style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>
                     <GameCanvas
                       state={myState}
                       onTap={() => triggerAction('rotateCW')}
@@ -1406,7 +1460,6 @@ export default function MultiplayerPage() {
                       onHardDrop={handleHardDrop}
                       renderQuality={(() => { try { return JSON.parse(localStorage.getItem('tetris-config') || '{}').renderQuality || 'balanced' } catch { return 'balanced' } })()}
                     />
-                    </SynesthesiaMotionLayer>
                     {/* Small right-side focus toggle for mobile */}
                     <button
                       onClick={() => setFocus(f => !f)}
@@ -1452,8 +1505,32 @@ export default function MultiplayerPage() {
                         })()}
                       </>
                     )}
+                    {/* Zone end overlay */}
+                    <AnimatePresence>
+                      {myState?.zoneEndResult && (
+                        <motion.div className="zone-end-overlay"
+                          initial={{ opacity: 0, scale: 0.92 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ duration: 0.35 }}>
+                          <div className="zone-end-number">{myState.zoneEndResult.lines}</div>
+                          <div className="zone-end-label">ZONE LINES!</div>
+                          <div className="zone-end-bonus">+{myState.zoneEndResult.bonus.toLocaleString()}</div>
+                          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', gap: 4, padding: '10% 18%', pointerEvents: 'none' }}>
+                            {Array.from({ length: Math.min(12, myState.zoneEndResult.lines || 0) }).map((_, i) => (
+                              <motion.div key={i}
+                                initial={{ scaleX: 1, opacity: 0.9 }}
+                                animate={{ scaleX: 0, opacity: 0 }}
+                                transition={{ delay: 0.3 + i * 0.1, duration: 0.7, ease: 'easeIn' }}
+                                style={{ height: 6, background: 'linear-gradient(90deg,#fff,#00cfff)', borderRadius: 4, filter: 'drop-shadow(0 0 6px #00cfff)' }}
+                              />
+                            ))}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                     {/* Pause overlay removed in Versus */}
-                  </div>
+                    </SynesthesiaMotionLayer>
                 </div>
 
                 {/* Right column removed per request to maximize board area */}
