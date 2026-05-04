@@ -57,10 +57,12 @@ import AboutPage from './components/AboutPage'
 import SettingsPage from './components/SettingsPage'
 import LoadingScreen from './components/LoadingScreen'
 import GlitchOverlay from './components/GlitchOverlay'
+import SynesthesiaMotionLayer from './components/SynesthesiaMotionLayer'
 import { useTheme } from './contexts/ThemeContext'
 import { useAuth } from './contexts/AuthContext'
 import { MusicManager } from './audio/musicManager'
 import { saveGameResult, addCoinsWithLedger } from './firebase/db'
+import { emitSynesthesia, SYNESTHESIA_EVENT } from './logic/synesthesiaBus'
 import catImageUrl from './meme/oiia_cat_assets_by_awesomeconsoles7_djwlgwe-fullview.png'
 import catMusicUrl from './meme/YTDown_YouTube_OIIAOIIA-CAT-but-in-4K-Not-Actually_Media_ZHgyQGoeaB0_009_128k.mp3'
 import horror1Url from './meme/horror1.jpg'
@@ -1601,6 +1603,9 @@ export default function App() {
       let playedClearCue = false
       if (ns.lastClear) {
         const { spinType, lines, isAllClear } = ns.lastClear
+        const isSpinClear = spinType === 'tSpin' || spinType === 'allSpin' || spinType === 'tSpinMini'
+        if (isSpinClear) emitSynesthesia(SYNESTHESIA_EVENT.T_SPIN, { intensity: lines >= 2 ? 1.45 : 1.2, lines })
+        else if ((lines || 0) > 0) emitSynesthesia(SYNESTHESIA_EVENT.LINE_CLEAR, { intensity: Math.min(1.55, 0.9 + (lines || 1) * 0.2), lines })
         if (spinType === 'tSpin' || spinType === 'tSpinMini') sessionTSpinsRef.current += 1
         if ((lines || 0) > 0 && prevPieceTypeRef.current === 'I') sessionILinesRef.current += lines
         if ((lines || 0) === 4) sessionTetrisClearsRef.current += 1
@@ -1775,16 +1780,22 @@ export default function App() {
       if (b.held) {
         heldRef.current[b.held] = true
         if ((b.held === 'left' || b.held === 'right') && sfxOn) playMoveSFX(theme)
+        if (b.held === 'left' || b.held === 'right') emitSynesthesia(SYNESTHESIA_EVENT.MOVE, { intensity: 0.9, source: 'keyboard' })
+        if (b.held === 'softDrop') emitSynesthesia(SYNESTHESIA_EVENT.SOFT_DROP, { intensity: 0.82, source: 'keyboard' })
       }
       if (b.action) {
         if (countdownActiveRef.current && b.action !== 'pause') return
         actionRef.current[b.action] = true
         if ((b.action === 'rotateCW' || b.action === 'rotateCCW' || b.action === 'rotate180') && sfxOn) playRotateSFX(theme)
+        if (b.action === 'rotateCW' || b.action === 'rotateCCW' || b.action === 'rotate180') emitSynesthesia(SYNESTHESIA_EVENT.ROTATE, { intensity: 1.02, source: 'keyboard' })
         if (b.action === 'activateZone') {
           if (sfxOn) playZoneActivateSFX(theme)
           if (configRef.current.hapticEnabled) navigator.vibrate?.([20, 10, 40])
         }
-        if (b.action === 'hardDrop' && sfxOn) playHardDropSFX(theme)
+        if (b.action === 'hardDrop') {
+          emitSynesthesia(SYNESTHESIA_EVENT.HARD_DROP, { intensity: 1.24, source: 'keyboard' })
+          if (sfxOn) playHardDropSFX(theme)
+        }
         if (b.action === 'pause') handlePauseToggle()
       }
     }
@@ -1804,9 +1815,11 @@ export default function App() {
     const sfxOn = configRef.current.sfxEnabled
     const hapticOn = configRef.current.hapticEnabled
     if (action === 'rotateCW' || action === 'rotateCCW' || action === 'rotate180') {
+      emitSynesthesia(SYNESTHESIA_EVENT.ROTATE, { intensity: 1.0, source: 'ui' })
       if (sfxOn) playRotateSFX(theme)
       if (hapticOn) navigator.vibrate?.(20)
     } else if (action === 'hardDrop') {
+      emitSynesthesia(SYNESTHESIA_EVENT.HARD_DROP, { intensity: 1.2, source: 'ui' })
       if (sfxOn) playHardDropSFX(theme)
       if (hapticOn) navigator.vibrate?.([25, 50, 25])
     } else if (action === 'activateZone') {
@@ -1824,8 +1837,15 @@ export default function App() {
     const bgBeat = () => { try { window.dispatchEvent(new Event('bg-beat')) } catch {} }
     if (hold) {
       heldRef.current[key] = true
-      if (key === 'left' || key === 'right') { if (sfxOn) playMoveSFX(theme); bgBeat(); if (hapticOn) navigator.vibrate?.(20) }
-      else if (key === 'softDrop' && hapticOn) navigator.vibrate?.(15)
+      if (key === 'left' || key === 'right') {
+        emitSynesthesia(SYNESTHESIA_EVENT.MOVE, { intensity: 0.95, source: 'touch' })
+        if (sfxOn) playMoveSFX(theme)
+        bgBeat()
+        if (hapticOn) navigator.vibrate?.(20)
+      } else if (key === 'softDrop') {
+        emitSynesthesia(SYNESTHESIA_EVENT.SOFT_DROP, { intensity: 0.86, source: 'touch' })
+        if (hapticOn) navigator.vibrate?.(15)
+      }
     } else {
       triggerAction(key); bgBeat()
     }
@@ -1835,9 +1855,11 @@ export default function App() {
     const sfxOn = configRef.current.sfxEnabled
     if (dir === 'left' || dir === 'right') {
       heldRef.current[dir] = true
+      emitSynesthesia(SYNESTHESIA_EVENT.MOVE, { intensity: 1.05, source: 'drag' })
       if (sfxOn) playSwipeSFX(dir, theme); try { window.dispatchEvent(new Event('bg-beat')) } catch {}
     } else if (dir === 'down') {
       heldRef.current.softDrop = true
+      emitSynesthesia(SYNESTHESIA_EVENT.SOFT_DROP, { intensity: 0.95, source: 'drag' })
       if (sfxOn) playSwipeSFX('down', theme); try { window.dispatchEvent(new Event('bg-beat')) } catch {}
     } else if (dir === 'up') {
       if (sfxOn) playSwipeSFX('up', theme); try { window.dispatchEvent(new Event('bg-beat')) } catch {}
@@ -1852,6 +1874,7 @@ export default function App() {
     if (!countdownActiveRef.current) {
       heldRef.current.softDrop = false
       actionRef.current.hardDrop = true
+      emitSynesthesia(SYNESTHESIA_EVENT.HARD_DROP, { intensity: 1.25, source: 'gesture' })
       if (configRef.current.sfxEnabled) { playHardDropSFX(theme); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }
       if (configRef.current.hapticEnabled) navigator.vibrate?.([25, 50, 25])
     }
@@ -1922,9 +1945,13 @@ export default function App() {
               } else if (!countdownActiveRef.current) {
                 actionRef.current[action] = true
                 const sfxOn = configRef.current.sfxEnabled
-                if ((action === 'rotateCW' || action === 'rotateCCW' || action === 'rotate180') && sfxOn) playRotateSFX(theme)
-                else if (action === 'hardDrop' && sfxOn) playHardDropSFX(theme)
-                else if (action === 'activateZone') {
+                if (action === 'rotateCW' || action === 'rotateCCW' || action === 'rotate180') {
+                  emitSynesthesia(SYNESTHESIA_EVENT.ROTATE, { intensity: 1.0, source: 'gamepad' })
+                  if (sfxOn) playRotateSFX(theme)
+                } else if (action === 'hardDrop') {
+                  emitSynesthesia(SYNESTHESIA_EVENT.HARD_DROP, { intensity: 1.22, source: 'gamepad' })
+                  if (sfxOn) playHardDropSFX(theme)
+                } else if (action === 'activateZone') {
                   if (sfxOn) playZoneActivateSFX(theme)
                   if (configRef.current.hapticEnabled) navigator.vibrate?.([30, 15, 50])
                 }
@@ -1933,6 +1960,9 @@ export default function App() {
             prev[bi] = pressed
           }
         }
+        if (gpLeft && !gpHeldRef.current.left) emitSynesthesia(SYNESTHESIA_EVENT.MOVE, { intensity: 0.92, source: 'gamepad' })
+        if (gpRight && !gpHeldRef.current.right) emitSynesthesia(SYNESTHESIA_EVENT.MOVE, { intensity: 0.92, source: 'gamepad' })
+        if (gpSoftDrop && !gpHeldRef.current.softDrop) emitSynesthesia(SYNESTHESIA_EVENT.SOFT_DROP, { intensity: 0.84, source: 'gamepad' })
         gpHeldRef.current.left     = gpLeft
         gpHeldRef.current.right    = gpRight
         gpHeldRef.current.softDrop = gpSoftDrop
@@ -2055,7 +2085,6 @@ export default function App() {
   const isPurify   = state.mode === GAME_MODE.PURIFY
   const isUltimate = state.mode === GAME_MODE.ULTIMATE
   const isVersus   = state.mode === GAME_MODE.VERSUS
-  const isTower    = state.mode === GAME_MODE.ULTIMATE  // TOWER merged into ULTIMATE
   const showZone   = state.mode === GAME_MODE.NORMAL || state.mode === GAME_MODE.ULTIMATE
 
   // Glitch effect: active in Ultimate when stack reaches row 10 from top
@@ -2261,7 +2290,7 @@ export default function App() {
       )}
       {!isPurify && state.backToBack && (
         <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#ffcc44', letterSpacing: '0.08em' }}>
-          🔥 B2B{state.b2bCount > 1 ? ` x${state.b2bCount}` : ''}
+          🔥 B2B x{(state.b2bCount ?? 0) + 1}
         </div>
       )}
     </div>
@@ -2429,8 +2458,8 @@ export default function App() {
                 <div className="combo-label">COMBO</div>
               </div>
             )}
-      {!isPurify && state.backToBack && <div className="b2b-badge">🔥 B2B{state.b2bCount > 1 ? ` x${state.b2bCount}` : ''}</div>}
-            <div className={`game-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`}>
+      {!isPurify && state.backToBack && <div className="b2b-badge">🔥 B2B x{(state.b2bCount ?? 0) + 1}</div>}
+            <SynesthesiaMotionLayer className={`game-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`}>
               <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
                 onTwoFingerTap={() => triggerAction('activateZone')}
                 onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop}
@@ -2509,7 +2538,7 @@ export default function App() {
               {renderZoneEnd(state)}
               {renderCountdown()}
               {renderFloatPopups()}
-            </div>
+            </SynesthesiaMotionLayer>
             <div className="game-hud-bottom">
               {state.mode === GAME_MODE.SPRINT && <span>⏱ <span className="hud-val">{fmtElapsed(state.elapsedTime)}</span></span>}
               {state.mode !== GAME_MODE.SPRINT && state.mode !== GAME_MODE.BLITZ && <span />}
@@ -2543,7 +2572,17 @@ export default function App() {
 
   // ─── Mobile landscape (swipe + controller only) ────────────────────────────
   const renderMobileLandscape = () => (
-    <div className="mobile-ls">
+    <div className={`mobile-ls${isUiHidden ? ' ui-hidden' : ''}`}>
+
+      {/* Floating UI toggle tab — available in landscape too */}
+      <button
+        type="button"
+        className="ui-toggle-tab"
+        onClick={handleUiToggle}
+        aria-label={isUiHidden ? 'Show controls' : 'Hide controls'}
+      >
+        {isUiHidden ? '▲' : '▼'}
+      </button>
 
       {/* Left context panel: Purify info only */}
       {isPurify && (
@@ -2617,7 +2656,7 @@ export default function App() {
         )}
 
         {/* board */}
-        <div className={`ls-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`} style={{ background: 'transparent' }}>
+        <SynesthesiaMotionLayer className={`ls-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`} style={{ background: 'transparent' }}>
           <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
             onTwoFingerTap={() => triggerAction('activateZone')}
             onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop}
@@ -2632,7 +2671,14 @@ export default function App() {
           {renderZoneEnd(state)}
           {renderCountdown()}
           {renderFloatPopups()}
-        </div>
+
+          {/* Focus/fullscreen controls in landscape when UI is hidden */}
+          {isUiHidden && config.showOnScreenControls && (
+            <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 22, pointerEvents: 'auto' }}>
+              <TouchControls onPress={_handlePress} onRelease={_handleRelease} />
+            </div>
+          )}
+        </SynesthesiaMotionLayer>
       </div>
 
       {/* ── Right: actions + controls ── */}
@@ -2761,7 +2807,7 @@ export default function App() {
           <span style={{ fontSize: '0.68rem', color: '#a78bfa', width: 28, textAlign: 'right' }}>{Math.ceil((state.infectionTimer || 0) / 1000)}s</span>
         </div>
       )}
-      <div className={`mobile-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`} style={{ background: 'transparent' }}>
+      <SynesthesiaMotionLayer className={`mobile-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`} style={{ background: 'transparent' }}>
         <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
           onTwoFingerTap={() => triggerAction('activateZone')}
           onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop}
@@ -2815,7 +2861,12 @@ export default function App() {
             </div>
           </div>
         )}
-      </div>
+      </SynesthesiaMotionLayer>
+
+      {/* Focus/fullscreen controls: keep touch inputs available when UI is hidden */}
+      {isUiHidden && config.showOnScreenControls && (
+        <TouchControls onPress={_handlePress} onRelease={_handleRelease} />
+      )}
 
       {/* Bottom panel: same controls as landscape */}
       <div className="pt-panel">

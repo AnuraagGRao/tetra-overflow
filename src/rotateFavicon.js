@@ -1,11 +1,11 @@
 // Rotates favicon between /icons/newicon.svg and icon1–4.svg every day of the week
 
 const ICONS = [
-  '/icons/newicon.svg',
-  '/icons/icon1.svg',
-  '/icons/icon2.svg',
-  '/icons/icon3.svg',
-  '/icons/icon4.svg'
+  import.meta.env.BASE_URL + 'icons/newicon.svg',
+  import.meta.env.BASE_URL + 'icons/icon1.svg',
+  import.meta.env.BASE_URL + 'icons/icon2.svg',
+  import.meta.env.BASE_URL + 'icons/icon3.svg',
+  import.meta.env.BASE_URL + 'icons/icon4.svg'
 ]
 
 export function setDailyFavicon() {

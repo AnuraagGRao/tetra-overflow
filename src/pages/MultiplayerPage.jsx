@@ -5,11 +5,13 @@ import { QRCodeSVG as QRCode } from 'qrcode.react'
 import { useAuth } from '../contexts/AuthContext'
 import { createLobby, joinLobby, updateLobby, updateLobbyPlayer, setLobbyStatus, setLobbyBestOf, subscribeLobby, archiveLobby, getFriends, getFriendRequests, getSentFriendRequests, acceptFriendRequest, declineFriendRequest, sendFriendRequest, findPublicProfileByFriendCode, sendLobbyInvite, getLobbyInvites, dismissLobbyInvite, getPublicProfiles } from '../firebase/db'
 import { TetrisEngine, GAME_MODE, ZONE_MIN_METER } from '../logic/gameEngine'
-import { setSfxVolume, playMoveSFX, playRotateSFX, playHoldSFX, playHardDropSFX, playLockSFX, playLineClearSFX, playTetrisSFX } from '../audio/gameSfx'
+import { setSfxVolume, playMoveSFX, playRotateSFX, playHoldSFX, playSoftDropSFX, playHardDropSFX, playLockSFX, playLineClearSFX, playTetrisSFX } from '../audio/gameSfx'
 import { PIECES } from '../logic/tetrominoes'
 import { MusicManager } from '../audio/musicManager'
 import { mpPlayLobbyMusic, mpStopMusic, mpMuteMusic, mpSetMusicVolume } from '../audio/multiplayerMusic'
 import GameCanvas from '../components/GameCanvas'
+import SynesthesiaMotionLayer from '../components/SynesthesiaMotionLayer'
+import { emitSynesthesia, SYNESTHESIA_EVENT } from '../logic/synesthesiaBus'
 import homeIconUrl from '../icons/home-button.png'
 import { BOARD_HEIGHT } from '../logic/tetrominoes'
 import TouchControls from '../components/TouchControls'
@@ -895,20 +897,27 @@ export default function MultiplayerPage() {
 
       // No WS stream sending in this build
 
-      // SFX triggers (edge detection against prev frame)
+      // SFX + synesthesia triggers (edge detection against prev frame)
       if (prev) {
         const theme = 'classic'
-        if (ns.hardDropped)               playHardDropSFX(theme)
+        if (ns.hardDropped)               { playHardDropSFX(theme); emitSynesthesia(SYNESTHESIA_EVENT.HARD_DROP, { intensity: 1.24 }) }
         else if (ns.pieceLocked)          playLockSFX(theme)
-        if (ns.lastClear?.lines > 0)      { (ns.lastClear.lines >= 4 ? playTetrisSFX : playLineClearSFX)(theme) }
+        if (ns.lastClear?.lines > 0) {
+          const _spinType = ns.lastClear.spinType
+          const _lines    = ns.lastClear.lines
+          const _isSpin   = _spinType === 'tSpin' || _spinType === 'allSpin' || _spinType === 'tSpinMini'
+          if (_isSpin) emitSynesthesia(SYNESTHESIA_EVENT.T_SPIN, { intensity: _lines >= 2 ? 1.45 : 1.18, lines: _lines })
+          else emitSynesthesia(SYNESTHESIA_EVENT.LINE_CLEAR, { intensity: Math.min(1.5, 0.9 + _lines * 0.2), lines: _lines })
+          if (_lines >= 4) playTetrisSFX(theme)
+          else playLineClearSFX(theme, ns.combo ?? 0)
+        }
         if (ns.pieceHeld)                 playHoldSFX(theme)
         // Move / rotate: only fire when the SAME piece is moving (not on spawn)
         if (prev.current?.type === ns.current?.type) {
-          if (ns.current?.x !== prev.current?.x)          playMoveSFX(theme)
-          else if (ns.current?.rotation !== prev.current?.rotation) playRotateSFX(theme)
+          if (ns.current?.x !== prev.current?.x)          { playMoveSFX(theme); emitSynesthesia(SYNESTHESIA_EVENT.MOVE, { intensity: 0.9 }) }
+          else if (ns.current?.rotation !== prev.current?.rotation) { playRotateSFX(theme); emitSynesthesia(SYNESTHESIA_EVENT.ROTATE, { intensity: 1.0 }) }
         }
-      }
-      prevStateRef.current = ns
+      }      prevStateRef.current = ns
 
       // Zone LPF music effect
       if (prev?.zoneActive !== ns.zoneActive) _mpMusicMgr?.setZoneFx?.(ns.zoneActive)
@@ -986,7 +995,7 @@ export default function MultiplayerPage() {
 
   const handleDragBegin = useCallback((dir) => {
     if (dir === 'left' || dir === 'right') handlePress(dir, true)
-    else if (dir === 'down') handlePress('softDrop', true)
+    else if (dir === 'down') { playSoftDropSFX('classic'); handlePress('softDrop', true) }
     else if (dir === 'up')   triggerAction('hold')
   }, [handlePress, triggerAction])
   const handleDragEnd = useCallback((dir) => {
@@ -1293,6 +1302,12 @@ export default function MultiplayerPage() {
                     )}
                   </span>
                   <span style={{ fontSize: '0.44rem', color: '#555', letterSpacing: '0.08em' }}>LVL {myState.level}</span>
+                  {(myState.combo > 1 || myState.backToBack) && (
+                    <span style={{ fontSize: '0.44rem', color: '#fbbf24', letterSpacing: '0.08em', fontWeight: 700 }}>
+                      {myState.combo > 1 ? `COMBO x${myState.combo}` : 'COMBO x1'}
+                      {myState.backToBack ? `  ·  B2B x${(myState.b2bCount ?? 0) + 1}` : ''}
+                    </span>
+                  )}
                 </div>
                 <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                   {/* Removed top focus toggle per request */}
@@ -1380,6 +1395,7 @@ export default function MultiplayerPage() {
                 {/* Canvas */}
                 <div className="mobile-canvas-wrap" style={{ background: 'transparent', flex: 1, minWidth: 0 }}>
                   <div style={{ position: 'relative', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>
+                    <SynesthesiaMotionLayer style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <GameCanvas
                       state={myState}
                       onTap={() => triggerAction('rotateCW')}
@@ -1389,6 +1405,7 @@ export default function MultiplayerPage() {
                       onHardDrop={handleHardDrop}
                       renderQuality={(() => { try { return JSON.parse(localStorage.getItem('tetris-config') || '{}').renderQuality || 'balanced' } catch { return 'balanced' } })()}
                     />
+                    </SynesthesiaMotionLayer>
                     {/* Small right-side focus toggle for mobile */}
                     <button
                       onClick={() => setFocus(f => !f)}

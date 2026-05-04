@@ -171,13 +171,13 @@ export const STORY_CHAPTERS = [
       },
       {
         id: 'l2', title: 'THE GRID', subtitle: 'Reality encoded.',
-        bgType: 'matrix', bpm: 120, gravityMult: 1.50, targetLines: 44, easyTargetLines: 32, themeUnlock: 'theme_terminal',
+        bgType: 'grid', bpm: 120, gravityMult: 1.50, targetLines: 44, easyTargetLines: 32, themeUnlock: 'theme_terminal',
         storyBefore: 'The void resolves into information. Raw data, cascading. Is this reality? Is this what reality always was?',
         storyAfter: 'You read the patterns between the patterns. A code within a code.',
       },
       {
         id: 'l3', title: 'SINGULARITY', subtitle: 'One point. All things.',
-        bgType: 'blackhole', bpm: 180, gravityMult: 2.10, targetLines: 50, easyTargetLines: 36, isBoss: true, mechanic: 'ghost_pieces',
+        bgType: 'geometry', bpm: 180, gravityMult: 2.10, targetLines: 50, easyTargetLines: 36, isBoss: true, mechanic: 'ghost_pieces',
         storyBefore: 'VOID FINALE — Everything converges. All the elements, all the worlds, collapsed to a single point.',
         storyAfter: 'VOID MASTERED — You did not break. The final gate appears.',
       },
@@ -191,19 +191,19 @@ export const STORY_CHAPTERS = [
     levels: [
       {
         id: 'l1', title: 'GENESIS', subtitle: 'Return to the beginning.',
-        bgType: 'crystal', bpm: 100, gravityMult: 1.10, targetLines: 38, easyTargetLines: 28,
+        bgType: 'stellar', bpm: 100, gravityMult: 1.10, targetLines: 38, easyTargetLines: 28,
         storyBefore: 'You have walked through fire, drowned in water, dissolved in the void. Now you begin again. But you remember.',
         storyAfter: 'The pieces fall differently now. You are different now.',
       },
       {
         id: 'l2', title: 'MAELSTROM', subtitle: 'All storms as one.',
-        bgType: 'storm', bpm: 145, gravityMult: 1.40, targetLines: 42, easyTargetLines: 30,
+        bgType: 'deepsea', bpm: 145, gravityMult: 1.40, targetLines: 42, easyTargetLines: 30,
         storyBefore: 'Every storm you have ever played converges. Rain, wind, lightning, sound — a symphony of destruction.',
         storyAfter: 'You have played this storm before. A hundred times. You know its rhythms.',
       },
       {
         id: 'l3', title: 'THE FORGE', subtitle: 'Burn away the impermanence.',
-        bgType: 'inferno', bpm: 165, gravityMult: 1.80, targetLines: 46, easyTargetLines: 34,
+        bgType: 'volcano', bpm: 165, gravityMult: 1.80, targetLines: 46, easyTargetLines: 34,
         storyBefore: 'The final fire. It burns away not just matter, but memory. What remains after everything is reduced? Only the pattern.',
         storyAfter: 'You emerge without weight. The pattern is all that remains of you.',
       },
@@ -215,7 +215,7 @@ export const STORY_CHAPTERS = [
       },
       {
         id: 'l5', title: 'TRANSCENDENCE', subtitle: 'Beyond the last line.',
-        bgType: 'nebula', bpm: 200, gravityMult: 2.60, targetLines: 56, easyTargetLines: 40, isBoss: true, themeUnlock: 'theme_circuit', mechanic: 'invisible_board',
+        bgType: 'ritual', bpm: 200, gravityMult: 2.60, targetLines: 56, easyTargetLines: 40, isBoss: true, themeUnlock: 'theme_circuit', mechanic: 'invisible_board',
         storyBefore: 'FINAL LEVEL — This is the last game. There is no world after this. Only the clearing of lines, forever, until you understand.',
         storyAfter: 'COMPLETE — You put down the last piece. The music stops. For one perfect moment, the board is clear.',
       },

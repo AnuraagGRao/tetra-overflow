@@ -7,13 +7,15 @@ import SettingsPage from '../components/SettingsPage'
 import { findLevel, getNextLevel } from '../logic/storyData'
 import { PIECES } from '../logic/tetrominoes'
 import { TetrisEngine, GAME_MODE, ZONE_MIN_METER, ZONE_DURATION_MS } from '../logic/gameEngine'
-import { setSfxVolume, setSfxDuck, playMoveSFX, playRotateSFX, playHoldSFX, playHardDropSFX, playLockSFX, playLineClearSFX, playTetrisSFX, playZoneActivateSFX } from '../audio/gameSfx'
+import { setSfxVolume, setSfxDuck, playMoveSFX, playRotateSFX, playHoldSFX, playSoftDropSFX, playHardDropSFX, playLockSFX, playLineClearSFX, playTetrisSFX, playZoneActivateSFX } from '../audio/gameSfx'
 import GameCanvas, { PIECE_COLOR_MAPS } from '../components/GameCanvas'
 import FocusHud from '../components/FocusHud'
 import { BG_TYPE_TO_PIECE_THEME } from '../logic/themeMappings'
 import TouchControls from '../components/TouchControls'
 import BackgroundCanvas from '../components/BackgroundCanvas'
+import SynesthesiaMotionLayer from '../components/SynesthesiaMotionLayer'
 import { StoryMusicManager } from '../audio/storyMusicManager'
+import { emitSynesthesia, SYNESTHESIA_EVENT } from '../logic/synesthesiaBus'
 
 // Uses shared mapping in logic/themeMappings.js
 
@@ -121,6 +123,8 @@ function useStoryGameLoop(engine, targetLines, levelStartLinesRef, levelKey, onC
       ev.preventDefault(); if (ev.repeat) return
       if (b.held) {
         heldRef.current[b.held] = true
+        if (b.held === 'left' || b.held === 'right') emitSynesthesia(SYNESTHESIA_EVENT.MOVE, { intensity: 0.9, source: 'story-keyboard' })
+        if (b.held === 'softDrop') emitSynesthesia(SYNESTHESIA_EVENT.SOFT_DROP, { intensity: 0.82, source: 'story-keyboard' })
         try { window.dispatchEvent(new Event('bg-beat')) } catch {}
       }
       if (b.action) {
@@ -128,6 +132,8 @@ function useStoryGameLoop(engine, targetLines, levelStartLinesRef, levelKey, onC
           togglePause()
         } else {
           actionRef.current[b.action] = true
+          if (b.action === 'rotateCW' || b.action === 'rotateCCW' || b.action === 'rotate180') emitSynesthesia(SYNESTHESIA_EVENT.ROTATE, { intensity: 1.0, source: 'story-keyboard' })
+          if (b.action === 'hardDrop') emitSynesthesia(SYNESTHESIA_EVENT.HARD_DROP, { intensity: 1.22, source: 'story-keyboard' })
           try { window.dispatchEvent(new Event('bg-beat')) } catch {}
         }
       }
@@ -164,6 +170,9 @@ function useStoryGameLoop(engine, targetLines, levelStartLinesRef, levelKey, onC
       if (ns.lastClear) {
         const spinType = ns.lastClear.spinType
         const lines = ns.lastClear.lines || 0
+        const isSpin = spinType === 'tSpin' || spinType === 'allSpin' || spinType === 'tSpinMini'
+        if (isSpin) emitSynesthesia(SYNESTHESIA_EVENT.T_SPIN, { intensity: lines >= 2 ? 1.45 : 1.18, lines })
+        else if (lines > 0) emitSynesthesia(SYNESTHESIA_EVENT.LINE_CLEAR, { intensity: Math.min(1.5, 0.9 + lines * 0.2), lines })
         if (spinType === 'tSpin' || spinType === 'tSpinMini') tSpinsRef.current += 1
         if (lines > 0 && prevPieceTypeRef.current === 'I') iPieceLinesRef.current += lines
         if (lines === 4) tetrisClearsRef.current += 1
@@ -486,10 +495,12 @@ export default function StoryLevelPage() {
   const handleDragBegin = useCallback((dir) => {
     if (dir === 'left' || dir === 'right') {
       if (config?.sfxEnabled && !paused) try { playMoveSFX(pieceTheme || 'classic') } catch {}
+      emitSynesthesia(SYNESTHESIA_EVENT.MOVE, { intensity: 1.03, source: 'story-drag' })
       handlePress(dir, true)
       try { window.dispatchEvent(new Event('bg-beat')) } catch {}
     } else if (dir === 'down') {
-      if (config?.sfxEnabled && !paused) try { playMoveSFX(pieceTheme || 'classic') } catch {}
+      if (config?.sfxEnabled && !paused) try { playSoftDropSFX(pieceTheme || 'classic') } catch {}
+      emitSynesthesia(SYNESTHESIA_EVENT.SOFT_DROP, { intensity: 0.95, source: 'story-drag' })
       handlePress('softDrop', true)
       try { window.dispatchEvent(new Event('bg-beat')) } catch {}
     } else if (dir === 'up') {
@@ -507,6 +518,7 @@ export default function StoryLevelPage() {
   const handleHardDrop = useCallback(() => {
     if (config?.sfxEnabled && !paused) try { playHardDropSFX(pieceTheme || 'classic') } catch {}
     handleRelease('softDrop')
+    emitSynesthesia(SYNESTHESIA_EVENT.HARD_DROP, { intensity: 1.24, source: 'story-gesture' })
     triggerAction('hardDrop')
     try { window.dispatchEvent(new Event('bg-beat')) } catch {}
   }, [handleRelease, triggerAction, config?.sfxEnabled, paused, pieceTheme])
@@ -522,6 +534,7 @@ export default function StoryLevelPage() {
         const b = KEY_BINDINGS[ev.code]; if (!b) return
         const th = pieceTheme || 'classic'
         if (b.held === 'left' || b.held === 'right') playMoveSFX(th)
+        if (b.held === 'softDrop') playSoftDropSFX(th)
         if (b.action === 'rotateCW' || b.action === 'rotateCCW' || b.action === 'rotate180') playRotateSFX(th)
         if (b.action === 'hardDrop') playHardDropSFX(th)
         if (b.action === 'hold')     playHoldSFX(th)
@@ -541,7 +554,10 @@ export default function StoryLevelPage() {
       const theme = pieceTheme || 'classic'
       if (state.hardDropped)               playHardDropSFX(theme)
       else if (state.pieceLocked)          playLockSFX(theme)
-      if (state.lastClear?.lines > 0)      { (state.lastClear.lines >= 4 ? playTetrisSFX : playLineClearSFX)(theme) }
+      if (state.lastClear?.lines > 0) {
+        if (state.lastClear.lines >= 4) playTetrisSFX(theme)
+        else playLineClearSFX(theme, state.combo ?? 0)
+      }
       if (state.pieceHeld)                 playHoldSFX(theme)
       if (prev.zoneActive !== state.zoneActive) {
         if (state.zoneActive) {
@@ -590,6 +606,7 @@ export default function StoryLevelPage() {
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
         beatRef={beatRef}
         bpm={found?.level?.bpm || 120}
+        comboStreak={state.combo ?? 0}
       />
 
       {/* Subtle darkening overlay */}
@@ -686,6 +703,16 @@ export default function StoryLevelPage() {
                     {Math.min(linesThisLevel, effectiveTargetLines)} / {effectiveTargetLines} lines
                   </span>
                 )}
+                {state.combo > 1 && (
+                  <span style={{ color: '#f59e0b', fontSize: '0.62rem', fontWeight: 700 }}>
+                    COMBO x{state.combo}
+                  </span>
+                )}
+                {state.backToBack && (
+                  <span style={{ color: '#fbbf24', fontSize: '0.62rem', fontWeight: 700 }}>
+                    B2B x{(state.b2bCount ?? 0) + 1}
+                  </span>
+                )}
                 <span style={{ color: '#00d4ff', fontWeight: 700 }}>{state.score.toLocaleString()}</span>
                 <button
                   onClick={togglePause}
@@ -711,10 +738,10 @@ export default function StoryLevelPage() {
 
             {/* Canvas */}
             <div className="mobile-canvas-wrap" style={{ background: 'transparent', flex: 1, minWidth: 0 }}>
-              <div style={{ position: 'relative', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>
+              <SynesthesiaMotionLayer style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>
                 <GameCanvas
                   state={state}
-                  onTap={() => { if (config?.sfxEnabled && !paused) try { playRotateSFX(pieceTheme || 'classic') } catch {}; triggerAction('rotateCW'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
+                  onTap={() => { if (config?.sfxEnabled && !paused) try { playRotateSFX(pieceTheme || 'classic') } catch {}; emitSynesthesia(SYNESTHESIA_EVENT.ROTATE, { intensity: 1.0, source: 'story-tap' }); triggerAction('rotateCW'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
                   onTwoFingerTap={() => { if (config?.sfxEnabled && !paused) try { playZoneActivateSFX(pieceTheme || 'classic') } catch {}; triggerAction('activateZone'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
                   onDragBegin={handleDragBegin}
                   onDragEnd={handleDragEnd}
@@ -822,7 +849,7 @@ export default function StoryLevelPage() {
                     </button>
                   </div>
                 )}
-              </div>
+              </SynesthesiaMotionLayer>
             </div>
 
             {/* Right strip removed per request to maximize board area */}

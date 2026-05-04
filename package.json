@@ -1,7 +1,7 @@
 {
   "name": "tetris-mobile-clone",
   "private": true,
-  "version": "0.6.3",
+  "version": "0.6.9",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,6 +12,7 @@
   "dependencies": {
     "firebase": "^12.12.1",
     "framer-motion": "^11.3.23",
+    "howler": "^2.2.4",
     "qrcode.react": "^4.2.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",

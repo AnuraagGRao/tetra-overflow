@@ -6,5 +6,6 @@ export const BG_TYPE_TO_PIECE_THEME = {
   ember: 'bauhaus', volcano: 'bauhaus', inferno: 'bauhaus',
   clouds: 'sketch', aurora: 'sketch',
   stars: 'classic', nebula: 'blueprint', warp: 'sketch', blackhole: 'dmg',
-  abyss: 'dmg', matrix: 'dmg', oiia: 'classic',
+  abyss: 'dmg', matrix: 'dmg', grid: 'dmg', oiia: 'classic',
+  deepsea: 'blueprint', stellar: 'classic', geometry: 'sketch', ritual: 'dmg',
 }

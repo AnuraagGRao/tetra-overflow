@@ -1,5 +1,9 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { motion, useMotionValue, useSpring } from 'framer-motion'
 import catImageUrl from '../meme/oiia_cat_assets_by_awesomeconsoles7_djwlgwe-fullview.png'
+import { SYNESTHESIA_EVENT, useSynesthesiaEvent } from '../logic/synesthesiaBus'
+import { BGTYPE_VANTA_CONFIG, getBackgroundProfile } from '../logic/backgroundProfiles'
+import '../styles/backgroundEffects.css'
 
 // ── Base fill colour per bgType ───────────────────────────────────────────────
 const BG_BASE = {
@@ -7,6 +11,7 @@ const BG_BASE = {
   quake:'#0a0804', ocean:'#00050f', bubbles:'#00060c',
   storm:'#040608', clouds:'#06080e', stars:'#000005',
   nebula:'#030008', blackhole:'#000003', matrix:'#000500',
+  grid:'#020912',
   // New types
   forest:'#000802', glacier:'#000a18', volcano:'#150200',
   inferno:'#100000', aurora:'#000410', warp:'#000008', abyss:'#000000',
@@ -76,6 +81,16 @@ function drawAmbient(ctx, bgType, w, h, t) {
         for (let x=0;x<=w;x+=4) { const y=h*0.15+j*h*0.08+Math.sin(x*0.02+t*0.002+j)*h*0.025; x===0?ctx.moveTo(x,y):ctx.lineTo(x,y) }
         ctx.stroke()
       }
+      // Foamy surface ribbon
+      ctx.globalAlpha = 0.24
+      ctx.strokeStyle = 'rgba(180, 235, 255, 0.85)'
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      for (let x=0;x<=w;x+=6) {
+        const y = h*0.22 + Math.sin(x*0.018 + t*0.0022)*h*0.02 + Math.sin(x*0.055 + t*0.0011)*4
+        x===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y)
+      }
+      ctx.stroke()
       ctx.restore(); break
     }
     case 'bubbles': {
@@ -159,6 +174,22 @@ function drawAmbient(ctx, bgType, w, h, t) {
       g.addColorStop(0,'rgba(0,8,0,1)'); g.addColorStop(1,'rgba(0,2,0,1)')
       ctx.fillStyle = g; ctx.fillRect(0,0,w,h); break
     }
+    case 'grid': {
+      const g = ctx.createLinearGradient(0,0,0,h)
+      g.addColorStop(0,'rgba(2,18,32,1)'); g.addColorStop(1,'rgba(1,8,16,1)')
+      ctx.fillStyle = g; ctx.fillRect(0,0,w,h)
+      ctx.save(); ctx.globalAlpha = 0.08
+      ctx.strokeStyle = 'rgba(90,220,255,0.9)'; ctx.lineWidth = 1
+      const step = Math.max(24, Math.round(Math.min(w, h) * 0.06))
+      const drift = (t * 0.02) % step
+      for (let x = -step; x <= w + step; x += step) {
+        ctx.beginPath(); ctx.moveTo(x + drift, 0); ctx.lineTo(x + drift, h); ctx.stroke()
+      }
+      for (let y = -step; y <= h + step; y += step) {
+        ctx.beginPath(); ctx.moveTo(0, y + drift * 0.6); ctx.lineTo(w, y + drift * 0.6); ctx.stroke()
+      }
+      ctx.restore(); break
+    }
 
     // ── New bgTypes ───────────────────────────────────────────────────────────
     case 'forest': {
@@ -232,8 +263,8 @@ function drawAmbient(ctx, bgType, w, h, t) {
       ctx.fillStyle = g; ctx.fillRect(0,0,w,h); break
     }
     case 'warp': {
-      const g = ctx.createRadialGradient(w*0.5,h*0.5,0,w*0.5,h*0.5,h*0.7)
-      g.addColorStop(0,'rgba(20,40,80,0.5)'); g.addColorStop(0.3,'rgba(5,10,30,0.3)'); g.addColorStop(1,'rgba(0,0,5,0)')
+      const g = ctx.createRadialGradient(w*0.5,h*0.5,0,w*0.5,h*0.5,h*0.8)
+      g.addColorStop(0,'rgba(85,140,255,0.45)'); g.addColorStop(0.28,'rgba(15,35,95,0.26)'); g.addColorStop(1,'rgba(0,0,8,0)')
       ctx.fillStyle = g; ctx.fillRect(0,0,w,h); break
     }
     case 'abyss': {
@@ -258,24 +289,118 @@ function drawAmbient(ctx, bgType, w, h, t) {
 function makeParticle(bgType, w, h, init=false) {
   const x = Math.random()*w
   const y = init ? Math.random()*h : (
-    ['storm','matrix','crystal','glacier','forest'].includes(bgType) ? -10 : h+10
+    ['storm','matrix','grid','crystal','glacier','forest'].includes(bgType) ? -10 : h+10
   )
   switch (bgType) {
     case 'lava':   return { x, y, vx:(Math.random()-0.5)*0.5, vy:-(0.5+Math.random()*0.7), r:3+Math.random()*4, hue:10+Math.random()*25, life:1, decay:0.003+Math.random()*0.003, glow:true }
     case 'ember':  return { x, y, vx:(Math.random()-0.5)*0.8, vy:-(0.4+Math.random()*0.9), r:1.5+Math.random()*2.5, hue:5+Math.random()*40, life:1, decay:0.004+Math.random()*0.004, glow:true }
-    case 'crystal':return { x, y, vx:(Math.random()-0.5)*0.2, vy:0.25+Math.random()*0.45, r:1+Math.random()*2.5, hue:200+Math.random()*70, life:1, decay:0.0025, glow:true }
+    case 'crystal': {
+      const prism = Math.random() < 0.7
+      return {
+        x,
+        y,
+        vx:(Math.random()-0.5)*0.24,
+        vy:0.2+Math.random()*0.42,
+        r:prism ? (1.4+Math.random()*2.8) : (0.4+Math.random()*1.2),
+        hue:190+Math.random()*80,
+        life:1,
+        decay:0.0019+Math.random()*0.0018,
+        glow:true,
+        subtype: prism ? 'prism' : 'dust',
+        rot: Math.random() * Math.PI * 2,
+        rotSpeed: (Math.random() - 0.5) * 0.03,
+      }
+    }
     case 'quake':  return { x, y:Math.random()*h, vx:(Math.random()-0.5)*1.8, vy:(Math.random()-0.5)*1, r:2+Math.random()*4, hue:22+Math.random()*18, life:1, decay:0.009+Math.random()*0.007, glow:false }
-    case 'ocean':  return { x, y, vx:(Math.random()-0.5)*0.15, vy:-(0.18+Math.random()*0.35), r:2+Math.random()*4, hue:200+Math.random()*30, life:1, decay:0.002+Math.random()*0.002, glow:true, a:0.35 }
-    case 'bubbles':return { x, y, vx:(Math.random()-0.5)*0.35, vy:-(0.3+Math.random()*0.55), r:3+Math.random()*6, hue:Math.random()*360, life:0.7, decay:0.0015+Math.random()*0.002, glow:true, bubble:true }
-    case 'storm':  return { x, y, vx:1.8+Math.random()*1.2, vy:5+Math.random()*4, r:0.7, hue:215, life:1, decay:0, glow:false }
-    case 'clouds': return { x, y:10+Math.random()*h*0.5, vx:0.12+Math.random()*0.22, vy:0, r:10+Math.random()*20, hue:220+Math.random()*30, life:1, decay:0, glow:false, a:0.04+Math.random()*0.04 }
-    case 'stars':  return { x, y:Math.random()*h, vx:0, vy:0, r:0.4+Math.random()*1.8, hue:0, life:1, decay:0, twinkle:Math.random()*Math.PI*2, color:`rgba(${200+Math.floor(Math.random()*55)},${200+Math.floor(Math.random()*55)},255,1)` }
-    case 'nebula': return { x, y, vx:(Math.random()-0.5)*0.12, vy:-(0.08+Math.random()*0.16), r:5+Math.random()*12, hue:270+Math.random()*70, life:1, decay:0.0008, glow:false, a:0.055 }
+    case 'ocean':  return { x, y, vx:(Math.random()-0.5)*0.08, vy:-(0.09+Math.random()*0.18), r:2+Math.random()*4, hue:200+Math.random()*30, life:1, decay:0.0015+Math.random()*0.0015, glow:true, a:0.35 }
+    case 'bubbles': {
+      const isLarge = Math.random() < 0.58
+      return {
+        x,
+        y,
+        vx:(Math.random()-0.5)*0.14,
+        vy:-(0.15+Math.random()*0.3),
+        r:isLarge ? (3.2+Math.random()*7.4) : (1.1+Math.random()*2.8),
+        hue:180+Math.random()*45,
+        life:0.7+Math.random()*0.28,
+        decay:0.0009+Math.random()*0.0012,
+        glow:true,
+        bubble:true,
+        wobble: Math.random() * Math.PI * 2,
+        wobbleAmp: 0.25 + Math.random() * 0.55,
+      }
+    }
+    case 'storm':  return { x, y, vx:1.2+Math.random()*1.6, vy:6+Math.random()*6, r:0.7+Math.random()*0.4, hue:208+Math.random()*16, life:1, decay:0, glow:false }
+    case 'clouds': return { x, y:10+Math.random()*h*0.6, vx:0.03+Math.random()*0.12, vy:(Math.random()-0.5)*0.02, r:16+Math.random()*30, hue:215+Math.random()*35, life:1, decay:0, glow:false, a:0.04+Math.random()*0.05, layer:Math.random()<0.5?0:1 }
+    case 'stars': {
+      const shooting = Math.random() < 0.07
+      if (shooting) {
+        const ang = -Math.PI * (0.12 + Math.random() * 0.32)
+        return {
+          x: Math.random() * w,
+          y: Math.random() * h * 0.45,
+          vx: Math.cos(ang) * (2.6 + Math.random() * 2.8),
+          vy: Math.sin(ang) * (2.6 + Math.random() * 2.8),
+          len: 18 + Math.random() * 34,
+          r: 1.0 + Math.random() * 1.5,
+          hue: 200 + Math.random() * 30,
+          life: 0.55 + Math.random() * 0.5,
+          decay: 0.005 + Math.random() * 0.005,
+          subtype: 'shooting',
+        }
+      }
+      return { x, y:Math.random()*h, vx:(Math.random()-0.5)*0.03, vy:(Math.random()-0.5)*0.02, r:0.5+Math.random()*2.1, hue:0, life:1, decay:0, twinkle:Math.random()*Math.PI*2, twinkleSpeed:0.02+Math.random()*0.04, depth:0.5+Math.random()*1.1, color:`rgba(${190+Math.floor(Math.random()*65)},${205+Math.floor(Math.random()*50)},255,1)` }
+    }
+    case 'nebula': {
+      const spark = Math.random() < 0.22
+      return {
+        x,
+        y,
+        vx:(Math.random()-0.5)*(spark ? 0.22 : 0.1),
+        vy:-(0.03+Math.random()*(spark ? 0.1 : 0.05)),
+        r:spark ? (0.6+Math.random()*1.6) : (4+Math.random()*10),
+        hue:spark ? (200+Math.random()*70) : (260+Math.random()*80),
+        life: spark ? (0.55+Math.random()*0.45) : 1,
+        decay:spark ? (0.0012+Math.random()*0.0022) : 0.0006,
+        glow:spark,
+        a:spark ? 0.18 : 0.07,
+        subtype: spark ? 'spark' : 'cloud',
+        twinkle: Math.random() * Math.PI * 2,
+      }
+    }
     case 'blackhole': {
       const angle=Math.random()*Math.PI*2, dist=60+Math.random()*160
       return { x:w/2+Math.cos(angle)*dist, y:h/2+Math.sin(angle)*dist, angle, dist, speed:0.007+Math.random()*0.006, r:1.2+Math.random()*2.2, hue:300+Math.random()*60, life:1, decay:0.0018, glow:true }
     }
-    case 'matrix': return { x, y:-(15+Math.random()*h), vx:0, vy:2.2+Math.random()*3.5, r:0, char:String.fromCharCode(0x30A0+Math.floor(Math.random()*96)), hue:120, life:1, decay:0, fontSize:9+Math.random()*7, lead:Math.random()<0.12 }
+    case 'matrix': {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%*+-<>[]{}=/\\|:;'
+      return {
+        x,
+        y:-(25+Math.random()*h),
+        vx:0,
+        vy:3.2+Math.random()*5.5,
+        r:0,
+        char: chars[Math.floor(Math.random()*chars.length)],
+        hue:115+Math.random()*16,
+        life:1,
+        decay:0,
+        fontSize:11+Math.random()*11,
+        lead:Math.random()<0.18,
+      }
+    }
+    case 'grid':
+      return {
+        x,
+        y:-(20+Math.random()*h),
+        vx:0,
+        vy:2.6+Math.random()*4.2,
+        r:0.7+Math.random()*1.6,
+        hue:190+Math.random()*30,
+        life:1,
+        decay:0,
+        pulse:Math.random()*Math.PI*2,
+        lead:Math.random()<0.14,
+      }
     // ── New types ─────────────────────────────────────────────────────────────
     case 'forest': {
       const isFirefly = Math.random()<0.35
@@ -284,30 +409,67 @@ function makeParticle(bgType, w, h, init=false) {
         : { x, y, vx:(Math.random()-0.5)*0.5, vy:0.4+Math.random()*0.7, r:2+Math.random()*2.5, hue:80+Math.random()*60, life:1, decay:0.004+Math.random()*0.003, subtype:'leaf', rot:Math.random()*Math.PI*2, rotSpeed:(Math.random()-0.5)*0.06 }
     }
     case 'glacier': {
-      const isFlake = Math.random()<0.65
-      return { x, y, vx:(Math.random()-0.5)*0.3, vy:0.15+Math.random()*0.4, r:isFlake?(2+Math.random()*3):(0.5+Math.random()*1.5), hue:200+Math.random()*35, life:1, decay:0, subtype:isFlake?'flake':'shard', rot:Math.random()*Math.PI*2 }
+      const roll = Math.random()
+      const subtype = roll < 0.54 ? 'flake' : roll < 0.9 ? 'shard' : 'mist'
+      return {
+        x,
+        y,
+        vx:(Math.random()-0.5)*(subtype === 'mist' ? 0.12 : 0.34),
+        vy:(subtype === 'mist' ? 0.04 : 0.15)+Math.random()*(subtype === 'mist' ? 0.15 : 0.42),
+        r:subtype === 'flake' ? (2+Math.random()*3.2) : subtype === 'mist' ? (7+Math.random()*12) : (0.6+Math.random()*1.6),
+        hue:198+Math.random()*40,
+        life:1,
+        decay:subtype === 'mist' ? 0.0012 : 0,
+        subtype,
+        rot:Math.random()*Math.PI*2,
+      }
     }
     case 'volcano':return { x:w*0.5+(Math.random()-0.5)*w*0.4, y:h*0.92, vx:(Math.random()-0.5)*3.5, vy:-(3+Math.random()*5), r:2+Math.random()*5, hue:10+Math.random()*30, life:1, decay:0.005+Math.random()*0.004, grav:0.07+Math.random()*0.04, glow:true }
     case 'inferno':return { x, y, vx:(Math.random()-0.5)*1.5, vy:-(1.5+Math.random()*2.5), r:3+Math.random()*8, hue:Math.random()*30, life:1, decay:0.007+Math.random()*0.006, glow:true }
-    case 'aurora': return { x, y:Math.random()*h*0.6, vx:0, vy:0, r:0.4+Math.random()*1.5, hue:0, life:1, decay:0, twinkle:Math.random()*Math.PI*2, color:`rgba(${180+Math.floor(Math.random()*75)},${210+Math.floor(Math.random()*45)},255,1)` }
+    case 'aurora': return { x, y:Math.random()*h*0.6, vx:(Math.random()-0.5)*0.08, vy:(Math.random()-0.5)*0.04, r:0.5+Math.random()*2.2, hue:130+Math.random()*120, life:1, decay:0, twinkle:Math.random()*Math.PI*2, twinkleSpeed:0.04+Math.random()*0.05, color:`hsla(${130+Math.floor(Math.random()*120)},90%,70%,1)` }
     case 'warp': {
       const angle = Math.random()*Math.PI*2
       return { x:w/2, y:h/2, angle, dist:Math.random()*25, speed:3+Math.random()*4, length:5+Math.random()*15, hue:200+Math.random()*60, life:1, decay:0 }
     }
-    case 'abyss':  return { x, y:Math.random()*h, vx:(Math.random()-0.5)*0.08, vy:(Math.random()-0.5)*0.08, r:5+Math.random()*14, hue:260+Math.random()*80, life:Math.random(), decay:0.0015, growing:Math.random()<0.5 }
+    case 'abyss':  return { x, y:Math.random()*h, vx:(Math.random()-0.5)*0.1, vy:(Math.random()-0.5)*0.1, r:3+Math.random()*16, hue:250+Math.random()*95, life:Math.random(), decay:0.0012+Math.random()*0.001, growing:Math.random()<0.5, pulse:Math.random()*Math.PI*2 }
     case 'oiia': {
       // Spinning cat-colored stars
       const angle = Math.random()*Math.PI*2
-      return { x:Math.random()*w, y:Math.random()*h, vx:(Math.random()-0.5)*0.3, vy:(Math.random()-0.5)*0.3, r:4+Math.random()*10, hue:300+Math.random()*60, life:Math.random(), decay:0.003+Math.random()*0.003, growing:Math.random()<0.5, rot:angle, rotSpeed:(Math.random()-0.5)*0.06 }
+      return { x:Math.random()*w, y:Math.random()*h, vx:(Math.random()-0.5)*0.3, vy:(Math.random()-0.5)*0.3, r:4+Math.random()*10, hue:300+Math.random()*60, life:Math.random(), decay:0.003+Math.random()*0.003, growing:Math.random()<0.5, rot:angle, rotSpeed:(Math.random()-0.5)*0.022 }
     }
     default: return { x, y:Math.random()*h, vx:0, vy:0, r:1, hue:0, life:1, decay:0.001, glow:false }
   }
 }
 
-function createParticles(bgType, w, h) {
-  const counts = { lava:120, ember:100, crystal:80, quake:70, ocean:90, bubbles:60, storm:150, clouds:30, stars:200, nebula:50, blackhole:80, matrix:120, forest:80, glacier:100, volcano:130, inferno:150, aurora:80, warp:100, abyss:45 }
-  const n = counts[bgType] || 80
+function createParticles(bgType, w, h, densityScale = 1) {
+  const counts = {
+    lava: 180, ember: 150, inferno: 220, storm: 240, quake: 130, volcano: 170,
+    ocean: 70, bubbles: 120, glacier: 120, clouds: 54, deepsea: 60,
+    stars: 340, nebula: 150, warp: 130, blackhole: 150, abyss: 120,
+    matrix: 180, grid: 150, crystal: 150, forest: 100, aurora: 150, oiia: 80,
+  }
+  const n = Math.max(8, Math.round((counts[bgType] || 80) * densityScale))
   return Array.from({ length:n }, () => makeParticle(bgType, w, h, true))
+}
+
+const readRenderQuality = () => {
+  try {
+    const cfg = JSON.parse(localStorage.getItem('tetris-config') || '{}')
+    const quality = String(cfg?.renderQuality || 'balanced')
+    return ['performance', 'balanced', 'quality', 'ultra'].includes(quality) ? quality : 'balanced'
+  } catch {
+    return 'balanced'
+  }
+}
+
+const detectLowEndDevice = () => {
+  if (typeof navigator === 'undefined') return false
+  const hc = Number(navigator.hardwareConcurrency || 0)
+  const dm = Number(navigator.deviceMemory || 0)
+  const coarsePointer = typeof matchMedia === 'function' ? matchMedia('(pointer: coarse)').matches : false
+  const smallViewport = typeof window !== 'undefined' ? (window.innerWidth <= 900 || window.innerHeight <= 700) : false
+  const saveData = Boolean(navigator.connection?.saveData)
+  return saveData || (hc > 0 && hc <= 4) || (dm > 0 && dm <= 4) || (coarsePointer && smallViewport)
 }
 
 // ── Particle update — returns true if dead (should respawn) ──────────────────
@@ -318,7 +480,51 @@ function updateParticle(p, bgType, w, h, dt) {
     p.x = w/2+Math.cos(p.angle)*p.dist; p.y = h/2+Math.sin(p.angle)*p.dist
     p.life -= p.decay*s; return p.dist<3 || p.life<=0
   }
-  if (bgType === 'stars' || bgType === 'aurora') { p.twinkle += 0.035*s; return false }
+  if (bgType === 'stars') {
+    if (p.subtype === 'shooting') {
+      p.x += p.vx * s
+      p.y += p.vy * s
+      p.life -= p.decay * s
+      return p.life <= 0 || p.x > w + 30 || p.x < -30 || p.y > h + 30 || p.y < -30
+    }
+    p.twinkle += (p.twinkleSpeed || 0.03) * s
+    p.x += (p.vx || 0) * s * (p.depth || 1)
+    p.y += (p.vy || 0) * s * (p.depth || 1)
+    if (p.x < -3) p.x = w + 3; else if (p.x > w + 3) p.x = -3
+    if (p.y < -3) p.y = h + 3; else if (p.y > h + 3) p.y = -3
+    return false
+  }
+  if (bgType === 'aurora') {
+    p.twinkle += (p.twinkleSpeed || 0.045) * s
+    p.x += (p.vx || 0) * s
+    p.y += (p.vy || 0) * s
+    if (p.x < -5) p.x = w + 5; else if (p.x > w + 5) p.x = -5
+    if (p.y < -5) p.y = h + 5; else if (p.y > h + 5) p.y = -5
+    return false
+  }
+  if (bgType === 'bubbles') {
+    p.wobble = (p.wobble || 0) + 0.06 * s
+    p.x += (p.vx || 0) * s + Math.sin(p.wobble) * (p.wobbleAmp || 0.3) * s
+    p.y += p.vy * s
+    p.life -= p.decay * s
+    return p.y < -30 || p.life <= 0
+  }
+  if (bgType === 'crystal') {
+    p.x += p.vx*s; p.y += p.vy*s
+    if (p.rotSpeed) p.rot = (p.rot || 0) + p.rotSpeed * s
+    p.life -= p.decay*s
+    return p.y > h+28 || p.life <= 0
+  }
+  if (bgType === 'nebula') {
+    p.x += p.vx * s
+    p.y += p.vy * s
+    p.twinkle = (p.twinkle || 0) + 0.02 * s
+    if (p.subtype === 'spark') p.life -= p.decay * s
+    else p.life = Math.max(0.45, Math.min(1, p.life + Math.sin(p.twinkle) * 0.0015 * s))
+    if (p.x < -40) p.x = w + 40; else if (p.x > w + 40) p.x = -40
+    if (p.y < -40) p.y = h + 40; else if (p.y > h + 40) p.y = -40
+    return p.subtype === 'spark' ? (p.life <= 0) : false
+  }
   if (bgType === 'forest') {
     p.x += p.vx*s; p.y += p.vy*s
     if (p.subtype === 'firefly') {
@@ -330,10 +536,16 @@ function updateParticle(p, bgType, w, h, dt) {
     if (p.rotSpeed) p.rot = (p.rot||0)+p.rotSpeed*s
     p.life -= p.decay*s; return p.y > h+15 || p.life<=0
   }
+  if (bgType === 'grid') {
+    p.y += p.vy * s
+    p.pulse = (p.pulse || 0) + 0.045 * s
+    return p.y > h + 22
+  }
   if (bgType === 'glacier') {
     p.x += p.vx*s; p.y += p.vy*s
     if (p.rot !== undefined) p.rot += 0.01*s
-    return p.y > h+20
+    if (p.subtype === 'mist') p.life -= p.decay * s
+    return p.y > h+20 || (p.subtype === 'mist' && p.life <= 0)
   }
   if (bgType === 'volcano') {
     p.vy += (p.grav||0.06)*s
@@ -347,6 +559,7 @@ function updateParticle(p, bgType, w, h, dt) {
   }
   if (bgType === 'abyss') {
     p.x += p.vx*s; p.y += p.vy*s
+    p.pulse = (p.pulse || 0) + 0.02 * s
     if (p.growing) { p.life += 0.0018*s; if (p.life >= 0.9) p.growing=false }
     else { p.life -= 0.0018*s; if (p.life <= 0.05) p.growing=true }
     if (p.x < -p.r*2) p.x=w+p.r*2; else if (p.x > w+p.r*2) p.x=-p.r*2
@@ -365,6 +578,7 @@ function updateParticle(p, bgType, w, h, dt) {
   if (p.decay>0) p.life -= p.decay*s
   if (bgType === 'storm') return p.y > h+20
   if (bgType === 'matrix') return p.y > h+20
+  if (bgType === 'grid') return p.y > h+20
   if (['lava','ember','ocean','bubbles','nebula','inferno'].includes(bgType)) return p.y < -30 || p.life<=0
   if (['crystal','clouds'].includes(bgType)) return p.y > h+30 || p.x > w+30
   return p.life<=0
@@ -376,28 +590,158 @@ function drawParticle(ctx, p, bgType, w, h, beat = 0) {
 
   // Matrix
   if (bgType === 'matrix') {
-    ctx.globalAlpha = p.lead ? 0.95 : (0.35+Math.random()*0.3)
-    if (p.lead) { ctx.shadowColor='#aaffaa'; ctx.shadowBlur=8 }
-    ctx.fillStyle = p.lead ? '#ccffcc' : `rgba(0,${140+Math.floor(Math.random()*115)},40,1)`
-    ctx.font = `${p.fontSize}px monospace`
-    if (Math.random()<0.03) p.char = String.fromCharCode(0x30A0+Math.floor(Math.random()*96))
+    const alpha = p.lead ? 0.95 : (0.35 + Math.random() * 0.28)
+    ctx.globalAlpha = alpha
+    if (p.lead) {
+      ctx.shadowColor = '#9dff9d'
+      ctx.shadowBlur = 10 + beat * 10
+      ctx.fillStyle = '#d9ffd9'
+    } else {
+      ctx.fillStyle = `hsl(${p.hue}, 95%, ${38 + Math.random()*17}%)`
+    }
+    ctx.font = `${Math.floor(p.fontSize)}px "Courier New", monospace`
+    if (Math.random() < 0.035) {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%*+-<>[]{}=/\\|:;'
+      p.char = chars[Math.floor(Math.random() * chars.length)]
+    }
     ctx.fillText(p.char, p.x, p.y); ctx.restore(); return
   }
 
-  // Stars / aurora star-dots
-  if (bgType === 'stars' || bgType === 'aurora') {
-    const alpha = 0.25+0.55*Math.abs(Math.sin(p.twinkle))
-    ctx.globalAlpha = alpha; ctx.fillStyle = p.color || '#ffffff'
-    if (p.r > 1.2) { ctx.shadowColor=p.color||'#fff'; ctx.shadowBlur=6 }
-    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill(); ctx.restore(); return
+  if (bgType === 'grid') {
+    const pulse = 0.45 + 0.55 * Math.abs(Math.sin(p.pulse || 0))
+    ctx.globalAlpha = p.lead ? 0.9 : 0.35 + pulse * 0.3
+    const c = `hsl(${p.hue}, 95%, ${p.lead ? 78 : 62}%)`
+    ctx.strokeStyle = c
+    ctx.fillStyle = c
+    if (p.lead) { ctx.shadowColor = c; ctx.shadowBlur = 10 + beat * 8 }
+    const r = Math.max(0.6, p.r)
+    ctx.beginPath()
+    ctx.moveTo(p.x - r, p.y)
+    ctx.lineTo(p.x, p.y - r)
+    ctx.lineTo(p.x + r, p.y)
+    ctx.lineTo(p.x, p.y + r)
+    ctx.closePath()
+    ctx.stroke()
+    if (p.lead) {
+      ctx.globalAlpha *= 0.4
+      ctx.beginPath(); ctx.arc(p.x, p.y, r * 0.35, 0, Math.PI * 2); ctx.fill()
+    }
+    ctx.restore(); return
+  }
+
+  // Storm rain streaks
+  if (bgType === 'storm') {
+    const len = 8 + p.vy * 0.8
+    ctx.globalAlpha = 0.35 + Math.min(0.45, p.vy / 16)
+    ctx.strokeStyle = `hsla(${p.hue}, 80%, 72%, 0.9)`
+    ctx.lineWidth = Math.max(0.6, p.r)
+    ctx.beginPath()
+    ctx.moveTo(p.x, p.y)
+    ctx.lineTo(p.x - (2.5 + p.vx * 0.8), p.y - len)
+    ctx.stroke()
+    ctx.restore()
+    return
+  }
+
+  // Clouds as soft puffs
+  if (bgType === 'clouds') {
+    const puffR = p.r * (1 + beat * 0.08)
+    const cloud = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, puffR)
+    const coreAlpha = p.layer === 1 ? Math.min(0.16, p.a + 0.05) : Math.min(0.22, p.a + 0.08)
+    cloud.addColorStop(0, `rgba(228,240,255,${coreAlpha})`)
+    cloud.addColorStop(1, 'rgba(200,220,255,0)')
+    ctx.fillStyle = cloud
+    ctx.globalAlpha = p.layer === 1 ? 0.54 : 0.78
+    ctx.beginPath()
+    ctx.arc(p.x, p.y, puffR, 0, Math.PI * 2)
+    ctx.fill()
+    if (p.layer === 0 && p.r > 26) {
+      ctx.globalAlpha = 0.12
+      ctx.strokeStyle = 'rgba(245,250,255,0.55)'
+      ctx.lineWidth = 0.8
+      ctx.beginPath()
+      ctx.arc(p.x - p.r * 0.2, p.y - p.r * 0.15, p.r * 0.5, 0, Math.PI * 2)
+      ctx.stroke()
+    }
+    ctx.restore()
+    return
+  }
+
+  // Stars (includes shooting stars)
+  if (bgType === 'stars') {
+    if (p.subtype === 'shooting') {
+      const nx = p.vx / (Math.hypot(p.vx, p.vy) || 1)
+      const ny = p.vy / (Math.hypot(p.vx, p.vy) || 1)
+      const tail = (p.len || 24) * Math.max(0.25, p.life)
+      const gx = ctx.createLinearGradient(p.x, p.y, p.x - nx * tail, p.y - ny * tail)
+      gx.addColorStop(0, `hsla(${p.hue || 210},100%,85%,0.95)`)
+      gx.addColorStop(1, 'rgba(150,210,255,0)')
+      ctx.globalAlpha = Math.min(1, p.life * 1.1)
+      ctx.strokeStyle = gx
+      ctx.lineWidth = p.r
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - nx * tail, p.y - ny * tail); ctx.stroke()
+      ctx.restore(); return
+    }
+    const alpha = 0.22 + 0.62 * Math.abs(Math.sin(p.twinkle || 0))
+    ctx.globalAlpha = alpha
+    ctx.fillStyle = p.color || '#ffffff'
+    if (p.r > 1.2) { ctx.shadowColor = p.color || '#fff'; ctx.shadowBlur = 8 }
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill()
+    if (p.r > 1.3) {
+      ctx.globalAlpha = alpha * 0.35
+      ctx.strokeStyle = p.color || '#fff'
+      ctx.lineWidth = 0.5
+      ctx.beginPath(); ctx.moveTo(p.x - p.r * 1.7, p.y); ctx.lineTo(p.x + p.r * 1.7, p.y); ctx.stroke()
+      ctx.beginPath(); ctx.moveTo(p.x, p.y - p.r * 1.7); ctx.lineTo(p.x, p.y + p.r * 1.7); ctx.stroke()
+    }
+    ctx.restore(); return
+  }
+
+  // Aurora spark-dots
+  if (bgType === 'aurora') {
+    const alpha = 0.18 + 0.5 * Math.abs(Math.sin(p.twinkle || 0))
+    ctx.globalAlpha = alpha
+    ctx.fillStyle = p.color || '#a8ffe9'
+    if (p.r > 1.1) { ctx.shadowColor = p.color || '#b0fff0'; ctx.shadowBlur = 10 + beat * 8 }
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill(); ctx.restore(); return
   }
 
   // Bubbles
   if (bgType==='bubbles' && p.bubble) {
-    ctx.globalAlpha = p.life*0.5
-    ctx.strokeStyle = `hsla(${p.hue},80%,70%,0.8)`; ctx.lineWidth=1
-    ctx.shadowColor = `hsla(${p.hue},80%,70%,1)`; ctx.shadowBlur=6
-    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.stroke(); ctx.restore(); return
+    const bubbleAlpha = Math.max(0.1, p.life * 0.6)
+    ctx.globalAlpha = bubbleAlpha
+    ctx.strokeStyle = `hsla(${p.hue},85%,74%,0.92)`
+    ctx.lineWidth = Math.max(0.8, p.r * 0.12)
+    ctx.shadowColor = `hsla(${p.hue},90%,72%,1)`
+    ctx.shadowBlur = 8 + p.r * 0.4
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.stroke()
+    ctx.globalAlpha = bubbleAlpha * 0.35
+    ctx.fillStyle = `hsla(${p.hue},92%,80%,0.35)`
+    ctx.beginPath(); ctx.arc(p.x + p.r * 0.25, p.y - p.r * 0.2, Math.max(0.4, p.r * 0.22), 0, Math.PI*2); ctx.fill()
+    ctx.restore(); return
+  }
+
+  if (bgType === 'crystal' && p.subtype === 'prism') {
+    ctx.globalAlpha = Math.max(0.18, p.life * 0.9)
+    ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot || 0)
+    ctx.fillStyle = `hsla(${p.hue},88%,72%,0.22)`
+    ctx.strokeStyle = `hsla(${p.hue},98%,82%,0.85)`
+    ctx.lineWidth = 0.7
+    ctx.beginPath()
+    ctx.moveTo(0, -p.r * 1.7)
+    ctx.lineTo(p.r * 0.9, 0)
+    ctx.lineTo(0, p.r * 1.7)
+    ctx.lineTo(-p.r * 0.9, 0)
+    ctx.closePath()
+    ctx.fill(); ctx.stroke()
+    ctx.restore(); ctx.restore(); return
+  }
+
+  if (bgType === 'crystal' && p.subtype === 'dust') {
+    ctx.globalAlpha = Math.max(0.12, p.life * 0.7)
+    ctx.fillStyle = `hsla(${p.hue},90%,80%,0.8)`
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill()
+    ctx.restore(); return
   }
 
   // Forest firefly
@@ -437,6 +781,16 @@ function drawParticle(ctx, p, bgType, w, h, beat = 0) {
     ctx.restore(); ctx.restore(); return
   }
 
+  if (bgType==='glacier' && p.subtype==='mist') {
+    const mg = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r)
+    mg.addColorStop(0, `hsla(${p.hue},55%,86%,${Math.max(0.04, p.life * 0.08)})`)
+    mg.addColorStop(1, 'rgba(210,240,255,0)')
+    ctx.fillStyle = mg
+    ctx.globalAlpha = 0.45
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill()
+    ctx.restore(); return
+  }
+
   // Warp streak
   if (bgType==='warp') {
     const cx=w/2, cy=h/2
@@ -450,18 +804,45 @@ function drawParticle(ctx, p, bgType, w, h, beat = 0) {
     ctx.restore(); return
   }
 
+  if (bgType === 'nebula' && p.subtype === 'spark') {
+    const alpha = Math.max(0.1, p.life * (0.45 + 0.35 * Math.abs(Math.sin(p.twinkle || 0))))
+    ctx.globalAlpha = alpha
+    ctx.fillStyle = `hsla(${p.hue},95%,78%,1)`
+    ctx.shadowColor = ctx.fillStyle
+    ctx.shadowBlur = 8 + beat * 10
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill()
+    ctx.restore(); return
+  }
+
+  if (bgType === 'nebula' && p.subtype === 'cloud') {
+    ctx.globalAlpha = Math.max(0.08, p.life * (p.a || 0.08))
+    const ng = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r)
+    ng.addColorStop(0, `hsla(${p.hue},80%,58%,0.6)`)
+    ng.addColorStop(1, 'rgba(0,0,0,0)')
+    ctx.fillStyle = ng
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill()
+    ctx.restore(); return
+  }
+
   // Abyss wisp
   if (bgType==='abyss') {
-    ctx.globalAlpha=p.life*0.12
+    const pulse = 0.82 + 0.22 * Math.sin(p.pulse || 0)
+    ctx.globalAlpha=p.life*0.14*pulse
     const gr=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.r)
     gr.addColorStop(0,`hsla(${p.hue},40%,50%,1)`); gr.addColorStop(1,'rgba(0,0,0,0)')
     ctx.fillStyle=gr; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill()
+    if (p.r > 8) {
+      ctx.globalAlpha = p.life * 0.1 * pulse
+      ctx.strokeStyle = `hsla(${p.hue + 15},55%,65%,0.7)`
+      ctx.lineWidth = 0.6
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 0.6, 0, Math.PI*2); ctx.stroke()
+    }
     ctx.restore(); return
   }
 
   // OIIA spinning cat-paw star shapes
   if (bgType==='oiia') {
-    if (p.rot!==undefined) p.rot += (p.rotSpeed||0.04)
+    if (p.rot!==undefined) p.rot += (p.rotSpeed||0.014)
     const alpha = p.growing ? 0.06+p.life*0.18 : p.life*0.22
     ctx.globalAlpha = Math.max(0, alpha * (1 + beat * 0.4))
     ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot||0)
@@ -520,6 +901,71 @@ function drawForeground(ctx, bgType, w, h, t, beat = 0) {
       fg.addColorStop(0,'rgba(30,50,90,0)'); fg.addColorStop(1,'rgba(30,50,90,0.18)')
       ctx.fillStyle=fg; ctx.fillRect(0,0,w,h); break
     }
+    case 'ocean': {
+      // Multi-layer rolling wave crests
+      ctx.save(); ctx.globalAlpha = 0.16 + beat * 0.09
+      for (let i = 0; i < 3; i++) {
+        ctx.strokeStyle = i === 0 ? 'rgba(160,235,255,0.9)' : 'rgba(70,190,245,0.75)'
+        ctx.lineWidth = 1.4 + i * 0.5
+        ctx.beginPath()
+        for (let x = 0; x <= w; x += 6) {
+          const y = h * (0.32 + i * 0.08)
+            + Math.sin(x * 0.012 + t * (0.0018 + i * 0.0002)) * (9 + i * 2)
+            + Math.cos(x * 0.025 + t * 0.0012 + i) * 4
+          x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
+        }
+        ctx.stroke()
+      }
+      ctx.restore()
+      break
+    }
+    case 'clouds': {
+      // Layered cloud banks so this reads as clouds even at a glance
+      ctx.save()
+      for (let i = 0; i < 4; i++) {
+        const y = h * (0.18 + i * 0.12) + Math.sin(t * 0.00035 + i) * h * 0.018
+        const band = ctx.createLinearGradient(0, y - 28, 0, y + 28)
+        band.addColorStop(0, 'rgba(0,0,0,0)')
+        band.addColorStop(0.45, `rgba(160,185,220,${0.09 + i * 0.01})`)
+        band.addColorStop(1, 'rgba(0,0,0,0)')
+        ctx.fillStyle = band
+        ctx.fillRect(0, y - 28, w, 56)
+      }
+      ctx.restore()
+      break
+    }
+    case 'bubbles': {
+      ctx.save()
+      ctx.globalAlpha = 0.14 + beat * 0.08
+      for (let i = 0; i < 5; i++) {
+        const bx = w * ((i + 0.5) / 5) + Math.sin(t * 0.00045 + i * 0.8) * 26
+        const by = h * (0.28 + i * 0.1)
+        const caustic = ctx.createRadialGradient(bx, by, 0, bx, by, 90 + i * 15)
+        caustic.addColorStop(0, 'rgba(170,235,255,0.45)')
+        caustic.addColorStop(1, 'rgba(120,200,255,0)')
+        ctx.fillStyle = caustic
+        ctx.beginPath(); ctx.arc(bx, by, 90 + i * 15, 0, Math.PI * 2); ctx.fill()
+      }
+      ctx.restore()
+      break
+    }
+    case 'crystal': {
+      ctx.save()
+      ctx.globalAlpha = 0.13 + beat * 0.09
+      for (let i = 0; i < 6; i++) {
+        const x = (w / 6) * i + Math.sin(t * 0.0006 + i) * 18
+        const y = h * (0.12 + (i % 3) * 0.18)
+        ctx.strokeStyle = `hsla(${195 + i * 10},95%,78%,0.9)`
+        ctx.lineWidth = 1
+        ctx.beginPath()
+        ctx.moveTo(x - 18, y + 30)
+        ctx.lineTo(x, y - 38)
+        ctx.lineTo(x + 18, y + 30)
+        ctx.stroke()
+      }
+      ctx.restore()
+      break
+    }
     case 'volcano': {
       ctx.save(); ctx.globalAlpha=0.09
       for (let si=0;si<3;si++) {
@@ -556,6 +1002,23 @@ function drawForeground(ctx, bgType, w, h, t, beat = 0) {
       }
       ctx.restore(); break
     }
+    case 'stars': {
+      ctx.save()
+      ctx.globalAlpha = 0.08 + beat * 0.05
+      for (let i = 0; i < 3; i++) {
+        const sy = h * (0.2 + i * 0.22) + Math.sin(t * 0.00025 + i * 1.3) * 22
+        ctx.strokeStyle = 'rgba(180,220,255,0.4)'
+        ctx.lineWidth = 0.7
+        ctx.beginPath()
+        for (let x = -40; x <= w + 40; x += 16) {
+          const y = sy + Math.sin(x * 0.01 + t * 0.0004 + i) * 6
+          x === -40 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
+        }
+        ctx.stroke()
+      }
+      ctx.restore()
+      break
+    }
     case 'blackhole': {
       const cx=w*0.5, cy=h*0.5, hr=h*0.12
       const eg=ctx.createRadialGradient(cx,cy,0,cx,cy,hr*1.4)
@@ -567,29 +1030,76 @@ function drawForeground(ctx, bgType, w, h, t, beat = 0) {
       ctx.restore(); break
     }
     case 'matrix': {
-      ctx.save(); ctx.globalAlpha=0.04; ctx.fillStyle='rgba(0,0,0,1)'
-      for (let y=0;y<h;y+=4) ctx.fillRect(0,y,w,2)
-      ctx.globalAlpha=0.06
-      const sy=(t*0.04)%h
-      const sg=ctx.createLinearGradient(0,sy,0,sy+60)
-      sg.addColorStop(0,'rgba(0,255,70,0)'); sg.addColorStop(0.5,'rgba(0,255,70,0.6)'); sg.addColorStop(1,'rgba(0,255,70,0)')
-      ctx.fillStyle=sg; ctx.fillRect(0,sy,w,60); ctx.restore(); break
+      // Subtle top glow only; avoid horizontal scanline look.
+      ctx.save()
+      const top = ctx.createLinearGradient(0, 0, 0, h * 0.3)
+      top.addColorStop(0, 'rgba(80,255,120,0.08)')
+      top.addColorStop(1, 'rgba(0,0,0,0)')
+      ctx.fillStyle = top
+      ctx.fillRect(0, 0, w, h * 0.3)
+      ctx.restore()
+      break
+    }
+    case 'grid': {
+      ctx.save()
+      const step = Math.max(22, Math.round(Math.min(w, h) * 0.055))
+      const ox = (t * 0.03) % step
+      const oy = (t * 0.022) % step
+      ctx.globalAlpha = 0.12 + beat * 0.08
+      ctx.strokeStyle = 'rgba(100,220,255,0.65)'
+      ctx.lineWidth = 0.8
+      for (let x = -step; x <= w + step; x += step) {
+        ctx.beginPath(); ctx.moveTo(x + ox, 0); ctx.lineTo(x + ox, h); ctx.stroke()
+      }
+      for (let y = -step; y <= h + step; y += step) {
+        ctx.beginPath(); ctx.moveTo(0, y + oy); ctx.lineTo(w, y + oy); ctx.stroke()
+      }
+      ctx.restore()
+      break
     }
     case 'nebula': {
-      ctx.save(); ctx.globalAlpha=0.03; ctx.fillStyle='#ffffff'
-      for (let i=0;i<80;i++) { const sx=(Math.sin(i*37.4)*0.5+0.5)*w, sy=(Math.cos(i*23.7)*0.5+0.5)*h; ctx.beginPath(); ctx.arc(sx,sy,0.5,0,Math.PI*2); ctx.fill() }
+      ctx.save()
+      for (let n = 0; n < 3; n++) {
+        const nx = w * (0.3 + n * 0.22) + Math.sin(t * 0.00018 + n * 1.4) * 50
+        const ny = h * (0.24 + n * 0.2) + Math.cos(t * 0.00022 + n) * 30
+        const rg = ctx.createRadialGradient(nx, ny, 0, nx, ny, 170 + n * 60)
+        rg.addColorStop(0, `hsla(${270 + n * 24},90%,58%,0.11)`)
+        rg.addColorStop(1, 'rgba(0,0,0,0)')
+        ctx.fillStyle = rg
+        ctx.fillRect(0, 0, w, h)
+      }
+      ctx.globalAlpha = 0.04
+      ctx.fillStyle = '#ffffff'
+      for (let i=0;i<110;i++) {
+        const sx=(Math.sin(i*37.4+t*0.00003)*0.5+0.5)*w
+        const sy=(Math.cos(i*23.7+t*0.00002)*0.5+0.5)*h
+        ctx.beginPath(); ctx.arc(sx,sy,0.5,0,Math.PI*2); ctx.fill()
+      }
       ctx.restore(); break
     }
     case 'warp': {
       const wg=ctx.createRadialGradient(w*0.5,h*0.5,h*0.05,w*0.5,h*0.5,h*0.5)
-      wg.addColorStop(0,'rgba(40,80,150,0.12)'); wg.addColorStop(0.4,'rgba(0,0,0,0)'); wg.addColorStop(1,'rgba(0,0,10,0.30)')
+      wg.addColorStop(0,'rgba(90,160,255,0.2)'); wg.addColorStop(0.4,'rgba(0,0,0,0)'); wg.addColorStop(1,'rgba(0,0,18,0.34)')
       ctx.fillStyle=wg; ctx.fillRect(0,0,w,h); break
     }
     case 'abyss': {
       const breathe=0.18+0.09*Math.sin(t*0.0015)
       const ag=ctx.createRadialGradient(w*0.5,h*0.5,h*0.22,w*0.5,h*0.5,h*0.72)
       ag.addColorStop(0,'rgba(0,0,0,0)'); ag.addColorStop(1,`rgba(0,0,0,${breathe})`)
-      ctx.fillStyle=ag; ctx.fillRect(0,0,w,h); break
+      ctx.fillStyle=ag; ctx.fillRect(0,0,w,h)
+      ctx.save()
+      ctx.globalAlpha = 0.12
+      for (let i = 0; i < 4; i++) {
+        const rx = w * (0.2 + i * 0.2) + Math.sin(t * 0.00027 + i * 2) * 20
+        const ry = h * (0.35 + i * 0.12)
+        ctx.strokeStyle = `hsla(${265 + i * 12},55%,48%,0.5)`
+        ctx.lineWidth = 0.8
+        ctx.beginPath()
+        ctx.ellipse(rx, ry, 35 + i * 10, 8 + i * 2, t * 0.0002 + i, 0, Math.PI * 2)
+        ctx.stroke()
+      }
+      ctx.restore()
+      break
     }
     case 'oiia': {
       // Pulsing pink shimmer
@@ -602,42 +1112,116 @@ function drawForeground(ctx, bgType, w, h, t, beat = 0) {
   }
 }
 
-// ── Auto-Vanta map: bgType → { type, ...vantaOptions } ───────────────────────
-// Covers cosmic/water/crystal bgTypes. Fire/earth/jungle keep the canvas painter.
-const BGTYPE_VANTA_CONFIG = {
-  // Keep stars/nebula/warp/blackhole/abyss on the classic canvas painter (no Vanta)
-  // matrix can use net for digital effect
-  matrix:    { type: 'net', color: 0x00ff44, backgroundColor: 0x000500, points: 18, maxDistance: 20, spacing: 12, showDots: true },
-  // WAVES — water, ocean, storm
-  ocean:     { type: 'waves', color: 0x004488, backgroundColor: 0x00050f, shininess: 28, waveHeight: 25, waveSpeed: 1.0, zoom: 0.65 },
-  bubbles:   { type: 'waves', color: 0x0099bb, backgroundColor: 0x00060c, shininess: 55, waveHeight: 18, waveSpeed: 1.5, zoom: 0.75 },
-  storm:     { type: 'waves', color: 0x112244, backgroundColor: 0x040608, shininess: 5,  waveHeight: 35, waveSpeed: 2.5, zoom: 0.55 },
-  // CELLS — crystalline, ice, aurora
-  crystal:   { type: 'cells', color1: 0x2244aa, color2: 0x00ddff, size: 1.5, speed: 0.7 },
-  glacier:   { type: 'cells', color1: 0x8899cc, color2: 0xbbddff, size: 2.2, speed: 0.3 },
-  aurora:    { type: 'cells', color1: 0x003322, color2: 0x00ffaa, size: 1.2, speed: 1.2 },
-  // New TE-style themes
-  deepsea:   { type: 'clouds', backgroundColor: 0x0b1621, skyColor: 0x0b1621, cloudColor: 0x00f2ff, speed: 0.5, zoom: 1.0 },
-  stellar:   { type: 'halo', backgroundColor: 0x000000, amplitude: 2.2, size: 1.4, xOffset: 0.2, yOffset: -0.05, color: 0xffddaa },
-  ritual:    { type: 'fog', highlightColor: 0xffd700, midtoneColor: 0x3b0d5c, lowlightColor: 0x1a0a2a, baseColor: 0x000000, zoom: 1.5, speed: 0.6 },
-  geometry:  { type: 'net', color: 0xff00cc, backgroundColor: 0x000000, points: 10, maxDistance: 20, spacing: 22, showDots: true },
-}
-
 // Module-level cache for loaded Vanta effect factories (avoids re-importing)
 const _vantaModCache = {}
 
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
+const lerp = (a, b, t) => a + (b - a) * t
+const lerpHex = (from, to, t) => {
+  const f = Number(from || 0)
+  const tt = Number(to || 0)
+  const fr = (f >> 16) & 0xff
+  const fg = (f >> 8) & 0xff
+  const fb = f & 0xff
+  const tr = (tt >> 16) & 0xff
+  const tg = (tt >> 8) & 0xff
+  const tb = tt & 0xff
+  const rr = Math.round(lerp(fr, tr, t))
+  const rg = Math.round(lerp(fg, tg, t))
+  const rb = Math.round(lerp(fb, tb, t))
+  return (rr << 16) | (rg << 8) | rb
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
-export default function BackgroundCanvas({ bgType = 'stars', style, beatRef: _beatRef = null, bpm = 120, useVanta = false, vantaType = null, vantaOptions = null }) {
+export default function BackgroundCanvas({ bgType = 'stars', style, beatRef: _beatRef = null, bpm = 120, comboStreak = 0, useVanta = false, vantaType = null, vantaOptions = null, synesthesiaEnabled = true }) {
   const canvasRef = useRef(null)
   const vantaElRef = useRef(null)
   const vantaInstRef = useRef(null)
+  const sceneRef = useRef(null)
+  const vantaBaseRef = useRef({})
+  const synRef = useRef({ impact: 0, spin: 0, clear: 0, drop: 0 })
+  const comboBoostRef = useRef(0)
+  const prevComboRef = useRef(0)
   const customImgRef = useRef(null)
   const lastUrlRef = useRef('')
   const nyanImgRef = useRef(null)
+  const [renderQuality, setRenderQuality] = useState(() => readRenderQuality())
+  const [selectedEffects, setSelectedEffects] = useState(() => {
+    try {
+      const arr = JSON.parse(localStorage.getItem('selectedEffects') || '[]')
+      return Array.isArray(arr) ? arr : []
+    } catch {
+      return []
+    }
+  })
+
+  const profile = useMemo(() => getBackgroundProfile(bgType), [bgType])
+  const lowEndMode = useMemo(() => renderQuality === 'performance' || detectLowEndDevice(), [renderQuality])
+  const particleDensityScale = lowEndMode ? 0.5 : 1
+  const parallaxStrength = profile?.parallax ?? 7
+  const px = useMotionValue(0)
+  const py = useMotionValue(0)
+  const springX = useSpring(px, { stiffness: 60, damping: 18, mass: 1.2 })
+  const springY = useSpring(py, { stiffness: 60, damping: 18, mass: 1.2 })
+
+  useEffect(() => {
+    const onStorage = (ev) => {
+      if (ev.key === 'selectedEffects') {
+        try {
+          const arr = JSON.parse(localStorage.getItem('selectedEffects') || '[]')
+          setSelectedEffects(Array.isArray(arr) ? arr : [])
+        } catch {
+          setSelectedEffects([])
+        }
+      }
+      if (ev.key === 'tetris-config') {
+        setRenderQuality(readRenderQuality())
+      }
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [])
+
+  useEffect(() => {
+    const nextCombo = Math.max(0, Number(comboStreak) || 0)
+    const prevCombo = prevComboRef.current
+    if (nextCombo > 1 && nextCombo > prevCombo) {
+      const growthBoost = 0.06 + Math.min(0.24, (nextCombo - prevCombo) * 0.08)
+      const streakBonus = Math.min(0.38, nextCombo * 0.03)
+      comboBoostRef.current = clamp(comboBoostRef.current + growthBoost + streakBonus, 0, 1.25)
+    }
+    prevComboRef.current = nextCombo
+  }, [comboStreak])
+
+  useEffect(() => {
+    const onMouseMove = (ev) => {
+      const w = window.innerWidth || 1
+      const h = window.innerHeight || 1
+      const nx = (ev.clientX / w - 0.5) * 2
+      const ny = (ev.clientY / h - 0.5) * 2
+      px.set(-nx * parallaxStrength)
+      py.set(-ny * parallaxStrength * 0.7)
+    }
+    const onOrientation = (ev) => {
+      const gamma = clamp(Number(ev.gamma || 0), -35, 35)
+      const beta = clamp(Number(ev.beta || 0), -35, 35)
+      px.set(-(gamma / 35) * parallaxStrength)
+      py.set(-(beta / 35) * parallaxStrength * 0.6)
+    }
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('deviceorientation', onOrientation)
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('deviceorientation', onOrientation)
+    }
+  }, [parallaxStrength, px, py])
 
   // Determine active Vanta type: explicit prop > bgType auto-map > null (canvas)
   const autoCfg = BGTYPE_VANTA_CONFIG[bgType] || null
-  const activeType = (useVanta && vantaType) ? vantaType : (autoCfg?.type ?? null)
+  const preferCanvas = Boolean(profile?.preferCanvas)
+  const activeType = (useVanta && vantaType)
+    ? vantaType
+    : (preferCanvas ? null : (autoCfg?.type ?? null))
   // Build merged options for Vanta (strip 'type' key from autoCfg before merging)
   let activeOpts = {}
   if (activeType) {
@@ -684,67 +1268,143 @@ export default function BackgroundCanvas({ bgType = 'stars', style, beatRef: _be
           scaleMobile: 1.0,
           ...activeOpts,
         })
+        vantaBaseRef.current = {
+          ...activeOpts,
+          speed: activeOpts.speed ?? 1.0,
+          zoom: activeOpts.zoom ?? 1.0,
+          amplitude: activeOpts.amplitude ?? 1.0,
+          maxDistance: activeOpts.maxDistance ?? 18,
+          spacing: activeOpts.spacing ?? 18,
+          size: activeOpts.size ?? 1.2,
+          waveHeight: activeOpts.waveHeight ?? 20,
+          waveSpeed: activeOpts.waveSpeed ?? 1.0,
+          color: activeOpts.color,
+          color1: activeOpts.color1,
+          color2: activeOpts.color2,
+          highlightColor: activeOpts.highlightColor,
+          cloudColor: activeOpts.cloudColor,
+        }
       } catch (e) { console.warn('[BackgroundCanvas] Vanta error:', e) }
     })()
     return () => {
       disposed = true
       try { vantaInstRef.current?.destroy?.() } catch {}
       vantaInstRef.current = null
+      vantaBaseRef.current = {}
+      synRef.current = { impact: 0, spin: 0, clear: 0, drop: 0 }
     }
   }, [activeType, bgType]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Continuous tempo sync for Vanta (music beat + level BPM)
+  const onSynesthesiaEvent = useCallback((evt) => {
+    if (!synesthesiaEnabled || !activeType || !evt?.type) return
+    const s = synRef.current
+    switch (evt.type) {
+      case SYNESTHESIA_EVENT.MOVE:
+        s.impact = clamp(s.impact + 0.08, 0, 1.5)
+        break
+      case SYNESTHESIA_EVENT.ROTATE:
+        s.spin = clamp(s.spin + 0.2, 0, 1.7)
+        s.impact = clamp(s.impact + 0.05, 0, 1.5)
+        break
+      case SYNESTHESIA_EVENT.SOFT_DROP:
+        s.drop = clamp(s.drop + 0.1, 0, 1.2)
+        break
+      case SYNESTHESIA_EVENT.HARD_DROP:
+        s.impact = clamp(s.impact + 0.42, 0, 1.9)
+        s.drop = clamp(s.drop + 0.28, 0, 1.4)
+        break
+      case SYNESTHESIA_EVENT.LINE_CLEAR:
+        s.clear = clamp(s.clear + 0.5, 0, 1.8)
+        s.impact = clamp(s.impact + 0.16, 0, 1.9)
+        break
+      case SYNESTHESIA_EVENT.T_SPIN:
+        s.clear = clamp(s.clear + 0.64, 0, 1.95)
+        s.spin = clamp(s.spin + 0.35, 0, 1.95)
+        s.impact = clamp(s.impact + 0.22, 0, 1.95)
+        break
+      default:
+        break
+    }
+  }, [activeType, synesthesiaEnabled])
+
+  useSynesthesiaEvent(onSynesthesiaEvent)
+
+  // Continuous tempo + synesthesia sync for Vanta (music beat + input/clear pulses)
   useEffect(() => {
     if (!activeType || !vantaInstRef.current) return
     let raf = 0
-    const baseSpeed = autoCfg?.speed || 1.0
-    const baseAmp = autoCfg?.amplitude || 1.0
-    const baseDist = autoCfg?.maxDistance || 18
     const loop = () => {
       const beat = Math.max(0, Math.min(1.2, Number(_beatRef?.current || 0)))
       const b = Math.max(40, Math.min(260, Number(bpm) || 120))
       const t = performance.now() / 1000
       const bpmPulse = Math.pow((Math.sin(t * (b / 60) * Math.PI * 2) + 1) / 2, 2)
-      const energy = Math.max(beat, bpmPulse * 0.65)
+      const s = synRef.current
+      s.impact *= 0.905
+      s.spin *= 0.9
+      s.clear *= 0.892
+      s.drop *= 0.9
+      const synEnergy = clamp(s.impact * 0.58 + s.spin * 0.48 + s.clear * 0.9 + s.drop * 0.35, 0, 1.5)
+      comboBoostRef.current *= 0.94
+      const comboPulse = clamp(comboBoostRef.current, 0, 1.1)
+      const energy = Math.min(2.3, Math.max(beat, bpmPulse * 0.65) + synEnergy * 0.72 + comboPulse * 0.9)
+      const base = vantaBaseRef.current
       try {
+        const nextOpts = {}
         if (activeType === 'net') {
-          vantaInstRef.current.setOptions({ maxDistance: baseDist + energy * 8 })
-        } else if (activeType === 'waves' || activeType === 'clouds' || activeType === 'fog') {
-          vantaInstRef.current.setOptions({ speed: baseSpeed * (1 + energy * 0.45) })
+          nextOpts.maxDistance = (base.maxDistance ?? 18) + energy * 7.5 + s.clear * 9
+          nextOpts.spacing = Math.max(8, (base.spacing ?? 18) - s.clear * 1.6)
+          if (typeof base.color === 'number') {
+            nextOpts.color = lerpHex(base.color, 0x66f8ff, clamp(s.clear * 0.5 + s.spin * 0.35, 0, 0.6))
+          }
+        } else if (activeType === 'waves') {
+          nextOpts.speed = (base.speed ?? 1.0) * (1 + energy * 0.32 + s.drop * 0.26)
+          nextOpts.waveSpeed = (base.waveSpeed ?? 1.0) * (1 + s.drop * 0.35)
+          nextOpts.waveHeight = (base.waveHeight ?? 20) * (1 + s.impact * 0.22 + s.clear * 0.11)
+          nextOpts.zoom = (base.zoom ?? 1.0) * (1 - s.clear * 0.04)
+          if (typeof base.color === 'number') {
+            nextOpts.color = lerpHex(base.color, 0x8ffbff, clamp(s.clear * 0.45 + s.drop * 0.18, 0, 0.5))
+          }
+        } else if (activeType === 'clouds' || activeType === 'fog') {
+          nextOpts.speed = (base.speed ?? 1.0) * (1 + energy * 0.42)
+          nextOpts.zoom = (base.zoom ?? 1.0) * (1 + s.clear * 0.06 - s.drop * 0.03)
+          if (activeType === 'clouds' && typeof base.cloudColor === 'number') {
+            nextOpts.cloudColor = lerpHex(base.cloudColor, 0x9ef8ff, clamp(s.clear * 0.42 + s.spin * 0.16, 0, 0.55))
+          }
+          if (activeType === 'fog' && typeof base.highlightColor === 'number') {
+            nextOpts.highlightColor = lerpHex(base.highlightColor, 0xfff3b2, clamp(s.clear * 0.5 + s.spin * 0.2, 0, 0.6))
+          }
         } else if (activeType === 'halo') {
-          vantaInstRef.current.setOptions({ amplitude: baseAmp * (1 + energy * 0.55) })
+          nextOpts.amplitude = (base.amplitude ?? 1.0) * (1 + energy * 0.56 + s.spin * 0.18)
+          nextOpts.size = (base.size ?? 1.2) * (1 + s.clear * 0.08)
+          if (typeof base.color === 'number') {
+            nextOpts.color = lerpHex(base.color, 0xfff1ba, clamp(s.clear * 0.48 + s.spin * 0.2, 0, 0.65))
+          }
+        } else if (activeType === 'cells' || activeType === 'dots' || activeType === 'birds') {
+          nextOpts.speed = (base.speed ?? 1.0) * (1 + energy * 0.38)
+          nextOpts.size = (base.size ?? 1.2) * (1 + s.spin * 0.08 + s.clear * 0.05)
+          if (typeof base.color1 === 'number') {
+            nextOpts.color1 = lerpHex(base.color1, 0xb6e8ff, clamp(s.clear * 0.35 + s.spin * 0.24, 0, 0.45))
+          }
+          if (typeof base.color2 === 'number') {
+            nextOpts.color2 = lerpHex(base.color2, 0xffffff, clamp(s.clear * 0.32, 0, 0.38))
+          }
         }
+        if (Object.keys(nextOpts).length) vantaInstRef.current.setOptions(nextOpts)
       } catch {}
       raf = requestAnimationFrame(loop)
     }
     raf = requestAnimationFrame(loop)
     return () => cancelAnimationFrame(raf)
-  }, [activeType, autoCfg, bpm, _beatRef])
+  }, [activeType, bpm, _beatRef])
 
-  // Lightweight interactivity: react to global 'bg-beat' events by pulsing Vanta params
+  // Keep legacy beat pulses compatible with existing music hooks.
   useEffect(() => {
     const onBeat = () => {
-      const inst = vantaInstRef.current
-      if (!inst || !activeType) return
-      try {
-        if (activeType === 'net') {
-          const base = (autoCfg?.maxDistance || 18)
-          inst.setOptions({ maxDistance: base + 6 })
-          setTimeout(() => inst.setOptions({ maxDistance: base }), 180)
-        } else if (activeType === 'waves' || activeType === 'clouds' || activeType === 'fog') {
-          const speed = (autoCfg?.speed || 1.0)
-          inst.setOptions({ speed: speed * 1.6 })
-          setTimeout(() => inst.setOptions({ speed }), 180)
-        } else if (activeType === 'halo') {
-          const amp = (autoCfg?.amplitude || 1.0)
-          inst.setOptions({ amplitude: amp * 1.8 })
-          setTimeout(() => inst.setOptions({ amplitude: amp }), 220)
-        }
-      } catch {}
+      synRef.current.impact = clamp(synRef.current.impact + 0.16, 0, 1.6)
     }
     window.addEventListener('bg-beat', onBeat)
     return () => window.removeEventListener('bg-beat', onBeat)
-  }, [activeType])
+  }, [])
 
   useEffect(() => {
     // Load/refresh custom image when bgType is 'custom'
@@ -773,7 +1433,7 @@ export default function BackgroundCanvas({ bgType = 'stars', style, beatRef: _be
     const resize = () => {
       canvas.width  = canvas.offsetWidth  || window.innerWidth
       canvas.height = canvas.offsetHeight || window.innerHeight
-      particles = createParticles(bgType, canvas.width, canvas.height)
+      particles = createParticles(bgType, canvas.width, canvas.height, particleDensityScale)
     }
     resize()
     window.addEventListener('resize', resize)
@@ -785,7 +1445,9 @@ export default function BackgroundCanvas({ bgType = 'stars', style, beatRef: _be
       const beat = Math.max(0, Math.min(1.25, Number(_beatRef?.current || 0)))
       const b = Math.max(40, Math.min(260, Number(bpm) || 120))
       const bpmPulse = Math.pow((Math.sin((now / 1000) * (b / 60) * Math.PI * 2) + 1) / 2, 2)
-      const energy = Math.max(beat, bpmPulse * 0.65)
+      comboBoostRef.current *= Math.pow(0.94, baseDt / 16)
+      const comboPulse = clamp(comboBoostRef.current, 0, 1.1)
+      const energy = Math.min(2.2, Math.max(beat, bpmPulse * 0.65) + comboPulse * 0.9)
       const dt = baseDt * (0.9 + energy * 0.6)
       const w = canvas.width, hh = canvas.height
 
@@ -856,14 +1518,29 @@ export default function BackgroundCanvas({ bgType = 'stars', style, beatRef: _be
     }
     animId = requestAnimationFrame(tick)
     return () => { cancelAnimationFrame(animId); window.removeEventListener('resize', resize) }
-  }, [bgType, activeType, bpm, _beatRef])  
+  }, [bgType, activeType, bpm, _beatRef, particleDensityScale])
 
-  // Always render both; CSS display toggles which is visible
-  const sharedStyle = { position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', ...style }
+  const scanlinesOn = selectedEffects.includes('effect_retro_crt')
+  const fluidFogOn = profile?.category === 'fluid'
+  const heatHazeOn = profile?.category === 'aggressive'
+
+  const sceneClassName = ['bg-scene', profile?.cssClass || 'bg-theme-default'].join(' ')
+
   return (
-    <>
-      <div ref={vantaElRef} style={{ ...sharedStyle, display: activeType ? 'block' : 'none' }} />
-      <canvas ref={canvasRef} style={{ ...sharedStyle, display: activeType ? 'none' : 'block' }} />
-    </>
+    <motion.div
+      ref={sceneRef}
+      className={sceneClassName}
+      style={{ x: springX, y: springY, ...style }}
+    >
+      <div className="bg-visual">
+        <div ref={vantaElRef} className="bg-layer" style={{ display: activeType ? 'block' : 'none' }} />
+        <canvas ref={canvasRef} className="bg-layer" style={{ display: activeType ? 'none' : 'block' }} />
+      </div>
+      {fluidFogOn && <div className="bg-overlay bg-depth-fog" />}
+      {heatHazeOn && <div className="bg-overlay bg-heat-haze-layer" />}
+      <div className="bg-overlay bg-vignette" />
+      <div className="bg-overlay bg-grain" />
+      <div className={`bg-overlay bg-scanlines${scanlinesOn ? ' is-on' : ''}`} />
+    </motion.div>
   )
 }
