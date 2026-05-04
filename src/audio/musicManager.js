@@ -113,6 +113,10 @@ export class MusicManager {
     src.start()
     this._source = src
     try { this._onTrackChange?.(TRACKS[index]) } catch {}
+    try {
+      const name = TRACKS[index]?.name?.replace(/_/g,' ').replace(/\b(\w)/g, m=>m.toUpperCase()) || ''
+      window.dispatchEvent(new CustomEvent('tetris:nowplaying', { detail: { name } }))
+    } catch {}
   }
 
   // -- Public API -------------------------------------------------------------

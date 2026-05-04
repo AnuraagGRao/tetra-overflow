@@ -1,7 +1,7 @@
 {
   "name": "tetris-mobile-clone",
   "private": true,
-  "version": "0.6.9",
+  "version": "0.6.69",
   "type": "module",
   "scripts": {
     "dev": "vite",

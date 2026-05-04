@@ -61,6 +61,7 @@ import SynesthesiaMotionLayer from './components/SynesthesiaMotionLayer'
 import { useTheme } from './contexts/ThemeContext'
 import { useAuth } from './contexts/AuthContext'
 import { MusicManager } from './audio/musicManager'
+import { Howler } from 'howler'
 import { saveGameResult, addCoinsWithLedger } from './firebase/db'
 import { emitSynesthesia, SYNESTHESIA_EVENT } from './logic/synesthesiaBus'
 import catImageUrl from './meme/oiia_cat_assets_by_awesomeconsoles7_djwlgwe-fullview.png'
@@ -138,7 +139,14 @@ const sfxPermit = (name, minGapMs = 60, windowMs = 800, maxPerWindow = 6) => {
 const getAudioCtx = () => {
   if (!ToneContext) return null
   if (!sharedAudioContext) {
-    sharedAudioContext = new ToneContext()
+    // Reuse Howler's AudioContext if it already exists (gameSfx/multiplayer creates one at module load).
+    // Having two separate AudioContexts causes browsers to silence one of them.
+    if (Howler.ctx && Howler.ctx.state !== 'closed') {
+      sharedAudioContext = Howler.ctx
+    } else {
+      sharedAudioContext = new ToneContext()
+      try { Howler.ctx = sharedAudioContext } catch {}
+    }
     musicManager = new MusicManager(sharedAudioContext)
   }
   return sharedAudioContext
@@ -1150,10 +1158,8 @@ export default function App() {
   const [showInstallBanner, setShowInstallBanner] = useState(false)
   const [showAbout, setShowAbout] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
-  const [nowPlayingToast, setNowPlayingToast] = useState(null) // { name, id }
   const [floatPopups, setFloatPopups] = useState([]) // [{ id, text, color }]
   const floatPopupCounterRef = useRef(0)
-  const nowPlayingToastTimerRef = useRef(null)
   const checkMobile = () => window.innerWidth < 768 || (window.innerHeight < 600 && ('ontouchstart' in window || navigator.maxTouchPoints > 0))
   const checkLandscape = () => window.innerHeight < 600 && window.innerWidth > window.innerHeight && ('ontouchstart' in window || navigator.maxTouchPoints > 0)
   const [isMobile, setIsMobile]       = useState(checkMobile)
@@ -1302,20 +1308,15 @@ export default function App() {
     setTimeout(() => setFloatPopups(prev => prev.filter(p => p.id !== id)), 4000)
   }, [])
 
-  // ─── Music "now playing" overlay ────────────────────────────────────────────
+  // ─── Music "now playing" — keep solo mode NowPlaying text in sync ──────────────
   useEffect(() => {
-    if (!musicManager) return
-    musicManager.setOnTrackChange((track) => {
-      const name = (track?.name || '').replace(/_/g, ' ').replace(/\b(\w)/g, m => m.toUpperCase())
-      setNowPlayingToast({ name, id: Date.now() })
-      if (nowPlayingToastTimerRef.current) clearTimeout(nowPlayingToastTimerRef.current)
-      nowPlayingToastTimerRef.current = setTimeout(() => setNowPlayingToast(null), 4500)
-    })
-    return () => {
-      musicManager.setOnTrackChange(null)
-      if (nowPlayingToastTimerRef.current) { clearTimeout(nowPlayingToastTimerRef.current); nowPlayingToastTimerRef.current = null }
+    const handler = (e) => {
+      const name = e.detail?.name || ''
+      if (name) setNowPlaying(name)
     }
-  }, []) // musicManager is a module-level singleton; no deps needed
+    window.addEventListener('tetris:nowplaying', handler)
+    return () => window.removeEventListener('tetris:nowplaying', handler)
+  }, [])
 
   // Resize → isMobile
   useEffect(() => {
@@ -2393,37 +2394,6 @@ export default function App() {
     </AnimatePresence>
   )
 
-  // ─── Now-playing song overlay (shown when BGM track changes) ─────────────────
-  const renderNowPlayingToast = () => (
-    <AnimatePresence>
-      {nowPlayingToast && (
-        <motion.div
-          key={nowPlayingToast.id}
-          initial={{ opacity: 0, y: -12 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          transition={{ duration: 0.3 }}
-          style={{
-            position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-            background: 'rgba(10,10,26,0.88)', backdropFilter: 'blur(10px)',
-            border: '1px solid rgba(255,255,255,0.14)', borderRadius: 10,
-            padding: '9px 18px', zIndex: 9990, pointerEvents: 'none',
-            display: 'flex', alignItems: 'center', gap: 8,
-            fontFamily: '"Courier New", monospace',
-          }}
-        >
-          <span style={{ fontSize: '1rem' }}>🎵</span>
-          <div>
-            <div style={{ fontSize: '0.48rem', letterSpacing: '0.2em', color: '#888', marginBottom: 2 }}>NOW PLAYING</div>
-            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#e2e8f0', letterSpacing: '0.06em', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {nowPlayingToast.name}
-            </div>
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  )
-
   // ─── Desktop render ─────────────────────────────────────────────────────────
   const renderDesktop = () => (
     <>
@@ -2947,8 +2917,6 @@ export default function App() {
           onClose={() => setShowSettings(false)}
         />
       )}
-      {renderNowPlayingToast()}
-    </div>
-    </>
+    </div></>
   )
 }

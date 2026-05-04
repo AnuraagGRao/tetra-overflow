@@ -184,6 +184,11 @@ export class StoryMusicManager {
     }
     src.start()
     this._source = src
+    try {
+      const file = TRACK_DEFS[idx]?.file || ''
+      const name = file.replace(/_/g,' ').replace(/\b(\w)/g, m=>m.toUpperCase())
+      window.dispatchEvent(new CustomEvent('tetris:nowplaying', { detail: { name } }))
+    } catch {}
 
     // Schedule crossfade before end, if buffer is known and we're playing
     try { clearTimeout(this._xFadeTimer) } catch {}
