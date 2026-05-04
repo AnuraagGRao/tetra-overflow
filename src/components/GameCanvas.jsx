@@ -1135,11 +1135,19 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
     // Register pointer for multi-finger detection
     if (event.pointerType === "touch") {
       activePointersRef.current.set(event.pointerId, performance.now())
-      if (activePointersRef.current.size === 2) {
-        const times = Array.from(activePointersRef.current.values())
-        if (Math.abs(times[0] - times[1]) < TAP_MULTI_WINDOW_MS) {
-          setTimeout(() => onTwoFingerTap?.(), 0)
+      if (activePointersRef.current.size >= 2) {
+        // Two-finger gesture: fire two-finger tap when the second contact arrives
+        if (activePointersRef.current.size === 2) {
+          const times = Array.from(activePointersRef.current.values())
+          if (Math.abs(times[0] - times[1]) < TAP_MULTI_WINDOW_MS) {
+            setTimeout(() => onTwoFingerTap?.(), 0)
+          }
         }
+        // Cancel any in-progress single-finger drag to prevent ghost left/hard-drop inputs
+        const prev = touchRef.current
+        touchRef.current = null
+        if (prev?.dir && prev.dir !== 'up') onDragEnd?.(prev.dir)
+        return  // Don't start a new single-finger tracking session for 2nd+ finger
       }
     }
     touchRef.current = {
@@ -1196,7 +1204,8 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
     onDragEnd(start.dir)   // left / right released
   }
 
-  const handlePointerCancel = () => {
+  const handlePointerCancel = (event) => {
+    activePointersRef.current.delete(event.pointerId)
     const start = touchRef.current
     touchRef.current = null
     if (!start || start.dir === null || start.dir === 'up') return
