@@ -2289,7 +2289,7 @@ export default function App() {
           x{state.combo} COMBO
         </div>
       )}
-      {!isPurify && state.backToBack && (
+      {state.backToBack && (
         <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#ffcc44', letterSpacing: '0.08em' }}>
           🔥 B2B x{(state.b2bCount ?? 0) + 1}
         </div>
@@ -2428,7 +2428,7 @@ export default function App() {
                 <div className="combo-label">COMBO</div>
               </div>
             )}
-      {!isPurify && state.backToBack && <div className="b2b-badge">🔥 B2B x{(state.b2bCount ?? 0) + 1}</div>}
+      {state.backToBack && <div className="b2b-badge">🔥 B2B x{(state.b2bCount ?? 0) + 1}</div>}
             <SynesthesiaMotionLayer className={`game-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`}>
               <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
                 onTwoFingerTap={() => triggerAction('activateZone')}

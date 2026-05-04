@@ -30,6 +30,8 @@ export class MusicManager {
     this._targetVol    = 0.9  // master volume target while playing
     this._shuffleQueue = []    // shuffle-without-replacement track queue
     this._muted        = false
+    this._waitForBufferTimer = null
+    this._stopTimer = null
 
     // Audio graph: trackGain -> masterGain -> lpf -> volumeGain -> destination
     this.masterGain = audioCtx.createGain()
@@ -48,6 +50,12 @@ export class MusicManager {
     this.volumeGain.connect(audioCtx.destination)
 
     this._loadAll()
+  }
+
+  _clearBufferWait() {
+    if (!this._waitForBufferTimer) return
+    clearInterval(this._waitForBufferTimer)
+    this._waitForBufferTimer = null
   }
 
   _dbg(msg) {
@@ -79,19 +87,28 @@ export class MusicManager {
   _playIndex(index) {
     if (!this.playing) return
 
+    if (this._stopTimer) {
+      clearTimeout(this._stopTimer)
+      this._stopTimer = null
+    }
+
     const buf = this._buffers[index]
     if (!buf) {
       // Buffer not ready — poll then retry
-      const wait = setInterval(() => {
+      this._clearBufferWait()
+      this._waitForBufferTimer = setInterval(() => {
         if (this._loaded[index]) {
-          clearInterval(wait)
-          if (this.playing) this._playIndex(index)
+          this._clearBufferWait()
+          if (this.playing && this.trackIndex === index) this._playIndex(index)
         }
       }, 100)
       return
     }
 
+    this._clearBufferWait()
+
     // Tear down previous nodes
+    if (this._source) this._source.onended = null
     try { this._source?.stop() } catch {}
     this._source?.disconnect()
     this._trackGain?.disconnect()
@@ -138,6 +155,11 @@ export class MusicManager {
   start() {
     this._dbg('start')
     if (this.playing) return
+    this._clearBufferWait()
+    if (this._stopTimer) {
+      clearTimeout(this._stopTimer)
+      this._stopTimer = null
+    }
     if (this.ctx.state === 'suspended') this.ctx.resume()
     this.playing    = true
     this.trackIndex = this._nextTrackIndex()
@@ -155,14 +177,25 @@ export class MusicManager {
     this._dbg('stop')
     if (!this.playing) return
     this.playing = false
+    this._clearBufferWait()
+    if (this._stopTimer) {
+      clearTimeout(this._stopTimer)
+      this._stopTimer = null
+    }
     const t = this.ctx.currentTime
     this.masterGain.gain.cancelScheduledValues(t)
     this.masterGain.gain.setValueAtTime(this.masterGain.gain.value, t)
     this.masterGain.gain.linearRampToValueAtTime(0, t + 0.4)
-    setTimeout(() => {
-      try { this._source?.stop() } catch {}
-      this._source    = null
-      this._trackGain = null
+    const srcToStop = this._source
+    const gainToDisconnect = this._trackGain
+    try { if (srcToStop) srcToStop.onended = null } catch {}
+    this._stopTimer = setTimeout(() => {
+      try { srcToStop?.stop() } catch {}
+      try { srcToStop?.disconnect() } catch {}
+      try { gainToDisconnect?.disconnect() } catch {}
+      if (this._source === srcToStop) this._source = null
+      if (this._trackGain === gainToDisconnect) this._trackGain = null
+      this._stopTimer = null
     }, 450)
   }
 
@@ -263,6 +296,7 @@ export class MusicManager {
   // -- Media controls / UI helpers -----------------------------------------
   next() {
     if (!this.playing) return
+    this._clearBufferWait()
     // Null out onended BEFORE stop() so the automatic advance doesn't race
     // with our manual advance — this was causing double-track playback & freezes
     if (this._source) this._source.onended = null
@@ -275,6 +309,7 @@ export class MusicManager {
   }
   prev() {
     if (!this.playing) return
+    this._clearBufferWait()
     if (this._source) this._source.onended = null
     try { this._source?.stop() } catch {}
     this._source = null

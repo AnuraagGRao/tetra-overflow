@@ -18,6 +18,13 @@ import StoryLorePage from './pages/StoryLorePage'
 function NowPlayingToast() {
   const [toast, setToast] = useState(null)
   const timerRef = useRef(null)
+  const [topOffset, setTopOffset] = useState(() => window.innerWidth < 500 ? 82 : 64)
+
+  useEffect(() => {
+    const onResize = () => setTopOffset(window.innerWidth < 500 ? 82 : 64)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
 
   useEffect(() => {
     const handler = (e) => {
@@ -44,19 +51,21 @@ function NowPlayingToast() {
           exit={{ opacity: 0, y: -16 }}
           transition={{ duration: 0.35, ease: 'easeOut' }}
           style={{
-            position: 'fixed', top: 18, left: '50%', transform: 'translateX(-50%)',
+            position: 'fixed', top: topOffset, left: 14, right: 14,
             background: 'rgba(10,10,26,0.52)', backdropFilter: 'blur(14px)',
             border: '1px solid rgba(255,255,255,0.10)', borderRadius: 14,
             padding: '10px 22px', zIndex: 9999, pointerEvents: 'none',
             display: 'flex', alignItems: 'center', gap: 10,
             fontFamily: '"Courier New", monospace',
             boxShadow: '0 4px 32px rgba(0,0,0,0.28)',
+            width: 'fit-content',
+            maxWidth: 'min(560px, calc(100vw - 28px))',
           }}
         >
           <span style={{ fontSize: '1.25rem', opacity: 0.85 }}>🎵</span>
           <div>
             <div style={{ fontSize: '0.52rem', letterSpacing: '0.22em', color: 'rgba(200,210,255,0.55)', marginBottom: 3 }}>NOW PLAYING</div>
-            <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'rgba(226,232,240,0.88)', letterSpacing: '0.05em', maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'rgba(226,232,240,0.88)', letterSpacing: '0.05em', maxWidth: 'min(470px, calc(100vw - 92px))', whiteSpace: 'normal', overflowWrap: 'anywhere', lineHeight: 1.2 }}>
               {toast.name}
             </div>
           </div>

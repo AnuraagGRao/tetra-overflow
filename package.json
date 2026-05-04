@@ -1,7 +1,7 @@
 {
-  "name": "tetris-mobile-clone",
+  "name": "tetra-overflow-ultra",
   "private": true,
-  "version": "0.6.69",
+  "version": "0.6.9N",
   "type": "module",
   "scripts": {
     "dev": "vite",

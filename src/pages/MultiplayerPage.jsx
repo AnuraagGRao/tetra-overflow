@@ -1304,8 +1304,9 @@ export default function MultiplayerPage() {
                   <span style={{ fontSize: '0.44rem', color: '#555', letterSpacing: '0.08em' }}>LVL {myState.level}</span>
                   {(myState.combo > 1 || myState.backToBack) && (
                     <span style={{ fontSize: '0.44rem', color: '#fbbf24', letterSpacing: '0.08em', fontWeight: 700 }}>
-                      {myState.combo > 1 ? `COMBO x${myState.combo}` : 'COMBO x1'}
-                      {myState.backToBack ? `  ·  B2B x${(myState.b2bCount ?? 0) + 1}` : ''}
+                      {myState.combo > 1 ? `COMBO x${myState.combo}` : ''}
+                      {myState.combo > 1 && myState.backToBack ? '  ·  ' : ''}
+                      {myState.backToBack ? `B2B x${(myState.b2bCount ?? 0) + 1}` : ''}
                     </span>
                   )}
                 </div>

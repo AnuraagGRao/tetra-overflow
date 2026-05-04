@@ -1140,6 +1140,7 @@ export default function BackgroundCanvas({ bgType = 'stars', style, beatRef: _be
   const sceneRef = useRef(null)
   const vantaBaseRef = useRef({})
   const synRef = useRef({ impact: 0, spin: 0, clear: 0, drop: 0 })
+  const clearBurstRef = useRef({ pending: 0, power: 0 })
   const comboBoostRef = useRef(0)
   const prevComboRef = useRef(0)
   const customImgRef = useRef(null)
@@ -1292,11 +1293,15 @@ export default function BackgroundCanvas({ bgType = 'stars', style, beatRef: _be
       vantaInstRef.current = null
       vantaBaseRef.current = {}
       synRef.current = { impact: 0, spin: 0, clear: 0, drop: 0 }
+      clearBurstRef.current = { pending: 0, power: 0 }
     }
   }, [activeType, bgType]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const onSynesthesiaEvent = useCallback((evt) => {
-    if (!synesthesiaEnabled || !activeType || !evt?.type) return
+    if (!synesthesiaEnabled || !evt?.type) return
+    const lines = Math.max(0, Number(evt?.payload?.lines || 0))
+    const intensity = Math.max(0, Number(evt?.payload?.intensity || 1))
+    const burst = clearBurstRef.current
     const s = synRef.current
     switch (evt.type) {
       case SYNESTHESIA_EVENT.MOVE:
@@ -1316,16 +1321,38 @@ export default function BackgroundCanvas({ bgType = 'stars', style, beatRef: _be
       case SYNESTHESIA_EVENT.LINE_CLEAR:
         s.clear = clamp(s.clear + 0.5, 0, 1.8)
         s.impact = clamp(s.impact + 0.16, 0, 1.9)
+        {
+          const clearWeight = lines >= 4 ? 1.45 : lines === 3 ? 0.95 : lines === 2 ? 0.42 : 0.22
+          const clearBase = lines >= 4 ? 30 : lines === 3 ? 16 : lines === 2 ? 7 : 3
+          const gain = Math.round(clearBase * (0.7 + intensity * 0.28) * clearWeight)
+          const powerTarget = lines >= 4
+            ? 1.65 + intensity * 0.2
+            : lines === 3
+              ? 1.02 + intensity * 0.14
+              : lines === 2
+                ? 0.5 + intensity * 0.08
+                : 0.3 + intensity * 0.05
+          burst.pending = clamp(burst.pending + gain, 0, 340)
+          burst.power = clamp(Math.max(burst.power, powerTarget), 0, 2.35)
+        }
         break
       case SYNESTHESIA_EVENT.T_SPIN:
         s.clear = clamp(s.clear + 0.64, 0, 1.95)
         s.spin = clamp(s.spin + 0.35, 0, 1.95)
         s.impact = clamp(s.impact + 0.22, 0, 1.95)
+        {
+          const spinLines = Math.max(lines, 1)
+          const tSpinScale = spinLines >= 3 ? 1.45 : spinLines === 2 ? 1.22 : 1.0
+          const gain = Math.round((26 + spinLines * 14) * (0.9 + intensity * 0.42) * tSpinScale)
+          const powerTarget = 1.25 + spinLines * 0.28 + intensity * 0.16
+          burst.pending = clamp(burst.pending + gain, 0, 420)
+          burst.power = clamp(Math.max(burst.power, powerTarget), 0, 2.8)
+        }
         break
       default:
         break
     }
-  }, [activeType, synesthesiaEnabled])
+  }, [synesthesiaEnabled])
 
   useSynesthesiaEvent(onSynesthesiaEvent)
 
@@ -1450,6 +1477,27 @@ export default function BackgroundCanvas({ bgType = 'stars', style, beatRef: _be
       const energy = Math.min(2.2, Math.max(beat, bpmPulse * 0.65) + comboPulse * 0.9)
       const dt = baseDt * (0.9 + energy * 0.6)
       const w = canvas.width, hh = canvas.height
+
+      const burst = clearBurstRef.current
+      if (burst.pending > 0 && particles.length > 0) {
+        const burstPower = clamp(burst.power, 0.2, 2.8)
+        const baseBudget = particleDensityScale < 1 ? 8 : 14
+        const spawnBudget = Math.max(3, Math.round((baseBudget + burstPower * 5) * (baseDt / 16)))
+        const spawnNow = Math.min(burst.pending, spawnBudget)
+        const power = burstPower
+        for (let i = 0; i < spawnNow; i++) {
+          const p = makeParticle(bgType, w, hh, false)
+          p.x = w * (0.2 + Math.random() * 0.6)
+          p.y = hh * (0.2 + Math.random() * 0.65)
+          if (typeof p.vx === 'number') p.vx = p.vx * (1.2 + power * 0.45) + (Math.random() - 0.5) * (1.1 + power * 1.3)
+          if (typeof p.vy === 'number') p.vy = p.vy * (1.15 + power * 0.35) - Math.random() * (0.7 + power * 1.2)
+          if (typeof p.life === 'number') p.life = Math.min(1.25, Math.max(0.72, p.life + 0.2))
+          if (typeof p.decay === 'number' && p.decay > 0) p.decay *= 0.84
+          particles[(Math.random() * particles.length) | 0] = p
+        }
+        burst.pending = Math.max(0, burst.pending - spawnNow)
+      }
+      burst.power *= Math.pow(0.9, baseDt / 16)
 
       ctx.globalAlpha = 1
       ctx.fillStyle = BG_BASE[bgType] || '#000'

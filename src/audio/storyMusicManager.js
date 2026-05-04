@@ -234,6 +234,9 @@ export class StoryMusicManager {
       nextSrc.playbackRate.value = rate
     } catch {}
     nextSrc.connect(nextGain)
+    // During crossfade, old source ending can fire onended and race this advance.
+    // Disable it to ensure exactly one transition path is active.
+    try { if (this._source) this._source.onended = null } catch {}
     nextSrc.start()
 
     const t = this.ctx.currentTime
@@ -323,8 +326,6 @@ export class StoryMusicManager {
     this.masterGain.gain.cancelScheduledValues(t)
     this.masterGain.gain.setValueAtTime(this.masterGain.gain.value, t)
     this.masterGain.gain.linearRampToValueAtTime(0, t + 0.15)
-    // Also suspend the context to freeze playback time and avoid advancing tracks while paused
-    try { this.ctx.suspend?.() } catch {}
   }
 
   /** Restore volume after pause. */

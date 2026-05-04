@@ -2,7 +2,6 @@ import { useEffect, useRef } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { PIECES } from '../logic/tetrominoes';
 import { PIECE_COLOR_MAPS } from './GameCanvas';
-import { BG_TYPE_TO_PIECE_THEME } from '../logic/themeMappings';
 
 const PREV_CELL = 10
 const PREV_COLS = 4
@@ -10,8 +9,8 @@ const PREV_ROWS = 2
 
 export default function PiecePreview({ type, small = false }) {
   const canvasRef = useRef(null)
-  const { theme, bgTheme } = useTheme()
-  const previewTheme = bgTheme ? (BG_TYPE_TO_PIECE_THEME[bgTheme] ?? theme) : theme
+  const { theme } = useTheme()
+  const previewTheme = theme
   const cell = small ? 8 : PREV_CELL
 
   useEffect(() => {
