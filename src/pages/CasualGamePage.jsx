@@ -4,7 +4,7 @@ import App from '../App'
 import BackgroundCanvas from '../components/BackgroundCanvas'
 import { useTheme, THEMES } from '../contexts/ThemeContext'
 import { STORE_ITEMS } from '../logic/storeData'
-import homeIconUrl from '../icons/home-button-icon-for-tetris-mobile-game-ui--simple.png'
+import homeIconUrl from '../icons/home-button.png'
 
 const BG_ITEMS_MAP = Object.fromEntries(STORE_ITEMS.filter(i => i.type === 'bg').map(i => [i.id, i]))
 const THEME_MAP = Object.fromEntries(THEMES.map(t => [t.id, t]))

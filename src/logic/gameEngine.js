@@ -8,11 +8,11 @@ export const BLITZ_DURATION_MS  = 120000
 export const SPRINT_LINES       = 40
 export const EASY_SPRINT_LINES  = 20  // Easy mode clears only 20 lines to finish
 // Ultimate base garbage interval is randomized per run between 10–20s
-export const ULTIMATE_BASE_MIN_MS = 14000
-export const ULTIMATE_BASE_MAX_MS = 26000
-export const ULTIMATE_MIN_GARBAGE_MS     = 3800   // Floor for chaos interval (slower than before)
-export const ULTIMATE_GARBAGE_ACCEL      = 0.96   // gentler ramp (was 0.92)
-export const ULTIMATE_ACCEL_STEP_MS      = 26000  // ramp less frequently
+export const ULTIMATE_BASE_MIN_MS = 17000
+export const ULTIMATE_BASE_MAX_MS = 30000
+export const ULTIMATE_MIN_GARBAGE_MS     = 5200   // Keep waves readable deep into runs
+export const ULTIMATE_GARBAGE_ACCEL      = 0.975  // gentler ramp for mid floors
+export const ULTIMATE_ACCEL_STEP_MS      = 32000  // ramp less frequently
 
 // ── Tower Climb constants ─────────────────────────────────────────────────────
 export const TOWER_LINES_PER_FLOOR   = 6    // lines needed to advance one floor (increases with floors)
@@ -21,6 +21,7 @@ export const TOWER_INIT_GARBAGE_MS   = 11000 // initial garbage interval (ms)
 export const TOWER_MIN_GARBAGE_MS    = 2800  // minimum garbage interval
 export const TOWER_GARBAGE_ACCEL     = 0.91  // interval multiplier per floor (≈9% faster each floor)
 export const TOWER_FLOOR_SCORE_BONUS = 500   // score bonus per floor cleared
+export const TOWER_MAX_FLOOR         = 99
 
 const SCORE_BY_CLEAR = [0, 100, 300, 500, 800]
 const T_SPIN_SCORE = [400, 800, 1200, 1600]
@@ -296,6 +297,7 @@ export class TetrisEngine {
     this.blitzTimer  = BLITZ_DURATION_MS
     const baseInfTimer = (PURIFY_INFECTION_TIMERS[purifyDifficulty] ?? 8000) * this.touchMultiplier
     this.infectionTimer = baseInfTimer + Math.random() * 2000
+    this.infectionPeriod = this.infectionTimer
     // Ultimate mode: random garbage timer + meme chaos flag
     this.ultimateGarbageInterval = ULTIMATE_BASE_MIN_MS + Math.random() * (ULTIMATE_BASE_MAX_MS - ULTIMATE_BASE_MIN_MS)
     this.ultimateGarbageTimer = this.ultimateGarbageInterval
@@ -563,17 +565,19 @@ export class TetrisEngine {
       // Tower Climb: track floor progress (also when merged into Ultimate)
       if (this.mode === GAME_MODE.ULTIMATE && cleared > 0) {
         this.towerFloorLines += cleared
-        if (this.towerFloorLines >= this.towerFloorTarget) {
+        if (this.towerFloorLines >= this.towerFloorTarget && this.towerFloor < TOWER_MAX_FLOOR) {
           this.towerFloorLines -= this.towerFloorTarget
           this.towerFloor += 1
           this.towerFloorAdvance = true
           // Escalate target
-          this.towerFloorTarget = this.towerFloor <= 5 ? 5 : this.towerFloor <= 10 ? 6 : this.towerFloor <= 20 ? 7 : 8
+          this.towerFloorTarget = this.towerFloor <= 10 ? 5 : this.towerFloor <= 25 ? 6 : this.towerFloor <= 45 ? 7 : this.towerFloor <= 70 ? 8 : 9
           // Speed up garbage interval
           this.towerGarbageInterval = Math.max(TOWER_MIN_GARBAGE_MS, Math.floor(this.towerGarbageInterval * TOWER_GARBAGE_ACCEL))
           this.towerGarbageTimer = Math.min(this.towerGarbageTimer, this.towerGarbageInterval)
           // Bonus score per floor
           this.score += TOWER_FLOOR_SCORE_BONUS * this.towerFloor
+        } else if (this.towerFloor >= TOWER_MAX_FLOOR) {
+          this.towerFloorLines = this.towerFloorTarget
         }
       }
 
@@ -702,6 +706,7 @@ export class TetrisEngine {
         this.addInfectionLayer(3)
         const baseInfTimer = (PURIFY_INFECTION_TIMERS[this.purifyDifficulty] ?? 8000) * this.touchMultiplier
         this.infectionTimer = baseInfTimer + Math.random() * 2000
+        this.infectionPeriod = this.infectionTimer
       }
     }
 
@@ -826,14 +831,22 @@ export class TetrisEngine {
   }
 
   _applyGarbage(lines) {
+    const n = Math.max(0, Math.min(BOARD_HEIGHT, lines | 0))
+    if (n <= 0) return
     const gapCol = Math.floor(Math.random() * BOARD_WIDTH)
-    const garbageRows = Array.from({ length: lines }, () => {
+    const garbageRows = Array.from({ length: n }, () => {
       const row = Array(BOARD_WIDTH).fill('GBG')
       row[gapCol] = null
       return row
     })
     // Shift board up by `lines` rows, add garbage at bottom
-    this.board = [...this.board.slice(lines), ...garbageRows]
+    this.board = [...this.board.slice(n), ...garbageRows]
+    // Rising garbage should push the active piece upward to avoid visual merge artifacts.
+    if (this.current) this.current.y -= n
+    if (this.current && collides(this.board, this.current, this.current.x, this.current.y)) {
+      this.gameOver = true
+      this.gameOverReason = 'topout'
+    }
     this.shake = Math.max(this.shake, 4)
   }
 
@@ -862,7 +875,14 @@ export class TetrisEngine {
     // Exponential scaling: ~0.6 G/s at Lv1 → ~3 at Lv10 → ~9 at Lv15 → capped at 20
     const base = 0.6 * Math.pow(1.22, this.level - 1)
     if (this.mode === GAME_MODE.BLITZ) return Math.min(20, base * 1.25)
-    if (this.mode === GAME_MODE.ULTIMATE) return Math.min(20, base * 1.05)
+    if (this.mode === GAME_MODE.ULTIMATE) {
+      const floor = Math.max(1, this.towerFloor || 1)
+      // Gentle early climb (comfortable around floors 30-40), then sharp late-game ramp.
+      const early = 0.52 * Math.pow(1.14, Math.max(0, this.level - 1))
+      const midBoost = 1 + Math.max(0, floor - 35) * 0.02
+      const lateBoost = 1 + Math.max(0, floor - 60) * 0.035
+      return Math.min(20, early * midBoost * lateBoost)
+    }
     if (this.mode === GAME_MODE.EASY) return Math.min(20, base * 0.45)  // ~half speed
     return Math.min(20, base)
   }
@@ -1120,6 +1140,8 @@ export class TetrisEngine {
       mode: this.mode,
       blocksPurified: this.blocksPurified,
       purifyTimer: this.purifyTimer,
+      infectionTimer: this.infectionTimer,
+      infectionPeriod: this.infectionPeriod,
       gameOverReason: this.gameOverReason,
       b2bCount: this.b2bCount,
       infectionAdded: this.infectionAdded,

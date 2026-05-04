@@ -3,17 +3,59 @@ import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import BackgroundCanvas from '../components/BackgroundCanvas'
 import { STORY_CHAPTERS } from '../logic/storyData'
-import homeIconUrl from '../icons/home-button-icon-for-tetris-mobile-game-ui--simple.png'
+import { useAuth } from '../contexts/AuthContext'
+import { getStoryProgress } from '../firebase/db'
+import homeIconUrl from '../icons/home-button.png'
 
 const CH_BG = (ch) => ch?.levels?.[0]?.bgType || 'abyss'
 
+function isLevelUnlocked(chIdx, lvIdx, progress) {
+  if (chIdx === 0 && lvIdx === 0) return true
+  const ch = STORY_CHAPTERS[chIdx]
+  const prevLv = lvIdx > 0
+    ? ch.levels[lvIdx - 1]
+    : STORY_CHAPTERS[chIdx - 1]?.levels.at(-1)
+  const prevCh = lvIdx > 0 ? ch : STORY_CHAPTERS[chIdx - 1]
+  if (!prevCh || !prevLv) return false
+  return !!progress[`${prevCh.id}_${prevLv.id}_completed`]
+}
+
 export default function StoryLorePage() {
   const navigate = useNavigate()
-  const chapters = useMemo(() => STORY_CHAPTERS, [])
+  const { user } = useAuth()
+  const [progress, setProgress] = useState({})
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!user?.uid) {
+      setProgress({})
+      setLoading(false)
+      return
+    }
+    getStoryProgress(user.uid)
+      .then((p) => setProgress(p || {}))
+      .finally(() => setLoading(false))
+  }, [user])
+
+  const chapters = useMemo(() => {
+    const visible = []
+    STORY_CHAPTERS.forEach((ch, chIdx) => {
+      const unlockedLevels = ch.levels.filter((_, lvIdx) => isLevelUnlocked(chIdx, lvIdx, progress))
+      if (unlockedLevels.length > 0) visible.push({ ...ch, levels: unlockedLevels })
+    })
+    return visible
+  }, [progress])
+
   const [idx, setIdx] = useState(0)
   const railRef = useRef(null)
   const secRefs = useRef([])
+  const touchStartXRef = useRef(0)
+  const touchDeltaXRef = useRef(0)
   secRefs.current = chapters.map((_, i) => secRefs.current[i] || createRef())
+
+  useEffect(() => {
+    if (idx > chapters.length - 1) setIdx(Math.max(0, chapters.length - 1))
+  }, [idx, chapters.length])
 
   useEffect(() => {
     const opts = { root: railRef.current, threshold: 0.52 }
@@ -29,6 +71,29 @@ export default function StoryLorePage() {
     return () => io.disconnect()
   }, [chapters])
 
+  const jumpTo = (nextIdx) => {
+    const target = Math.max(0, Math.min(chapters.length - 1, nextIdx))
+    secRefs.current[target]?.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' })
+  }
+
+  const onTouchStart = (e) => {
+    touchStartXRef.current = e.touches?.[0]?.clientX || 0
+    touchDeltaXRef.current = 0
+  }
+
+  const onTouchMove = (e) => {
+    const nowX = e.touches?.[0]?.clientX || 0
+    touchDeltaXRef.current = nowX - touchStartXRef.current
+  }
+
+  const onTouchEnd = () => {
+    const dx = touchDeltaXRef.current
+    const SWIPE_PX = 52
+    if (Math.abs(dx) < SWIPE_PX) return
+    if (dx < 0) jumpTo(idx + 1)
+    else jumpTo(idx - 1)
+  }
+
   return (
     <div style={{ position: 'fixed', inset: 0, background: '#05050f', color: '#fff', fontFamily: '"Courier New", monospace', overflow: 'hidden' }}>
       {/* Live background follows the chapter in view */}
@@ -43,9 +108,24 @@ export default function StoryLorePage() {
           <div style={{ fontSize: '0.95rem', fontWeight: 900, letterSpacing: '0.3em' }}>LORE</div>
           <div style={{ width: 60 }} />
         </header>
-        <div ref={railRef} style={{ flex: 1, overflowX: 'auto', overflowY: 'hidden', contain: 'content', display: 'flex', scrollSnapType: 'x mandatory', touchAction: 'pan-x' }}>
-          {chapters.map((ch, ci) => (
-            <section key={ch.id} ref={secRefs.current[ci]} data-i={ci} style={{ position: 'relative', minWidth: '100%', scrollSnapAlign: 'start', padding: '1.1rem', height: '100%', overflowY: 'auto', overscrollBehaviorY: 'contain', touchAction: 'pan-y' }}>
+        {loading ? (
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666', letterSpacing: '0.12em', fontSize: '0.75rem' }}>
+            LOADING LORE…
+          </div>
+        ) : chapters.length === 0 ? (
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#777', letterSpacing: '0.08em', fontSize: '0.78rem', textAlign: 'center', padding: '1rem' }}>
+            No lore unlocked yet. Play story mode to reveal chapters.
+          </div>
+        ) : (
+          <div
+            ref={railRef}
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
+            style={{ flex: 1, overflowX: 'auto', overflowY: 'hidden', contain: 'content', display: 'flex', scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch', touchAction: 'pan-x pan-y' }}
+          >
+            {chapters.map((ch, ci) => (
+            <section key={ch.id} ref={secRefs.current[ci]} data-i={ci} style={{ position: 'relative', minWidth: '100%', scrollSnapAlign: 'start', padding: '1.1rem', height: '100%', overflowY: 'auto', overscrollBehaviorY: 'contain', touchAction: 'pan-x pan-y' }}>
               <motion.div initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.35 }}
                 style={{ marginBottom: 10, display: 'flex', alignItems: 'baseline', gap: 8 }}>
                 <div style={{ fontSize: '0.58rem', letterSpacing: '0.32em', color: '#888' }}>{`CHAPTER ${ci+1}`}</div>
@@ -70,8 +150,9 @@ export default function StoryLorePage() {
                 ))}
               </div>
             </section>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

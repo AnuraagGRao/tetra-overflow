@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { getAllArtworkVotes, voteArtwork } from '../firebase/db'
-import homeIconUrl from '../icons/home-button-icon-for-tetris-mobile-game-ui--simple.png'
+import homeIconUrl from '../icons/home-button.png'
 
 // Import all artwork MP4s via Vite glob import
 const ARTWORK_MODULES = import.meta.glob('../artwork/*.mp4', { eager: true, query: '?url', import: 'default' })

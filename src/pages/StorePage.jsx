@@ -33,7 +33,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { purchaseItem, setActiveBadge, toggleEffect } from '../firebase/db'
 import { STORE_ITEMS, ITEM_TYPES } from '../logic/storeData'
 import { useTheme } from '../contexts/ThemeContext'
-import homeIconUrl from '../icons/home-button-icon-for-tetris-mobile-game-ui--simple.png'
+import homeIconUrl from '../icons/home-button.png'
 
 const TAB_LABELS = { theme: 'THEMES', badge: 'BADGES', effect: 'EFFECTS', bg: 'BACKGROUNDS' }
 

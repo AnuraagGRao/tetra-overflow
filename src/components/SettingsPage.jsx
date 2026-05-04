@@ -1,8 +1,8 @@
 import { useTheme } from '../contexts/ThemeContext'
-import settingsIconUrl from '../icons/settings-gear-icon-for-tetris-mobile-game-ui--geom.png'
-import soundIconUrl from '../icons/sound-music-icon-for-tetris-mobile-game-ui--speake.png'
+import settingsIconUrl from '../icons/settings-button.png'
+import soundIconUrl from '../icons/sound-button.png'
 
-export default function SettingsPage({ config, onConfig, onClose }) {
+export default function SettingsPage({ config, onConfig, onClose, onClearCache }) {
   const set = (key, val) => onConfig(prev => ({ ...prev, [key]: val }))
   const { colorMode: _colorMode, setColorMode: _setColorMode } = useTheme()
 
@@ -184,6 +184,24 @@ export default function SettingsPage({ config, onConfig, onClose }) {
                 >{label}</button>
               ))}
             </div>
+          </div>
+        </div>
+
+        {/* Update / cache tools */}
+        <div className="settings-section">
+          <div className="settings-section-title">Update</div>
+          <div className="settings-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+            <span className="settings-label" style={{ fontSize: '0.68rem', color: '#888' }}>
+              If an update looks stale, clear cached assets and reload.
+            </span>
+            <button
+              type="button"
+              className="about-install-btn"
+              onClick={() => onClearCache?.()}
+              style={{ marginTop: 0, width: '100%' }}
+            >
+              Clear Cache + Reload
+            </button>
           </div>
         </div>
 

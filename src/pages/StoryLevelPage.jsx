@@ -265,6 +265,7 @@ export default function StoryLevelPage() {
 
   // Line baseline: how many lines were cleared when the current level started
   const levelStartLinesRef = useRef(0)
+  const levelStartScoreRef = useRef(0)
   // When true, engine.reset() will fire on the next GAME phase entry (fresh start / retry)
   const pendingResetRef    = useRef(true)
 
@@ -325,6 +326,7 @@ export default function StoryLevelPage() {
       pendingResetRef.current = false
       engine.reset(GAME_MODE.NORMAL)
       levelStartLinesRef.current = 0
+      levelStartScoreRef.current = 0
       const gm = found?.level?.gravityMult ?? 1.0
       const gravFactor = easyMode ? 0.6 : 1.0
       const targetLevel = Math.max(1, Math.round(gm * gravFactor * 5 + 1))
@@ -373,6 +375,7 @@ export default function StoryLevelPage() {
         engine.storyLevelOffset = targetLevel
         engine.storyLinesOffset = engine.getState().lines
       levelStartLinesRef.current = engine.getState().lines
+      levelStartScoreRef.current = engine.getState().score
       engine.togglePause()  // resume
       setCurrentChapterId(next.chapterId)
       setCurrentLevelId(next.levelId)
@@ -398,6 +401,7 @@ export default function StoryLevelPage() {
 
   const handleComplete = useCallback(async ({ score, lines, linesThisLevel: ltl, gameOver, tSpins = 0, iPieceLines = 0, piecesPlaced = 0, holdUses = 0, tetrisClears = 0, hardDrops = 0 }) => {
     const lt = ltl ?? lines
+    const scoreThisLevel = Math.max(0, Number(score || 0) - Number(levelStartScoreRef.current || 0))
     setFinalScore(score)
     setFinalLines(lt)
 
@@ -415,7 +419,7 @@ export default function StoryLevelPage() {
       setSaving(true)
       const isChapterComplete = found.chapter.levels[found.chapter.levels.length - 1]?.id === currentLevelId
       const unlocks = [
-        saveStoryProgress(user.uid, currentChapterId, currentLevelId, score, lt),
+        saveStoryProgress(user.uid, currentChapterId, currentLevelId, scoreThisLevel, lt),
         unlockItem(user.uid, `bg_${found.level.bgType}`),
       ]
       if (found.level.themeUnlock) {

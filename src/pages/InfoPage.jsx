@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import homeIconUrl from '../icons/home-button-icon-for-tetris-mobile-game-ui--simple.png'
+import homeIconUrl from '../icons/home-button.png'
 
 const isIOS = () =>
   /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream

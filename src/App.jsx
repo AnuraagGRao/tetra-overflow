@@ -1,5 +1,5 @@
 // ─── App version (keep in sync for cache/localStorage rescans) ─────────────
-const APP_VERSION = '0.6.3-2026.05.03';
+const APP_VERSION = '0.6.3-2026.05.04';
 
 // Clear versioned localStorage keys on first load after a version bump
 if (typeof window !== 'undefined') {
@@ -23,15 +23,15 @@ if (typeof window !== 'undefined') {
   } catch {}
 }
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import pauseIconUrl from './icons/pause-button-icon-for-tetris-mobile-game-ui--two-b.png'
-import playIconUrl from './icons/play-button-icon-for-tetris-mobile-game-ui--bold-t.png'
-import restartIconUrl from './icons/restart-refresh-icon-for-tetris-mobile-game-ui--ci.png'
-import settingsIconUrl from './icons/settings-gear-icon-for-tetris-mobile-game-ui--geom.png'
-import soundIconUrl from './icons/sound-music-icon-for-tetris-mobile-game-ui--speake.png'
+import pauseIconUrl from './icons/pause-button.png'
+import playIconUrl from './icons/play-button.png'
+import restartIconUrl from './icons/restart-refresh-button.png'
+import settingsIconUrl from './icons/settings-button.png'
+import soundIconUrl from './icons/sound-button.png'
 
 // ─── Custom: SW Update Banner ───────────────────
 
-function SWUpdateBanner({ onReload }) {
+function SWUpdateBanner({ onReload, onHardRefresh }) {
   return (
     <div
       style={{
@@ -43,6 +43,7 @@ function SWUpdateBanner({ onReload }) {
     >
       <span>New update available — reload for best experience and updated app icon.</span>
       <button style={{ marginLeft: 24, padding: '6px 22px', fontWeight: 600, borderRadius: 4, outline: 'none', border: 'none', background: '#ffd02a', color: '#111', cursor: 'pointer', fontSize: 16 }} onClick={onReload}>Reload</button>
+      <button style={{ marginLeft: 10, padding: '6px 16px', fontWeight: 600, borderRadius: 4, outline: 'none', border: '1px solid #ffd02a', background: 'transparent', color: '#ffd02a', cursor: 'pointer', fontSize: 14 }} onClick={onHardRefresh}>Clear Cache + Reload</button>
     </div>
   )
 }
@@ -1138,6 +1139,7 @@ export default function App() {
   const [config, setConfig] = useState(loadConfig)
   const [gameMode, setGameMode]   = useState(GAME_MODE.NORMAL)
   const [musicOn, setMusicOn]     = useState(false)
+  const [nowPlaying, setNowPlaying] = useState('—')
   const [coinDelta, setCoinDelta] = useState(0)
   const [countdown, setCountdown] = useState(null)
   const [highScores, setHighScores] = useState(() => loadHighScores())
@@ -1508,6 +1510,7 @@ export default function App() {
       } else if (musicOnRef.current) {
         musicManager?.start()
         musicManager?.setVolume(configRef.current.musicVolume)
+        setNowPlaying(musicManager?.getNowPlaying?.() || '—')
       }
       return
     }
@@ -1968,15 +1971,72 @@ export default function App() {
     const doToggle = () => {
       if (musicOnRef.current) {
         musicManager.stop(); musicOnRef.current = false; setMusicOn(false)
+        setNowPlaying('—')
       } else {
         musicManager.start()
         musicManager.setVolume(configRef.current.musicVolume)
         musicOnRef.current = true; setMusicOn(true)
+        setNowPlaying(musicManager?.getNowPlaying?.() || '—')
       }
     }
     const ctx = sharedAudioContext
     if (ctx?.state === 'suspended') ctx.resume().then(doToggle); else doToggle()
   }
+
+  const refreshNowPlaying = useCallback(() => {
+    setNowPlaying(musicManager?.getNowPlaying?.() || '—')
+  }, [])
+
+  const handleMusicPrev = useCallback(() => {
+    musicManager?.prev?.()
+    refreshNowPlaying()
+  }, [refreshNowPlaying])
+
+  const handleMusicNext = useCallback(() => {
+    musicManager?.next?.()
+    refreshNowPlaying()
+  }, [refreshNowPlaying])
+
+  const handleMusicPause = useCallback(() => {
+    musicManager?.pause?.()
+    setMusicOn(false)
+  }, [])
+
+  const handleMusicResume = useCallback(() => {
+    musicManager?.resume?.()
+    setMusicOn(true)
+    refreshNowPlaying()
+  }, [refreshNowPlaying])
+
+  const handleMusicMuteToggle = useCallback(() => {
+    musicManager?.setMuted?.(!(musicManager?.isMuted?.()))
+    refreshNowPlaying()
+  }, [refreshNowPlaying])
+
+  const hardRefreshApp = useCallback(async () => {
+    try {
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations()
+        await Promise.all(regs.map((r) => r.unregister()))
+      }
+      if ('caches' in window) {
+        const keys = await caches.keys()
+        await Promise.all(keys.map((k) => caches.delete(k)))
+      }
+    } catch (e) {
+      console.warn('Cache clear failed:', e)
+    } finally {
+      window.location.reload()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!musicOnRef.current) return
+    const id = setInterval(() => {
+      setNowPlaying(musicManager?.getNowPlaying?.() || '—')
+    }, 1000)
+    return () => clearInterval(id)
+  }, [musicOn])
 
   // Sync music volume when config changes
   useEffect(() => {
@@ -2036,7 +2096,7 @@ export default function App() {
         {s.mode === GAME_MODE.PURIFY && <div className="overlay-sub">Purified: {s.blocksPurified} blocks</div>}
         {s.mode === GAME_MODE.ULTIMATE && <div className="overlay-sub">🗼 Floor {s.towerFloor} reached!</div>}
         <div className="overlay-sub">Lv {s.level} · {s.lines} lines</div>
-        {coinDelta > 0 && <div className="overlay-sub" style={{ color: '#eab308' }}>+{coinDelta} XP</div>}
+        {coinDelta > 0 && <div className="overlay-sub" style={{ color: '#eab308' }}>+{coinDelta} Coins</div>}
         {!isP2 && <button type="button" className="overlay-restart" onClick={() => startGame(gameMode)}>Play Again</button>}
       </div>
     )
@@ -2050,26 +2110,26 @@ export default function App() {
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: '0.75rem', alignItems: 'center' }}>
         <div style={{ fontSize: '0.62rem', color: '#bbb', letterSpacing: '0.12em' }}>
-          Now Playing: <span style={{ color: '#fff' }}>{musicManager?.getNowPlaying?.() || '—'}</span>
+          Now Playing: <span style={{ color: '#fff' }}>{nowPlaying || '—'}</span>
         </div>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
           <button type="button"
-            onClick={() => musicManager?.prev?.()}
+            onClick={handleMusicPrev}
             style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '5px 12px', fontSize: '0.72rem', cursor: 'pointer', fontFamily: 'inherit' }}>⏮</button>
           {musicOn ? (
             <button type="button"
-              onClick={() => musicManager?.pause?.()}
+              onClick={handleMusicPause}
               style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '5px 12px', fontSize: '0.72rem', cursor: 'pointer', fontFamily: 'inherit' }}>⏸</button>
           ) : (
             <button type="button"
-              onClick={toggleMusic}
+              onClick={handleMusicResume}
               style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '5px 12px', fontSize: '0.72rem', cursor: 'pointer', fontFamily: 'inherit' }}>▶</button>
           )}
           <button type="button"
-            onClick={() => musicManager?.next?.()}
+            onClick={handleMusicNext}
             style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '5px 12px', fontSize: '0.72rem', cursor: 'pointer', fontFamily: 'inherit' }}>⏭</button>
           <button type="button"
-            onClick={() => musicManager?.setMuted?.(!(musicManager?.isMuted?.()))}
+            onClick={handleMusicMuteToggle}
             style={{ background: musicManager?.isMuted?.() ? 'rgba(255,60,60,0.10)' : 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: musicManager?.isMuted?.() ? '#ff6666' : '#ccc', borderRadius: 6, padding: '5px 12px', fontSize: '0.72rem', cursor: 'pointer', fontFamily: 'inherit' }}>
             {musicManager?.isMuted?.() ? '🔇 Muted' : '🔊 Mute'}
           </button>
@@ -2180,18 +2240,7 @@ export default function App() {
         {highScores[state.mode] != null && (
           <div className="high-score-line">Best: {highScores[state.mode].toLocaleString()}</div>
         )}
-        {isTower && (
-          <>
-            <div className="stat-item" style={{ marginTop: '0.4rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '0.4rem' }}>
-              <span className="label">Floor</span>
-              <span className="value" style={{ color: '#fb923c', textShadow: '0 0 10px #fb923c88' }}>{state.towerFloor}</span>
-            </div>
-            <div style={{ width: '100%', height: 4, background: 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden', margin: '4px 0' }}>
-              <div style={{ height: '100%', background: '#fb923c', borderRadius: 2, transition: 'width 0.2s ease', width: `${Math.round(((state.towerFloorLines || 0) / (state.towerFloorTarget || 5)) * 100)}%` }} />
-            </div>
-            <div style={{ fontSize: '0.5rem', color: '#888', letterSpacing: '0.1em' }}>{state.towerFloorLines || 0}/{state.towerFloorTarget || 5} LINES</div>
-          </>
-        )}
+
         {isPurify && (
           <>
             <div className="purify-timer-display" style={{ color: state.purifyTimer < 30000 ? '#f87171' : '#8b5cf6' }}>
@@ -2387,6 +2436,11 @@ export default function App() {
                 onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop}
                 boardAlpha={bgTheme ? 0.32 : undefined} renderQuality={config.renderQuality} />
               <GlitchOverlay active={glitchActive} />
+              {isUltimate && !state.gameOver && (
+                <div style={{ position: 'absolute', left: '50%', top: '22%', transform: 'translate(-50%, -50%)', zIndex: 5, pointerEvents: 'none', fontSize: 'clamp(3.2rem, 9vw, 7rem)', fontWeight: 900, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.08)', textShadow: '0 0 20px rgba(168,85,247,0.2)' }}>
+                  F{String(state.towerFloor || 1).padStart(2, '0')}
+                </div>
+              )}
               {/* Floor FX overlay */}
               <AnimatePresence>
                 {floorFx && (
@@ -2424,7 +2478,7 @@ export default function App() {
                       transition={{ duration: 0.22 }}
                       style={{ position: 'relative', zIndex: 2, padding: '0.35rem 0.7rem', borderRadius: 8, background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontWeight: 900, letterSpacing: '0.14em', fontSize: '0.9rem', textAlign: 'center' }}
                     >
-                      FLOOR {state.towerFloor}
+                      FLOOR UP! • {state.towerFloor}
                     </motion.div>
                   </motion.div>
                 )}
@@ -2552,6 +2606,15 @@ export default function App() {
             <div style={{ width: `${Math.round(Math.max(0, Math.min(1, 1 - (state.ultimateTimer / (state.ultimatePeriod || 1)))) * 100)}%`, height: '100%', background: 'linear-gradient(90deg,#a855f7,#22d3ee)' }} />
           </div>
         )}
+        {isPurify && !state.gameOver && (
+          <div title="Next infection wave" style={{ marginTop: 6, width: '100%', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: '0.66rem', color: '#a78bfa', letterSpacing: '0.08em' }}>INF</span>
+            <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.08)', borderRadius: 3, overflow: 'hidden' }}>
+              <div style={{ width: `${Math.round(Math.max(0, Math.min(1, 1 - ((state.infectionTimer || 0) / (state.infectionPeriod || 1)))) * 100)}%`, height: '100%', background: 'linear-gradient(90deg,#8b5cf6,#ec4899)' }} />
+            </div>
+            <span style={{ fontSize: '0.68rem', color: '#a78bfa', width: 28, textAlign: 'right' }}>{Math.ceil((state.infectionTimer || 0) / 1000)}s</span>
+          </div>
+        )}
 
         {/* board */}
         <div className={`ls-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`} style={{ background: 'transparent' }}>
@@ -2559,6 +2622,11 @@ export default function App() {
             onTwoFingerTap={() => triggerAction('activateZone')}
             onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop}
             boardAlpha={bgTheme ? 0.32 : undefined} renderQuality={config.renderQuality} />
+          {isUltimate && !state.gameOver && (
+            <div style={{ position: 'absolute', left: '50%', top: '46%', transform: 'translate(-50%, -50%)', zIndex: 5, pointerEvents: 'none', fontSize: 'clamp(2.4rem, 8vw, 4.6rem)', fontWeight: 900, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.08)', textShadow: '0 0 16px rgba(168,85,247,0.2)' }}>
+              FLOOR {state.towerFloor || 1}
+            </div>
+          )}
           {renderOverlay(state, false)}
           {renderPauseOverlay(state)}
           {renderZoneEnd(state)}
@@ -2684,12 +2752,26 @@ export default function App() {
           <div style={{ width: `${Math.round(Math.max(0, Math.min(1, 1 - (state.ultimateTimer / (state.ultimatePeriod || 1)))) * 100)}%`, height: '100%', background: 'linear-gradient(90deg,#a855f7,#22d3ee)' }} />
         </div>
       )}
+      {isPurify && !state.gameOver && (
+        <div title="Next infection wave" style={{ marginTop: 6, width: '100%', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: '0.66rem', color: '#a78bfa', letterSpacing: '0.08em' }}>INF</span>
+          <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.08)', borderRadius: 3, overflow: 'hidden' }}>
+            <div style={{ width: `${Math.round(Math.max(0, Math.min(1, 1 - ((state.infectionTimer || 0) / (state.infectionPeriod || 1)))) * 100)}%`, height: '100%', background: 'linear-gradient(90deg,#8b5cf6,#ec4899)' }} />
+          </div>
+          <span style={{ fontSize: '0.68rem', color: '#a78bfa', width: 28, textAlign: 'right' }}>{Math.ceil((state.infectionTimer || 0) / 1000)}s</span>
+        </div>
+      )}
       <div className={`mobile-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`} style={{ background: 'transparent' }}>
         <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
           onTwoFingerTap={() => triggerAction('activateZone')}
           onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop}
           boardAlpha={bgTheme ? 0.32 : undefined} renderQuality={config.renderQuality} />
         <GlitchOverlay active={glitchActive} />
+        {isUltimate && !state.gameOver && (
+          <div style={{ position: 'absolute', left: '50%', top: '22%', transform: 'translate(-50%, -50%)', zIndex: 5, pointerEvents: 'none', fontSize: 'clamp(2.4rem, 15vw, 5.6rem)', fontWeight: 900, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.09)', textShadow: '0 0 18px rgba(168,85,247,0.26)' }}>
+            {String(state.towerFloor || 1).padStart(2, '0')}
+          </div>
+        )}
         {renderOverlay(state, false)}
         {renderPauseOverlay(state)}
         {renderZoneEnd(state)}
@@ -2699,6 +2781,24 @@ export default function App() {
         {/* Fullscreen mini HUD — visible only when UI is hidden */}
         {isUiHidden && (
           <div className="fullscreen-mini-hud">
+            {isUltimate && !state.gameOver && (
+              <>
+                <div className="fmh-label" style={{ color: '#f59e0b' }}>Floor {state.towerFloor || 1}</div>
+                <div className="fmh-zone-wrap" style={{ height: 52, boxShadow: '0 0 4px rgba(251,146,60,0.24) inset' }}>
+                  <div className="fmh-zone-bar" style={{ height: `${Math.round(Math.max(0, Math.min(1, 1 - (state.ultimateTimer / (state.ultimatePeriod || 1)))) * 100)}%`, background: 'linear-gradient(180deg,#a855f7,#22d3ee)' }} />
+                </div>
+                <div className="fmh-label">Chaos {Math.ceil((state.ultimateTimer || 0) / 1000)}s</div>
+              </>
+            )}
+            {isPurify && !state.gameOver && (
+              <>
+                <div className="fmh-label" style={{ color: '#a78bfa' }}>Infection</div>
+                <div className="fmh-zone-wrap" style={{ height: 52, boxShadow: '0 0 4px rgba(167,139,250,0.3) inset' }}>
+                  <div className="fmh-zone-bar" style={{ height: `${Math.round(Math.max(0, Math.min(1, 1 - ((state.infectionTimer || 0) / (state.infectionPeriod || 1)))) * 100)}%`, background: 'linear-gradient(180deg,#8b5cf6,#ec4899)' }} />
+                </div>
+                <div className="fmh-label">{Math.ceil((state.infectionTimer || 0) / 1000)}s</div>
+              </>
+            )}
             <div className="fmh-hold">
               <div className="fmh-label">Hold</div>
               <PiecePreview type={state.hold} small />
@@ -2774,7 +2874,7 @@ export default function App() {
   return (
     <>
       {isLoading && <LoadingScreen onDone={() => setIsLoading(false)} />}
-      {showSWBanner && <SWUpdateBanner onReload={() => window.location.reload()} />}
+      {showSWBanner && <SWUpdateBanner onReload={() => window.location.reload()} onHardRefresh={hardRefreshApp} />}
       <div className={`app${state.zoneActive ? ' zone-active' : ''}`} style={!isMobile ? { '--board-w': `calc(260px * ${zoom})` } : undefined}>
       {renderInstallBanner()}
       {isMobile
@@ -2792,6 +2892,7 @@ export default function App() {
         <SettingsPage
           config={config}
           onConfig={setConfig}
+          onClearCache={hardRefreshApp}
           onClose={() => setShowSettings(false)}
         />
       )}

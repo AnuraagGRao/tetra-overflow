@@ -129,7 +129,7 @@ export const saveGameResult = async (uid, mode, score, extra = {}) => {
     totalLines: increment(extra.lines || 0),
     totalScore: increment(score),
     totalFloors: increment(floors || 0),
-    ...(isBest ? { [bestKey]: score } : {}),
+    ...(isBest ? { [bestKey]: score, [`${bestKey}_lines`]: extra.lines || 0, [`${bestKey}_at`]: serverTimestamp() } : {}),
     ...(isBestUltimateFloors ? { best_ultimate_floors: floors } : {}),
     lastPlayed: serverTimestamp(),
   }, { merge: true })
@@ -277,10 +277,32 @@ export const getCoinHistory = async (uid, lim = 20) => {
 // ─── Story progress ───────────────────────────────────────────────────────────
 export const saveStoryProgress = async (uid, chapterId, levelId, score, lines = 0) => {
   const ref = doc(db, 'story', uid)
+  const snap = await getDoc(ref)
+  const existing = snap.exists() ? snap.data() : {}
+
+  const levelScoreKey = `${chapterId}_${levelId}_score`
+  const levelLinesKey = `${chapterId}_${levelId}_lines`
+  const levelDoneKey = `${chapterId}_${levelId}_completed`
+  const chapterScoreKey = `${chapterId}_chapter_score`
+  const chapterLinesKey = `${chapterId}_chapter_lines`
+
+  const prevLevelScore = Number(existing[levelScoreKey] || 0)
+  const prevLevelLines = Number(existing[levelLinesKey] || 0)
+  const prevChapterScore = Number(existing[chapterScoreKey] || 0)
+  const prevChapterLines = Number(existing[chapterLinesKey] || 0)
+
+  // Keep chapter totals stable when replaying levels by replacing only this level's contribution.
+  const nextChapterScore = Math.max(0, prevChapterScore - prevLevelScore + Math.max(0, Number(score || 0)))
+  const nextChapterLines = Math.max(0, prevChapterLines - prevLevelLines + Math.max(0, Number(lines || 0)))
+
   await setDoc(ref, {
-    [`${chapterId}_${levelId}_score`]: score,
-    [`${chapterId}_${levelId}_lines`]: lines,
-    [`${chapterId}_${levelId}_completed`]: true,
+    [levelScoreKey]: score,
+    [levelLinesKey]: lines,
+    [levelDoneKey]: true,
+    [chapterScoreKey]: nextChapterScore,
+    [chapterLinesKey]: nextChapterLines,
+    total_story_score: increment(Math.max(0, Number(score || 0)) - prevLevelScore),
+    total_story_lines: increment(Math.max(0, Number(lines || 0)) - prevLevelLines),
     lastUpdated: serverTimestamp(),
   }, { merge: true })
 }
@@ -480,8 +502,39 @@ export const findPublicProfileByFriendCode = async (friendCode) => {
 
 /** Get public stats (best scores) for any user. */
 export const getPublicStats = async (uid) => {
-  const snap = await getDoc(doc(db, 'stats', uid))
-  return snap.exists() ? snap.data() : {}
+  try {
+    const snap = await getDoc(doc(db, 'stats', uid))
+    if (snap.exists()) return snap.data()
+  } catch (err) {
+    // stats/{uid} is owner-only by rules; fall back to public scores aggregation.
+    if (err?.code !== 'permission-denied') throw err
+  }
+
+  // Public fallback: aggregate from readable scores docs for this user.
+  const q = query(collection(db, 'scores'), where('uid', '==', uid), limit(200))
+  const snap = await getDocs(q)
+  const aggregated = {
+    totalGames: 0,
+    totalLines: 0,
+    totalScore: 0,
+    totalFloors: 0,
+  }
+
+  snap.docs.forEach((d) => {
+    const s = d.data() || {}
+    const mode = String(s.mode || '')
+    const score = Number(s.score || 0)
+    const lines = Number(s.lines || 0)
+    const floors = Number(s.floors || 0)
+    aggregated.totalGames += 1
+    aggregated.totalLines += lines
+    aggregated.totalScore += score
+    aggregated.totalFloors += floors
+    const key = `best_${mode}`
+    if (!aggregated[key] || score > aggregated[key]) aggregated[key] = score
+  })
+
+  return aggregated
 }
 
 // ─── Friends system ───────────────────────────────────────────────────────────

@@ -38,10 +38,11 @@ import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
-import { getUserStats, getLeaderboard, getCoinHistory, getPublicProfile, getPublicStats, getPublicProfiles, getFriends, getFriendRequests, getSentFriendRequests, acceptFriendRequest, declineFriendRequest, sendFriendRequest, findPublicProfileByFriendCode } from '../firebase/db'
+import { getUserStats, getLeaderboard, getCoinHistory, getPublicProfile, getPublicStats, getPublicProfiles, getFriends, getFriendRequests, getSentFriendRequests, acceptFriendRequest, declineFriendRequest, sendFriendRequest, findPublicProfileByFriendCode, getStoryProgress } from '../firebase/db'
 import { GAME_MODE } from '../logic/gameEngine'
+import { STORY_CHAPTERS } from '../logic/storyData'
 import DailyChallengesMenu from '../components/DailyChallengesMenu'
-import homeIconUrl from '../icons/home-button-icon-for-tetris-mobile-game-ui--simple.png'
+import homeIconUrl from '../icons/home-button.png'
 
 // Include all solo modes (excluding multiplayer/versus)
 const MODES = [
@@ -121,9 +122,16 @@ function PlayerProfileModal({ uid, onClose, myUid, myDisplayName, friends }) {
 
   useEffect(() => {
     if (!uid) return
-    Promise.all([getPublicProfile(uid), getPublicStats(uid)]).then(([p, s]) => {
-      setProfile(p); setPStats(s); setLoading(false)
-    })
+    Promise.all([getPublicProfile(uid), getPublicStats(uid)])
+      .then(([p, s]) => {
+        setProfile(p)
+        setPStats(s)
+      })
+      .catch(() => {
+        setProfile(null)
+        setPStats({})
+      })
+      .finally(() => setLoading(false))
   }, [uid])
 
   const handleAdd = async () => {
@@ -220,6 +228,7 @@ export default function StatsPage() {
   const [loading, setLoading] = useState(true)
   const [narrow, setNarrow] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 420 : false))
   const [coinHistory, setCoinHistory] = useState([])
+  const [storyProgress, setStoryProgress] = useState({})
   const [lbProfiles, setLbProfiles] = useState({}) // uid → { displayName, hasPlayedEasy }
   const [profileModal, setProfileModal] = useState(null) // uid | null
   const [friends, setFriends] = useState([])
@@ -243,7 +252,8 @@ export default function StatsPage() {
       getUserStats(user.uid),
       getLeaderboard(lbMode, lbLimit),
       getCoinHistory(user.uid, 25),
-    ]).then(([s, lb, hist]) => {
+      getStoryProgress(user.uid),
+    ]).then(([s, lb, hist, story]) => {
       setStats(s)
       const dedupedLb = Object.values(
         lb.reduce((acc, entry) => {
@@ -253,6 +263,7 @@ export default function StatsPage() {
       );
       setLeaderboard(dedupedLb);
       setCoinHistory(hist)
+      setStoryProgress(story || {})
       setLoading(false)
       // Fetch public profiles for leaderboard entries
       const uids = [...new Set(lb.map(e => e.uid).filter(Boolean))]
@@ -473,18 +484,30 @@ export default function StatsPage() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
-                  <button onClick={() => setLbLimit(l => (l === 10 ? 25 : 10))} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.12)', color: '#888', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', fontSize: '0.6rem', letterSpacing: '0.12em', fontFamily: 'inherit' }}>{lbLimit === 10 ? 'Show Top 25' : 'Show Top 10'}</button>
+                    {[10, 25, 50].map((lim) => (
+                      <button
+                        key={lim}
+                        onClick={() => setLbLimit(lim)}
+                        style={{ background: lbLimit === lim ? 'rgba(0,212,255,0.12)' : 'none', border: `1px solid ${lbLimit === lim ? 'rgba(0,212,255,0.45)' : 'rgba(255,255,255,0.12)'}`, color: lbLimit === lim ? '#00d4ff' : '#888', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', fontSize: '0.6rem', letterSpacing: '0.12em', fontFamily: 'inherit' }}
+                      >
+                        Top {lim}
+                      </button>
+                    ))}
                 </div>
               </div>
               <div style={{ background: '#0f1120', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, overflow: 'hidden', maxWidth: '100%' }}>
+                <div style={{ overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch' }}>
+                <div style={{ minWidth: 560 }}>
                 {/* Header row */}
-                <div style={{ display: 'grid', gridTemplateColumns: narrow ? '32px minmax(0,1fr) auto' : '40px minmax(0,1fr) 110px 80px 86px', gap: 8, alignItems: 'center', padding: '8px 10px', background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid rgba(255,255,255,0.06)', fontSize: '0.60rem', color: '#666', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-                  <div>#</div>
-                  <div style={{ minWidth: 0 }}>Player</div>
-                  <div style={{ textAlign: 'right' }}>Score</div>
-                  {!narrow && <div style={{ textAlign: 'right' }}>Lines</div>}
-                  {!narrow && <div style={{ textAlign: 'right' }}>When</div>}
-                </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '40px minmax(170px,1fr) 94px 64px 56px 86px', gap: 8, alignItems: 'center', padding: '8px 10px', background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid rgba(255,255,255,0.06)', fontSize: '0.60rem', color: '#666', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                    <div>#</div>
+                    <div style={{ minWidth: 0 }}>Player</div>
+                    <div style={{ textAlign: 'right' }}>Score</div>
+                    <div style={{ textAlign: 'right' }}>Lines</div>
+                    <div style={{ textAlign: 'right' }}>Flr</div>
+                    <div style={{ textAlign: 'right' }}>When</div>
+                  </div>
+                  <div style={{ maxHeight: 340, overflowY: 'auto', overflowX: 'hidden' }}>
                 {/* Rows (add personal best row if not present) */}
                 {leaderboard.length === 0 && personalRow ? (
                   <div
@@ -509,7 +532,7 @@ export default function StatsPage() {
                         key={entry.id}
                         onClick={() => !isMe && entry.uid && setProfileModal(entry.uid)}
                         title={!isMe ? 'View profile' : undefined}
-                        style={{ display: 'grid', gridTemplateColumns: narrow ? '32px minmax(0,1fr) auto' : '40px minmax(0,1fr) 110px 80px 86px', gap: 8, alignItems: 'center', padding: '8px 10px', borderBottom: i < leaderboard.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', background: bg, cursor: !isMe ? 'pointer' : 'default', transition: 'background 0.12s' }}
+                        style={{ display: 'grid', gridTemplateColumns: '40px minmax(170px,1fr) 94px 64px 56px 86px', gap: 8, alignItems: 'center', padding: '8px 10px', borderBottom: i < leaderboard.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', background: bg, cursor: !isMe ? 'pointer' : 'default', transition: 'background 0.12s' }}
                         onMouseEnter={e => { if (!isMe) e.currentTarget.style.background = 'rgba(0,212,255,0.05)' }}
                         onMouseLeave={e => { e.currentTarget.style.background = bg }}
                       >
@@ -518,15 +541,11 @@ export default function StatsPage() {
                           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</span>
                           {badge && <span style={{ fontSize: '0.45rem', color: '#c084fc', border: '1px solid #c084fc55', borderRadius: 3, padding: '0 4px', background: 'rgba(192,132,252,0.08)', flexShrink: 0, letterSpacing: '0.1em' }}>{badge.replace('badge_', '').toUpperCase()}</span>}
                           {hasNoob && <span style={{ fontSize: '0.45rem', color: '#f87171', border: '1px solid #f8717155', borderRadius: 3, padding: '0 4px', background: 'rgba(248,113,113,0.08)', flexShrink: 0, letterSpacing: '0.1em' }}>NOOB</span>}
-                          {narrow && (
-                            <div style={{ fontSize: '0.6rem', color: '#666', letterSpacing: '0.06em', marginTop: 2, display: 'block' }}>
-                              L {entry.lines ?? '—'} • {relTime(dt)}
-                            </div>
-                          )}
                         </div>
                         <div style={{ textAlign: 'right', color: '#eee', fontWeight: 700 }}>{(entry.score||0).toLocaleString()}</div>
-                        {!narrow && <div style={{ textAlign: 'right', color: '#aaa' }}>{entry.lines ?? '—'}</div>}
-                        {!narrow && <div style={{ textAlign: 'right', color: '#777', fontSize: '0.7rem' }}>{relTime(dt)}</div>}
+                        <div style={{ textAlign: 'right', color: '#aaa' }}>{entry.lines ?? '—'}</div>
+                        <div style={{ textAlign: 'right', color: '#aaa' }}>{entry.floors ?? '—'}</div>
+                        <div style={{ textAlign: 'right', color: '#777', fontSize: '0.7rem' }}>{relTime(dt)}</div>
                       </div>
                     )
                   })
@@ -536,7 +555,7 @@ export default function StatsPage() {
                   <div
                     key={personalRow.uid + '_pers'}
                     title="Your Best (not ranked)"
-                    style={{ display: 'grid', gridTemplateColumns: narrow ? '32px minmax(0,1fr) auto' : '40px minmax(0,1fr) 110px 80px 86px', gap: 8, alignItems: 'center', padding: '8px 10px', background: 'rgba(34,197,94,0.09)', borderTop: '1px solid #22c55e22', borderRadius: 7, marginTop: 4, fontStyle: 'italic', color: '#b4f0ce' }}
+                    style={{ display: 'grid', gridTemplateColumns: '40px minmax(170px,1fr) 94px 64px 56px 86px', gap: 8, alignItems: 'center', padding: '8px 10px', background: 'rgba(34,197,94,0.09)', borderTop: '1px solid #22c55e22', borderRadius: 7, marginTop: 4, fontStyle: 'italic', color: '#b4f0ce' }}
                   >
                     <div style={{ color: '#22c55e', fontWeight: 700, fontSize: '0.75rem' }}>—</div>
                     <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0, color: '#22c55e', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -545,10 +564,40 @@ export default function StatsPage() {
                       {personalRow.hasNoob && <span style={{ fontSize: '0.45rem', color: '#f87171', border: '1px solid #f8717155', borderRadius: 3, padding: '0 4px', background: 'rgba(248,113,113,0.08)', flexShrink: 0, letterSpacing: '0.1em' }}>NOOB</span>}
                     </div>
                     <div style={{ textAlign: 'right', color: '#eee', fontWeight: 700 }}>{(personalRow.score||0).toLocaleString()}</div>
-                    {!narrow && <div style={{ textAlign: 'right', color: '#aaa' }}>{personalRow.lines ?? '—'}</div>}
-                    {!narrow && <div style={{ textAlign: 'right', color: '#777', fontSize: '0.7rem' }}>{relTime(personalRow.timestamp?.toDate?.() ?? null)}</div>}
+                    <div style={{ textAlign: 'right', color: '#aaa' }}>{personalRow.lines ?? '—'}</div>
+                    <div style={{ textAlign: 'right', color: '#aaa' }}>—</div>
+                    <div style={{ textAlign: 'right', color: '#777', fontSize: '0.7rem' }}>{relTime(personalRow.timestamp?.toDate?.() ?? null)}</div>
                   </div>
                 )}
+                </div>
+                </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Story chapter progress */}
+            <div>
+              <div style={{ fontSize: '0.6rem', letterSpacing: '0.22em', color: '#555', margin: '0.75rem 0' }}>Story Chapter Scores</div>
+              <div style={{ background: '#0f1120', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, overflow: 'hidden', maxWidth: '100%' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '72px minmax(0,1fr) 92px 76px', gap: 8, alignItems: 'center', padding: '8px 10px', background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid rgba(255,255,255,0.06)', fontSize: '0.60rem', color: '#666', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                  <div>Chapter</div>
+                  <div>Name</div>
+                  <div style={{ textAlign: 'right' }}>Score</div>
+                  <div style={{ textAlign: 'right' }}>Lines</div>
+                </div>
+                {STORY_CHAPTERS.map((ch, i) => {
+                  const score = Number(storyProgress?.[`${ch.id}_chapter_score`] || 0)
+                  const lines = Number(storyProgress?.[`${ch.id}_chapter_lines`] || 0)
+                  const bg = i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent'
+                  return (
+                    <div key={ch.id} style={{ display: 'grid', gridTemplateColumns: '72px minmax(0,1fr) 92px 76px', gap: 8, alignItems: 'center', padding: '8px 10px', borderBottom: i < STORY_CHAPTERS.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', background: bg }}>
+                      <div style={{ color: ch.color, fontSize: '0.65rem', letterSpacing: '0.12em', fontWeight: 700 }}>CH {i + 1}</div>
+                      <div style={{ minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#ddd', fontSize: '0.72rem' }}>{ch.title}</div>
+                      <div style={{ textAlign: 'right', color: '#eee', fontWeight: 700, fontSize: '0.72rem' }}>{score.toLocaleString()}</div>
+                      <div style={{ textAlign: 'right', color: '#aaa', fontSize: '0.72rem' }}>{lines.toLocaleString()}</div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
 

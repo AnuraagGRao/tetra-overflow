@@ -10,7 +10,7 @@ import { PIECES } from '../logic/tetrominoes'
 import { MusicManager } from '../audio/musicManager'
 import { mpPlayLobbyMusic, mpStopMusic, mpMuteMusic, mpSetMusicVolume } from '../audio/multiplayerMusic'
 import GameCanvas from '../components/GameCanvas'
-import homeIconUrl from '../icons/home-button-icon-for-tetris-mobile-game-ui--simple.png'
+import homeIconUrl from '../icons/home-button.png'
 import { BOARD_HEIGHT } from '../logic/tetrominoes'
 import TouchControls from '../components/TouchControls'
 

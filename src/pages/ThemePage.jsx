@@ -6,7 +6,7 @@ import { purchaseItem } from '../firebase/db'
 import { useTheme, THEMES } from '../contexts/ThemeContext'
 import { STORE_ITEMS } from '../logic/storeData'
 import BackgroundCanvas from '../components/BackgroundCanvas'
-import homeIconUrl from '../icons/home-button-icon-for-tetris-mobile-game-ui--simple.png'
+import homeIconUrl from '../icons/home-button.png'
 
 const BG_ITEMS = STORE_ITEMS.filter(i => i.type === 'bg')
 const THEME_STORE_ITEMS = STORE_ITEMS.filter(i => i.type === 'theme')

@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import SettingsPage from '../components/SettingsPage'
-import leaderboardIconUrl from '../icons/leaderboard-trophy-icon-for-tetris-mobile-game-ui-.png'
-import playIconUrl from '../icons/play-button-icon-for-tetris-mobile-game-ui--bold-t.png'
-import settingsIconUrl from '../icons/settings-gear-icon-for-tetris-mobile-game-ui--geom.png'
-import soundIconUrl from '../icons/sound-music-icon-for-tetris-mobile-game-ui--speake.png'
+import leaderboardIconUrl from '../icons/leaderboard-button.png'
+import playIconUrl from '../icons/play-button.png'
+import settingsIconUrl from '../icons/settings-button.png'
+import soundIconUrl from '../icons/sound-button.png'
+import storyIconUrl from '../icons/story-button.png'
+import storeIconUrl from '../icons/store-button.png'
 
 // ─── Falling tetromino background ─────────────────────────────────────────────
 const BG_SHAPES = [
@@ -72,10 +74,10 @@ function useFallingPieces() {
 // ─── Main menu items ───────────────────────────────────────────────────────────
 const MENU_ITEMS = [
   { label: 'SOLO',     sub: 'CLASSIC PLAY',   iconSrc: playIconUrl,       path: '/play',        color: '#00d4ff', public: true },
-  { label: 'STORY',    sub: 'CAMPAIGN',        icon: '◈',  path: '/story',       color: '#a855f7' },
+  { label: 'STORY',    sub: 'CAMPAIGN',        iconSrc: storyIconUrl,  path: '/story',       color: '#a855f7' },
   { label: 'VERSUS',   sub: 'ONLINE MATCH',    icon: '⚡', path: '/multiplayer', color: '#f97316' },
   { label: 'THEMES',   sub: 'WORLD + PIECES',  icon: '◉',  path: '/themes',      color: '#e879f9' },
-  { label: 'STORE',    sub: 'SHOP',            icon: '◆',  path: '/store',       color: '#22c55e' },
+  { label: 'STORE',    sub: 'SHOP',            iconSrc: storeIconUrl,  path: '/store',       color: '#22c55e' },
   { label: 'STATS',    sub: 'LEADERBOARD',     iconSrc: leaderboardIconUrl, path: '/stats',      color: '#eab308' },
   { label: 'LORE',     sub: 'STORY TEXTS',     icon: '✦',  path: '/lore',        color: '#22c55e' },
   { label: 'SOUNDTRACK', sub: 'VOTE TRACKS',   iconSrc: soundIconUrl,    path: '/artwork',     color: '#ec4899', public: true },

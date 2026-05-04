@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { getStoryProgress, resetStoryProgress } from '../firebase/db'
 import { STORY_CHAPTERS } from '../logic/storyData'
 import { playTap, playZoomIn, playZoomOut, playBack } from '../audio/uiSfx'
-import homeIconUrl from '../icons/home-button-icon-for-tetris-mobile-game-ui--simple.png'
+import homeIconUrl from '../icons/home-button.png'
 
 // Returns true if a level is unlocked given progress data
 function isLevelUnlocked(chIdx, lvIdx, progress) {
@@ -21,6 +21,8 @@ function isLevelUnlocked(chIdx, lvIdx, progress) {
 
 function ChapterPanel({ chapter, chIdx, progress, onSelectLevel }) {
   const levels = chapter.levels
+  const chapterScore = Number(progress?.[`${chapter.id}_chapter_score`] || 0)
+  const chapterLines = Number(progress?.[`${chapter.id}_chapter_lines`] || 0)
   return (
     <motion.div
       initial={{ opacity: 0, y: 18, scale: 0.92 }}
@@ -33,6 +35,10 @@ function ChapterPanel({ chapter, chIdx, progress, onSelectLevel }) {
         <div style={{ fontSize: '0.55rem', color: chapter.color, letterSpacing: '0.26em', textTransform: 'uppercase', marginBottom: 4 }}>Chapter {chIdx + 1}</div>
         <div style={{ fontSize: '1.1rem', fontWeight: 900, letterSpacing: '0.1em', color: '#fff' }}>{chapter.title}</div>
         <div style={{ fontSize: '0.68rem', color: '#666', marginTop: 4, lineHeight: 1.4 }}>{chapter.subtitle}</div>
+        <div style={{ marginTop: 8, display: 'flex', gap: 10, alignItems: 'center', fontSize: '0.62rem', letterSpacing: '0.08em' }}>
+          <span style={{ color: '#ddd' }}>Score: <strong style={{ color: chapter.color }}>{chapterScore.toLocaleString()}</strong></span>
+          <span style={{ color: '#888' }}>Lines: {chapterLines.toLocaleString()}</span>
+        </div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {levels.map((lv, lvIdx) => {
