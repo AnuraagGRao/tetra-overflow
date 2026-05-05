@@ -197,7 +197,7 @@ export const STORY_CHAPTERS = [
       },
       {
         id: 'l2', title: 'MAELSTROM', subtitle: 'All storms as one.',
-        bgType: 'deepsea', bpm: 145, gravityMult: 1.40, targetLines: 42, easyTargetLines: 30,
+        bgType: 'maelstorm', bpm: 145, gravityMult: 1.40, targetLines: 42, easyTargetLines: 30,
         storyBefore: 'Every storm you have ever played converges. Rain, wind, lightning, sound — a symphony of destruction.',
         storyAfter: 'You have played this storm before. A hundred times. You know its rhythms.',
       },

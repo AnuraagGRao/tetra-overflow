@@ -29,6 +29,12 @@ export const BACKGROUND_THEME_PROFILES = {
       zoom: 0.52,
     },
   },
+  maelstorm: {
+    category: 'aggressive',
+    cssClass: 'bg-theme-storm bg-cat-aggressive',
+    parallax: 11,
+    preferCanvas: true,
+  },
   ember: {
     category: 'aggressive',
     cssClass: 'bg-theme-ember bg-cat-aggressive bg-heat-haze',

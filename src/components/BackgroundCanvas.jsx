@@ -16,6 +16,7 @@ const BG_BASE = {
   forest:'#000802', glacier:'#000a18', volcano:'#150200',
   inferno:'#100000', aurora:'#000410', warp:'#000008', abyss:'#000000',
   oiia:'#0a0010', nyancat:'#020008', custom:'#000006',
+  maelstorm:'#010308',
 }
 
 // ── Layer 1: Animated ambient gradient ───────────────────────────────────────
@@ -110,6 +111,52 @@ function drawAmbient(ctx, bgType, w, h, t) {
         ctx.beginPath(); ctx.moveTo(lx,ly)
         while (ly < h) { lx += (Math.sin(ly*0.1+bolt)*30); ly += 40; ctx.lineTo(lx,ly) }
         ctx.stroke(); ctx.restore()
+      }
+      break
+    }
+    case 'maelstorm': {
+      // Dark heaving storm sky
+      const mg = ctx.createLinearGradient(0, 0, 0, h)
+      mg.addColorStop(0, 'rgba(2,4,14,1)'); mg.addColorStop(0.45, 'rgba(6,14,32,1)'); mg.addColorStop(1, 'rgba(1,3,8,1)')
+      ctx.fillStyle = mg; ctx.fillRect(0, 0, w, h)
+      // Swirling cloud banks
+      ctx.save(); ctx.globalAlpha = 0.07
+      for (let i = 0; i < 6; i++) {
+        const cy = h*(0.04 + i*0.09) + Math.sin(t*0.00035 + i*1.9)*h*0.025
+        const cb = ctx.createLinearGradient(0, cy-55, 0, cy+55)
+        cb.addColorStop(0, 'rgba(0,0,0,0)')
+        cb.addColorStop(0.5, `rgba(${8+i*2},${18+i*3},${45+i*4},0.9)`)
+        cb.addColorStop(1, 'rgba(0,0,0,0)')
+        ctx.fillStyle = cb; ctx.fillRect(0, cy-55, w, 110)
+      }
+      ctx.restore()
+      // Branching lightning — more frequent than storm
+      const cycle = t % 2600
+      if (cycle < 210) {
+        const fade = 1 - cycle/210
+        const boltSeed = Math.floor(t / 2600) % 5
+        ctx.save()
+        ctx.globalAlpha = (0.32 + beat * 0.20) * fade
+        ctx.strokeStyle = '#bce4ff'; ctx.lineWidth = 1.8
+        ctx.shadowColor = '#80c8ff'; ctx.shadowBlur = 45
+        let lx = w*(0.10 + boltSeed*0.20), ly = 0
+        ctx.beginPath(); ctx.moveTo(lx, ly)
+        while (ly < h*0.78) { lx += Math.sin(ly*0.09 + boltSeed)*26; ly += 30; ctx.lineTo(lx, ly) }
+        ctx.stroke()
+        // Branch
+        const branchX = lx - 28, branchY = h * 0.32
+        ctx.globalAlpha *= 0.55; ctx.lineWidth = 0.9
+        ctx.beginPath(); ctx.moveTo(branchX, branchY)
+        ctx.lineTo(branchX + 42, branchY + 65); ctx.lineTo(branchX + 68, branchY + 120)
+        ctx.stroke()
+        ctx.restore()
+      }
+      // Brief whole-sky flicker
+      const cycle2 = (t + 1300) % 2600
+      if (cycle2 < 80) {
+        ctx.save(); ctx.globalAlpha = 0.09 * (1 - cycle2/80)
+        ctx.fillStyle = 'rgba(130,180,255,1)'; ctx.fillRect(0, 0, w, h)
+        ctx.restore()
       }
       break
     }
@@ -289,7 +336,7 @@ function drawAmbient(ctx, bgType, w, h, t) {
 function makeParticle(bgType, w, h, init=false) {
   const x = Math.random()*w
   const y = init ? Math.random()*h : (
-    ['storm','matrix','grid','crystal','glacier','forest'].includes(bgType) ? -10 : h+10
+    ['storm','maelstorm','matrix','grid','crystal','glacier','forest'].includes(bgType) ? -10 : h+10
   )
   switch (bgType) {
     case 'lava':   return { x, y, vx:(Math.random()-0.5)*0.5, vy:-(0.5+Math.random()*0.7), r:3+Math.random()*4, hue:10+Math.random()*25, life:1, decay:0.003+Math.random()*0.003, glow:true }
@@ -331,6 +378,29 @@ function makeParticle(bgType, w, h, init=false) {
       }
     }
     case 'storm':  return { x, y, vx:1.2+Math.random()*1.6, vy:6+Math.random()*6, r:0.7+Math.random()*0.4, hue:208+Math.random()*16, life:1, decay:0, glow:false }
+    case 'maelstorm': {
+      const subtype = Math.random() < 0.13 ? 'heavy' : Math.random() < 0.11 ? 'mist' : 'rain'
+      if (subtype === 'mist') {
+        return {
+          x: init ? Math.random()*w : -Math.random()*120,
+          y: init ? Math.random()*h : Math.random()*h,
+          vx: 0.9 + Math.random()*1.4, vy: 0.06 + Math.random()*0.18,
+          r: 70 + Math.random()*130, hue: 200 + Math.random()*22,
+          life: init ? 0.1 + Math.random()*0.5 : 0.08,
+          decay: 0.0012 + Math.random()*0.001, subtype: 'mist', growing: true,
+        }
+      }
+      const speed = subtype === 'heavy' ? 10 + Math.random()*5 : 7 + Math.random()*7
+      const windLean = 0.16 + Math.random()*0.14
+      return {
+        x, y,
+        vx: speed * windLean,
+        vy: speed,
+        r: subtype === 'heavy' ? 1.1 + Math.random()*0.9 : 0.5 + Math.random()*0.5,
+        hue: subtype === 'heavy' ? 192 + Math.random()*18 : 202 + Math.random()*28,
+        life: 1, decay: 0, glow: Math.random() < 0.04, subtype,
+      }
+    }
     case 'clouds': return { x, y:10+Math.random()*h*0.6, vx:0.03+Math.random()*0.12, vy:(Math.random()-0.5)*0.02, r:16+Math.random()*30, hue:215+Math.random()*35, life:1, decay:0, glow:false, a:0.04+Math.random()*0.05, layer:Math.random()<0.5?0:1 }
     case 'stars': {
       const shooting = Math.random() < 0.07
@@ -448,7 +518,7 @@ function makeParticle(bgType, w, h, init=false) {
 function createParticles(bgType, w, h, densityScale = 1) {
   const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
   const counts = {
-    lava: 180, ember: 150, inferno: 220, storm: isMobile ? 80 : 240, quake: 130, volcano: 170,
+    lava: 180, ember: 150, inferno: 220, storm: isMobile ? 80 : 240, maelstorm: isMobile ? 100 : 280, quake: 130, volcano: 170,
     ocean: isMobile ? 40 : 70, bubbles: 80, glacier: 80, clouds: 54, deepsea: 60,
     stars: 340, nebula: 100, warp: 80, blackhole: 100, abyss: 80,
     matrix: 200, grid: 100, crystal: 100, forest: 60, aurora: 100, oiia: 50,
@@ -584,6 +654,16 @@ function updateParticle(p, bgType, w, h, dt) {
   }
   p.x += p.vx*s; p.y += p.vy*s
   if (p.decay>0) p.life -= p.decay*s
+  if (bgType === 'maelstorm') {
+    if (p.subtype === 'mist') {
+      p.x += p.vx*s; p.y += p.vy*s
+      if (p.growing) { p.life += 0.0014*s; if (p.life >= 0.65) p.growing = false }
+      else { p.life -= 0.001*s; if (p.life <= 0.06) { p.x = -Math.random()*120; p.y = Math.random()*h; p.life = 0.06; p.growing = true } }
+      return false
+    }
+    p.x += p.vx*s; p.y += p.vy*s
+    return p.y > h+20 || p.x > w+20
+  }
   if (bgType === 'storm') return p.y > h+20
   if (bgType === 'matrix') return p.y > h+20
   if (bgType === 'grid') return p.y > h+20
@@ -660,6 +740,30 @@ function drawParticle(ctx, p, bgType, w, h, beat = 0) {
     ctx.stroke()
     ctx.restore()
     return
+  }
+
+  // Maelstorm — heavy multi-type rain
+  if (bgType === 'maelstorm') {
+    if (p.subtype === 'mist') {
+      const mg2 = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r)
+      mg2.addColorStop(0, `hsla(${p.hue},50%,60%,${p.life * 0.10})`)
+      mg2.addColorStop(1, 'rgba(0,0,0,0)')
+      ctx.fillStyle = mg2
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill()
+      ctx.restore(); return
+    }
+    const isHeavy = p.subtype === 'heavy'
+    const len2 = isHeavy ? (16 + p.vy * 0.55) : (8 + p.vy * 0.65)
+    ctx.globalAlpha = isHeavy ? 0.55 + beat*0.18 : 0.22 + beat*0.12
+    if (p.glow) { ctx.shadowColor = `hsl(${p.hue},100%,85%)`; ctx.shadowBlur = 5 }
+    ctx.strokeStyle = `hsla(${p.hue}, ${isHeavy ? 70 : 55}%, ${isHeavy ? 82 : 72}%, 0.9)`
+    ctx.lineWidth = Math.max(0.5, p.r * (1 + beat * 0.2))
+    const dx2 = -(p.vx/p.vy) * len2
+    ctx.beginPath()
+    ctx.moveTo(p.x, p.y)
+    ctx.lineTo(p.x + dx2, p.y - len2)
+    ctx.stroke()
+    ctx.restore(); return
   }
 
   // Clouds as soft puffs
@@ -919,6 +1023,22 @@ function drawForeground(ctx, bgType, w, h, t, beat = 0) {
       const fg=ctx.createLinearGradient(0,h*0.75,0,h)
       fg.addColorStop(0,'rgba(30,50,90,0)'); fg.addColorStop(1,'rgba(30,50,90,0.18)')
       ctx.fillStyle=fg; ctx.fillRect(0,0,w,h); break
+    }
+    case 'maelstorm': {
+      const fg2 = ctx.createLinearGradient(0, h*0.72, 0, h)
+      fg2.addColorStop(0, 'rgba(5,12,32,0)'); fg2.addColorStop(1, 'rgba(5,12,32,0.22)')
+      ctx.fillStyle = fg2; ctx.fillRect(0, 0, w, h)
+      // Puddle shimmer at bottom
+      ctx.save(); ctx.globalAlpha = 0.07 + beat*0.06
+      ctx.strokeStyle = 'rgba(110,175,255,1)'; ctx.lineWidth = 0.8
+      for (let i = 0; i < 5; i++) {
+        const ry = h*0.92 + i*3 + Math.sin(t*0.003 + i)*1.5
+        ctx.beginPath(); ctx.moveTo(w*0.05, ry)
+        for (let xi = w*0.05; xi <= w*0.95; xi += 14)
+          ctx.lineTo(xi, ry + Math.sin(xi*0.06 + t*0.004 + i)*1.5)
+        ctx.stroke()
+      }
+      ctx.restore(); break
     }
     case 'ocean': {
       // Multi-layer rolling wave crests
@@ -1615,6 +1735,7 @@ export default function BackgroundCanvas({ bgType = 'stars', style, beatRef: _be
       } catch (e) {
         console.error('[BackgroundCanvas] Render error:', e)
       }
+      animId = requestAnimationFrame(tick)
     }
     animId = requestAnimationFrame(tick)
     return () => {
