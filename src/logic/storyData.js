@@ -215,7 +215,7 @@ export const STORY_CHAPTERS = [
       },
       {
         id: 'l5', title: 'TRANSCENDENCE', subtitle: 'Beyond the last line.',
-        bgType: 'ritual', bpm: 200, gravityMult: 2.60, targetLines: 56, easyTargetLines: 40, isBoss: true, themeUnlock: 'theme_circuit', mechanic: 'invisible_board',
+        bgType: 'ritual', bpm: 200, gravityMult: 1.35, targetLines: 56, easyTargetLines: 40, isBoss: true, themeUnlock: 'theme_circuit', mechanic: 'invisible_board',
         storyBefore: 'FINAL LEVEL — This is the last game. There is no world after this. Only the clearing of lines, forever, until you understand.',
         storyAfter: 'COMPLETE — You put down the last piece. The music stops. For one perfect moment, the board is clear.',
       },
@@ -229,7 +229,7 @@ export const STORY_CHAPTERS = [
     levels: [
       {
         id: 'l1', title: 'SYSTEM OVERRIDE', subtitle: 'Wake up.',
-        bgType: 'matrix', bpm: 220, gravityMult: 2.00, targetLines: 70, easyTargetLines: 40, isBoss: true, mechanic: 'glitch',
+        bgType: 'matrix', bpm: 220, gravityMult: 1.10, targetLines: 70, easyTargetLines: 70, isBoss: true, mechanic: 'glitch',
         storyBefore: 'SECRET — Beyond convergence, you glimpse the code beneath the worlds. It beckons you to rewrite it.',
         storyAfter: 'You leave fingerprints on the source. The pattern learns your name.',
       },

@@ -6,51 +6,75 @@
 
 // ── Track catalogue ───────────────────────────────────────────────────────────
 const TRACK_DEFS = [
-  // ── earth ──────────────────────────────────────────────────────────────────
-  { file: 'Bedrock_Authority_earth',       gain: 0.85 },  //  0  ch1
-  { file: 'Bedrock_Spine_earth',           gain: 0.85 },  //  1  ch1
-  { file: 'Clay_Turned_to_Stone_earth',    gain: 0.85 },  //  2  ch1
-  // ── water ──────────────────────────────────────────────────────────────────
-  { file: 'Tidal_Pulse_water',             gain: 0.85 },  //  3  ch2
-  { file: 'Beneath_The_Current_water',     gain: 0.85 },  //  4  ch2
-  { file: 'Where_Shadows_Grow_water',      gain: 0.85 },  //  5  ch2
-  // ── fire ───────────────────────────────────────────────────────────────────
-  { file: 'Amber_Haze_fire',               gain: 0.85 },  //  6  ch3
-  { file: 'Heat_of_the_Closing_Gate_fire', gain: 0.85 },  //  7  ch3
-  { file: 'The_Final_Ascent_fire',         gain: 0.85 },  //  8  ch3
-  { file: 'Final_Boss_Pursuit_fire',       gain: 0.85 },  //  9  ch3
-  // ── air ────────────────────────────────────────────────────────────────────
-  { file: 'The_Velvet_Blue_air',           gain: 0.85 },  // 10  ch4
-  { file: 'Horizon_Drift_air',             gain: 0.85 },  // 11  ch4
-  { file: 'Weightless_Ascent_air',         gain: 0.85 },  // 12  ch4
-  // ── cosmos ─────────────────────────────────────────────────────────────────
-  { file: 'The_Last_Orbit_cosmos',         gain: 0.85 },  // 13  ch5
-  { file: 'Logic_Into_Trust_cosmos',       gain: 0.85 },  // 14  ch5
-  { file: 'The_Center_Pulls_cosmos',       gain: 0.85 },  // 15  ch5
-  { file: 'One_Last_Arc_cosmos',           gain: 0.85 },  // 16  ch5
-  { file: 'One_Last_Arc_p2_cosmos',        gain: 0.85 },  // 17  ch5
-  { file: 'Celestial_Math_cosmos',         gain: 0.85 },  // 18  ch5
-  // ── void ───────────────────────────────────────────────────────────────────
-  { file: 'Gravity_s_Last_Pull_void',      gain: 0.85 },  // 19  ch6
-  { file: 'The_Loop_Resolves_void',        gain: 0.85 },  // 20  ch6
-  // ── convergence ────────────────────────────────────────────────────────────
-  { file: 'Alpha_and_Omega_convergence',   gain: 0.85 },  // 21  ch7
-  { file: 'Pattern_Lock_convergence',      gain: 0.85 },  // 22  ch7
-  { file: 'The_Final_Arc_convergence',     gain: 0.85 },  // 23  ch7
-  { file: 'Ultra_Mind_convergence',        gain: 0.85 },  // 24  ch7
-  { file: 'Geometry_Bends_convergence',    gain: 0.85 },  // 25  ch7
+  // ── earth (ch1) ────────────────────────────────────────────────────────────
+  { file: 'Bedrock_Authority_earth',             gain: 0.85 },  //  0  ch1
+  { file: 'Bedrock_Spine_earth',                 gain: 0.85 },  //  1  ch1
+  { file: 'Clay_Turned_to_Stone_earth',          gain: 0.85 },  //  2  ch1
+  { file: 'Clay_and_Iron_earth',                 gain: 0.85 },  //  3  ch1
+  // ── water (ch2) ────────────────────────────────────────────────────────────
+  { file: 'Tidal_Pulse_water',                   gain: 0.85 },  //  4  ch2
+  { file: 'Beneath_The_Current_water',           gain: 0.85 },  //  5  ch2
+  { file: 'Where_Shadows_Grow_water',            gain: 0.85 },  //  6  ch2
+  { file: 'Where_Stones_Become_Streams_water',   gain: 0.85 },  //  7  ch2
+  // ── fire (ch3) ─────────────────────────────────────────────────────────────
+  { file: 'Amber_Haze_fire',                     gain: 0.85 },  //  8  ch3
+  { file: 'Heat_of_the_Closing_Gate_fire',       gain: 0.85 },  //  9  ch3
+  { file: 'The_Final_Ascent_fire',               gain: 0.85 },  // 10  ch3
+  { file: 'Final_Boss_Pursuit_fire',             gain: 0.85 },  // 11  ch3
+  { file: 'White_Hot_Velocity_fire',             gain: 0.85 },  // 12  ch3
+  // ── air (ch4) ──────────────────────────────────────────────────────────────
+  { file: 'The_Velvet_Blue_air',                 gain: 0.85 },  // 13  ch4
+  { file: 'Horizon_Drift_air',                   gain: 0.85 },  // 14  ch4
+  { file: 'Weightless_Ascent_air',               gain: 0.85 },  // 15  ch4
+  { file: 'Velocity_Of_A_Cloud_air',             gain: 0.85 },  // 16  ch4
+  // ── cosmos (ch5) ───────────────────────────────────────────────────────────
+  { file: 'The_Last_Orbit_cosmos',               gain: 0.85 },  // 17  ch5
+  { file: 'Logic_Into_Trust_cosmos',             gain: 0.85 },  // 18  ch5
+  { file: 'The_Center_Pulls_cosmos',             gain: 0.85 },  // 19  ch5
+  { file: 'One_Last_Arc_cosmos',                 gain: 0.85 },  // 20  ch5
+  { file: 'One_Last_Arc_p2_cosmos',              gain: 0.85 },  // 21  ch5
+  { file: 'Celestial_Math_cosmos',               gain: 0.85 },  // 22  ch5
+  { file: 'The_View_From_Orbit_cosmos',          gain: 0.85 },  // 23  ch5
+  // ── void (ch6) ─────────────────────────────────────────────────────────────
+  { file: 'Gravity_s_Last_Pull_void',            gain: 0.85 },  // 24  ch6
+  { file: 'The_Loop_Resolves_void',              gain: 0.85 },  // 25  ch6
+  { file: 'Broken_Glass_Logic_void',             gain: 0.85 },  // 26  ch6
+  { file: 'Logic_In_Retreat_void',               gain: 0.85 },  // 27  ch6
+  // ── convergence (ch7) ──────────────────────────────────────────────────────
+  { file: 'Alpha_and_Omega_convergence',         gain: 0.85 },  // 28  ch7
+  { file: 'Pattern_Lock_convergence',            gain: 0.85 },  // 29  ch7
+  { file: 'The_Final_Arc_convergence',           gain: 0.85 },  // 30  ch7
+  { file: 'Ultra_Mind_convergence',              gain: 0.85 },  // 31  ch7
+  { file: 'Geometry_Bends_convergence',          gain: 0.85 },  // 32  ch7
+  { file: 'Aligning_the_Lattice_convergence',    gain: 0.85 },  // 33  ch7
+  { file: 'Grid_Collapse_convergence',           gain: 0.85 },  // 34  ch7
+  { file: 'The_Final_Alignment_convergence',     gain: 0.85 },  // 35  ch7
+  // ── matrix (ch8) ───────────────────────────────────────────────────────────
+  { file: 'Obsidian_Interface_matrix',           gain: 0.85 },  // 36  ch8
+  { file: 'One_Final_Gate_matrix',               gain: 0.85 },  // 37  ch8
+  { file: 'Protocol_Termination_matrix',         gain: 0.85 },  // 38  ch8
 ]
 
-// Chapter → pool of track indices. A random one is chosen at chapter entry;
+// Chapter → pool of track indices. A random track is chosen at chapter entry;
 // the same track continues across level transitions within the same chapter.
+// After the full playlist loops once, the previous chapter's tracks are added
+// so the music never runs dry on longer sessions.
 const CHAPTER_POOLS = {
-  ch1: [0, 1, 2],
-  ch2: [3, 4, 5],
-  ch3: [6, 7, 8, 9],
-  ch4: [10, 11, 12],
-  ch5: [13, 14, 15, 16, 17, 18],
-  ch6: [19, 20],
-  ch7: [21, 22, 23, 24, 25],
+  ch1: [0, 1, 2, 3],
+  ch2: [4, 5, 6, 7],
+  ch3: [8, 9, 10, 11, 12],
+  ch4: [13, 14, 15, 16],
+  ch5: [17, 18, 19, 20, 21, 22, 23],
+  ch6: [24, 25, 26, 27],
+  ch7: [28, 29, 30, 31, 32, 33, 34, 35],
+  ch8: [36, 37, 38],
+}
+
+// When a chapter's playlist has been fully cycled once, fall back to the
+// previous chapter's pool to extend the music without repetition.
+const CHAPTER_FALLBACK = {
+  ch2: 'ch1', ch3: 'ch2', ch4: 'ch3',
+  ch5: 'ch4', ch6: 'ch5', ch7: 'ch6', ch8: 'ch7',
 }
 
 // URLs resolved at Vite parse time (bundled as assets)
@@ -72,6 +96,7 @@ export class StoryMusicManager {
     this._playlist   = []   // array of track indices for current chapter (rotated from a random start)
     this._playlistPos= 0    // position within playlist
     this._shuffleEachLoop = true
+    this._fallbackAdded = false  // true once previous-chapter tracks are merged in
     this._xFadeTimer = null
     this._xfadeSec = 1.6
     this._buffers    = new Array(TRACK_URLS.length).fill(null)
@@ -139,6 +164,7 @@ export class StoryMusicManager {
     }
     this._playlistPos = 0
     this._chapterId = chapterId
+    this._fallbackAdded = false
     this._currentIdx = this._playlist[this._playlistPos]
   }
 
@@ -207,13 +233,28 @@ export class StoryMusicManager {
   _advance(crossfade = false) {
     if (!this._playlist.length) return
     this._playlistPos = (this._playlistPos + 1) % this._playlist.length
-    if (this._playlistPos === 0 && this._shuffleEachLoop && this._playlist.length > 1) {
-      // Fisher-Yates shuffle, then keep current position at 0
-      for (let i = this._playlist.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [this._playlist[i], this._playlist[j]] = [this._playlist[j], this._playlist[i]]
+    if (this._playlistPos === 0) {
+      // First full loop complete — merge in the previous chapter's tracks so the
+      // playlist never repeats the same songs without variety.
+      if (!this._fallbackAdded) {
+        const prevChId = CHAPTER_FALLBACK[this._chapterId]
+        const prevPool = prevChId && CHAPTER_POOLS[prevChId]
+        if (prevPool && prevPool.length > 0) {
+          // Append previous chapter tracks (avoid duplicates)
+          const existing = new Set(this._playlist)
+          const newTracks = prevPool.filter(idx => !existing.has(idx))
+          this._playlist.push(...newTracks)
+          this._fallbackAdded = true
+        }
       }
-      this._playlistPos = 0
+      if (this._shuffleEachLoop && this._playlist.length > 1) {
+        // Fisher-Yates shuffle, then keep current position at 0
+        for (let i = this._playlist.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [this._playlist[i], this._playlist[j]] = [this._playlist[j], this._playlist[i]]
+        }
+        this._playlistPos = 0
+      }
     }
     this._currentIdx = this._playlist[this._playlistPos]
     if (!crossfade || !this._source || !this._trackGain) {

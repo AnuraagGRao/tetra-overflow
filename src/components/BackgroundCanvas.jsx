@@ -374,18 +374,22 @@ function makeParticle(bgType, w, h, init=false) {
     }
     case 'matrix': {
       const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%*+-<>[]{}=/\\|:;'
+      const words = ['TETRA', 'OVERFLOW', 'ULTRA', 'MATRIX', 'SYS', 'VOID', 'CODE', 'TETRA OVERFLOW ULTRA']
+      const isWord = Math.random() < 0.14
       return {
         x,
         y:-(25+Math.random()*h),
         vx:0,
-        vy:3.2+Math.random()*5.5,
+        vy:(isWord ? 2.2 : 3.6) + Math.random() * (isWord ? 2.8 : 5.8),
         r:0,
         char: chars[Math.floor(Math.random()*chars.length)],
-        hue:115+Math.random()*16,
+        word: isWord ? words[Math.floor(Math.random() * words.length)] : null,
+        hue:110+Math.random()*20,
         life:1,
         decay:0,
-        fontSize:11+Math.random()*11,
-        lead:Math.random()<0.18,
+        fontSize:(isWord ? 8 : 11) + Math.random() * (isWord ? 6 : 12),
+        lead:Math.random()<0.24,
+        flicker:Math.random() * Math.PI * 2,
       }
     }
     case 'grid':
@@ -442,11 +446,12 @@ function makeParticle(bgType, w, h, init=false) {
 }
 
 function createParticles(bgType, w, h, densityScale = 1) {
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
   const counts = {
-    lava: 180, ember: 150, inferno: 220, storm: 240, quake: 130, volcano: 170,
-    ocean: 70, bubbles: 120, glacier: 120, clouds: 54, deepsea: 60,
-    stars: 340, nebula: 150, warp: 130, blackhole: 150, abyss: 120,
-    matrix: 180, grid: 150, crystal: 150, forest: 100, aurora: 150, oiia: 80,
+    lava: 180, ember: 150, inferno: 220, storm: isMobile ? 80 : 240, quake: 130, volcano: 170,
+    ocean: isMobile ? 40 : 70, bubbles: 80, glacier: 80, clouds: 54, deepsea: 60,
+    stars: 340, nebula: 100, warp: 80, blackhole: 100, abyss: 80,
+    matrix: 200, grid: 100, crystal: 100, forest: 60, aurora: 100, oiia: 50,
   }
   const n = Math.max(8, Math.round((counts[bgType] || 80) * densityScale))
   return Array.from({ length:n }, () => makeParticle(bgType, w, h, true))
@@ -469,7 +474,10 @@ const detectLowEndDevice = () => {
   const coarsePointer = typeof matchMedia === 'function' ? matchMedia('(pointer: coarse)').matches : false
   const smallViewport = typeof window !== 'undefined' ? (window.innerWidth <= 900 || window.innerHeight <= 700) : false
   const saveData = Boolean(navigator.connection?.saveData)
-  return saveData || (hc > 0 && hc <= 4) || (dm > 0 && dm <= 4) || (coarsePointer && smallViewport)
+  const slowConnection = navigator.connection?.effectiveType === '2g' || navigator.connection?.effectiveType === '3g'
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+  const lowGPU = typeof navigator !== 'undefined' && navigator.gpu === undefined
+  return saveData || (hc > 0 && hc <= 4) || (dm > 0 && dm <= 4) || (coarsePointer && smallViewport) || (isMobile && slowConnection) || (isMobile && lowGPU)
 }
 
 // ── Particle update — returns true if dead (should respawn) ──────────────────
@@ -590,21 +598,32 @@ function drawParticle(ctx, p, bgType, w, h, beat = 0) {
 
   // Matrix
   if (bgType === 'matrix') {
-    const alpha = p.lead ? 0.95 : (0.35 + Math.random() * 0.28)
+    p.flicker = (p.flicker || 0) + 0.04
+    const pulse = 0.35 + 0.65 * Math.abs(Math.sin(p.flicker))
+    const alpha = p.lead ? (0.85 + pulse * 0.1) : (0.24 + pulse * 0.42)
     ctx.globalAlpha = alpha
     if (p.lead) {
       ctx.shadowColor = '#9dff9d'
       ctx.shadowBlur = 10 + beat * 10
       ctx.fillStyle = '#d9ffd9'
     } else {
-      ctx.fillStyle = `hsl(${p.hue}, 95%, ${38 + Math.random()*17}%)`
+      ctx.fillStyle = `hsl(${p.hue}, 95%, ${35 + pulse * 28}%)`
     }
     ctx.font = `${Math.floor(p.fontSize)}px "Courier New", monospace`
-    if (Math.random() < 0.035) {
+    if (!p.word && Math.random() < 0.05) {
       const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%*+-<>[]{}=/\\|:;'
       p.char = chars[Math.floor(Math.random() * chars.length)]
     }
-    ctx.fillText(p.char, p.x, p.y); ctx.restore(); return
+    if (p.word) {
+      ctx.fillText(p.word, p.x, p.y)
+      if (p.lead) {
+        ctx.globalAlpha *= 0.34
+        ctx.fillText(p.word, p.x, p.y - (8 + beat * 4))
+      }
+    } else {
+      ctx.fillText(p.char, p.x, p.y)
+    }
+    ctx.restore(); return
   }
 
   if (bgType === 'grid') {
@@ -1451,11 +1470,36 @@ export default function BackgroundCanvas({ bgType = 'stars', style, beatRef: _be
     if (activeType) return // Vanta handles rendering
     const canvas = canvasRef.current
     if (!canvas) return
-    const ctx = canvas.getContext('2d')
+    let ctx = null
+    try {
+      ctx = canvas.getContext('2d', { alpha: true, willReadFrequently: false })
+      if (!ctx) throw new Error('Canvas context unavailable')
+    } catch (e) {
+      console.warn('[BackgroundCanvas] Failed to get canvas context:', e)
+      return
+    }
     let animId
     let particles = []
     const startTime = performance.now()
     let lastTime = startTime
+    let contextLost = false
+
+    // Handle canvas context loss (especially important on mobile)
+    const handleContextLoss = () => {
+      contextLost = true
+      console.warn('[BackgroundCanvas] Canvas context lost')
+    }
+    const handleContextRestoration = () => {
+      contextLost = false
+      try {
+        ctx = canvas.getContext('2d', { alpha: true, willReadFrequently: false })
+        console.log('[BackgroundCanvas] Canvas context restored')
+      } catch (e) {
+        console.warn('[BackgroundCanvas] Failed to restore context:', e)
+      }
+    }
+    canvas.addEventListener('webglcontextlost', handleContextLoss)
+    canvas.addEventListener('webglcontextrestored', handleContextRestoration)
 
     const resize = () => {
       canvas.width  = canvas.offsetWidth  || window.innerWidth
@@ -1466,106 +1510,119 @@ export default function BackgroundCanvas({ bgType = 'stars', style, beatRef: _be
     window.addEventListener('resize', resize)
 
     const tick = (now) => {
-      const baseDt = Math.min(now-lastTime, 50)
-      lastTime = now
-      const t = now-startTime
-      const beat = Math.max(0, Math.min(1.25, Number(_beatRef?.current || 0)))
-      const b = Math.max(40, Math.min(260, Number(bpm) || 120))
-      const bpmPulse = Math.pow((Math.sin((now / 1000) * (b / 60) * Math.PI * 2) + 1) / 2, 2)
-      comboBoostRef.current *= Math.pow(0.94, baseDt / 16)
-      const comboPulse = clamp(comboBoostRef.current, 0, 1.1)
-      const energy = Math.min(2.2, Math.max(beat, bpmPulse * 0.65) + comboPulse * 0.9)
-      const dt = baseDt * (0.9 + energy * 0.6)
-      const w = canvas.width, hh = canvas.height
-
-      const burst = clearBurstRef.current
-      if (burst.pending > 0 && particles.length > 0) {
-        const burstPower = clamp(burst.power, 0.2, 2.8)
-        const baseBudget = particleDensityScale < 1 ? 8 : 14
-        const spawnBudget = Math.max(3, Math.round((baseBudget + burstPower * 5) * (baseDt / 16)))
-        const spawnNow = Math.min(burst.pending, spawnBudget)
-        const power = burstPower
-        for (let i = 0; i < spawnNow; i++) {
-          const p = makeParticle(bgType, w, hh, false)
-          p.x = w * (0.2 + Math.random() * 0.6)
-          p.y = hh * (0.2 + Math.random() * 0.65)
-          if (typeof p.vx === 'number') p.vx = p.vx * (1.2 + power * 0.45) + (Math.random() - 0.5) * (1.1 + power * 1.3)
-          if (typeof p.vy === 'number') p.vy = p.vy * (1.15 + power * 0.35) - Math.random() * (0.7 + power * 1.2)
-          if (typeof p.life === 'number') p.life = Math.min(1.25, Math.max(0.72, p.life + 0.2))
-          if (typeof p.decay === 'number' && p.decay > 0) p.decay *= 0.84
-          particles[(Math.random() * particles.length) | 0] = p
-        }
-        burst.pending = Math.max(0, burst.pending - spawnNow)
+      // Bail out if context is lost
+      if (contextLost) {
+        animId = requestAnimationFrame(tick)
+        return
       }
-      burst.power *= Math.pow(0.9, baseDt / 16)
+      try {
+        const baseDt = Math.min(now-lastTime, 50)
+        lastTime = now
+        const t = now-startTime
+        const beat = Math.max(0, Math.min(1.25, Number(_beatRef?.current || 0)))
+        const b = Math.max(40, Math.min(260, Number(bpm) || 120))
+        const bpmPulse = Math.pow((Math.sin((now / 1000) * (b / 60) * Math.PI * 2) + 1) / 2, 2)
+        comboBoostRef.current *= Math.pow(0.94, baseDt / 16)
+        const comboPulse = clamp(comboBoostRef.current, 0, 1.1)
+        const energy = Math.min(2.2, Math.max(beat, bpmPulse * 0.65) + comboPulse * 0.9)
+        const dt = baseDt * (0.9 + energy * 0.6)
+        const w = canvas.width, hh = canvas.height
 
-      ctx.globalAlpha = 1
-      ctx.fillStyle = BG_BASE[bgType] || '#000'
-      ctx.fillRect(0,0,w,hh)
+        const burst = clearBurstRef.current
+        if (burst.pending > 0 && particles.length > 0) {
+          const burstPower = clamp(burst.power, 0.2, 2.8)
+          const baseBudget = particleDensityScale < 1 ? 8 : 14
+          const spawnBudget = Math.max(3, Math.round((baseBudget + burstPower * 5) * (baseDt / 16)))
+          const spawnNow = Math.min(burst.pending, spawnBudget)
+          const power = burstPower
+          for (let i = 0; i < spawnNow; i++) {
+            const p = makeParticle(bgType, w, hh, false)
+            p.x = w * (0.2 + Math.random() * 0.6)
+            p.y = hh * (0.2 + Math.random() * 0.65)
+            if (typeof p.vx === 'number') p.vx = p.vx * (1.2 + power * 0.45) + (Math.random() - 0.5) * (1.1 + power * 1.3)
+            if (typeof p.vy === 'number') p.vy = p.vy * (1.15 + power * 0.35) - Math.random() * (0.7 + power * 1.2)
+            if (typeof p.life === 'number') p.life = Math.min(1.25, Math.max(0.72, p.life + 0.2))
+            if (typeof p.decay === 'number' && p.decay > 0) p.decay *= 0.84
+            particles[(Math.random() * particles.length) | 0] = p
+          }
+          burst.pending = Math.max(0, burst.pending - spawnNow)
+        }
+        burst.power *= Math.pow(0.9, baseDt / 16)
+
+        ctx.globalAlpha = 1
+        ctx.fillStyle = BG_BASE[bgType] || '#000'
+        ctx.fillRect(0,0,w,hh)
 
       // Special: Nyancat background — rainbow diagonals + cat sprite
-      if (bgType === 'nyancat') {
-        // Rainbow bands moving diagonally
-        const bands = ['#ff0000','#ff7f00','#ffff00','#00ff00','#0000ff','#4b0082','#8f00ff']
-        const speed = 0.08
-        const off = (t*speed) % 40
-        ctx.save()
-        ctx.globalAlpha = 0.9
-        for (let i= -w; i < w*2; i += 40) {
-          const x = i - off
-          for (let b=0;b<bands.length;b++) {
-            ctx.fillStyle = bands[b]
-            ctx.fillRect(x + b*5, 0, 5, hh)
+        if (bgType === 'nyancat') {
+          // Rainbow bands moving diagonally
+          const bands = ['#ff0000','#ff7f00','#ffff00','#00ff00','#0000ff','#4b0082','#8f00ff']
+          const speed = 0.08
+          const off = (t*speed) % 40
+          ctx.save()
+          ctx.globalAlpha = 0.9
+          for (let i= -w; i < w*2; i += 40) {
+            const x = i - off
+            for (let b=0;b<bands.length;b++) {
+              ctx.fillStyle = bands[b]
+              ctx.fillRect(x + b*5, 0, 5, hh)
+            }
+          }
+          ctx.globalAlpha = 1
+          ctx.restore()
+          // Small cat sprite gliding with gentle bob
+          if (!nyanImgRef.current) { const img = new Image(); img.src = catImageUrl; nyanImgRef.current = img }
+          const img = nyanImgRef.current
+          if (img && img.complete) {
+            const pathY = hh*0.4 + Math.sin(t*0.0013)*hh*0.05
+            const pathX = (t*0.12) % (w+120) - 120
+            const iw = 96, ih = 96
+            try { ctx.drawImage(img, 0, 0, img.width, img.height, pathX, pathY, iw, ih) } catch (e) { console.debug('[BackgroundCanvas] Nyan draw error:', e) }
           }
         }
-        ctx.globalAlpha = 1
-        ctx.restore()
-        // Small cat sprite gliding with gentle bob
-        if (!nyanImgRef.current) { const img = new Image(); img.src = catImageUrl; nyanImgRef.current = img }
-        const img = nyanImgRef.current
-        if (img && img.complete) {
-          const pathY = hh*0.4 + Math.sin(t*0.0013)*hh*0.05
-          const pathX = (t*0.12) % (w+120) - 120
-          const iw = 96, ih = 96
-          try { ctx.drawImage(img, 0, 0, img.width, img.height, pathX, pathY, iw, ih) } catch {}
-        }
-      }
 
-      // Draw custom image layer (cover) if available
-      if (bgType === 'custom' && customImgRef.current && customImgRef.current.complete) {
-        try {
-          const img = customImgRef.current
-          const iw = img.naturalWidth || img.width
-          const ih = img.naturalHeight || img.height
-          if (iw && ih) {
-            const scale = Math.max(w/iw, hh/ih)
-            const dw = iw*scale, dh = ih*scale
-            const dx = (w - dw)/2, dy = (hh - dh)/2
-            ctx.globalAlpha = 0.96
-            ctx.drawImage(img, dx, dy, dw, dh)
-            ctx.globalAlpha = 1
+        // Draw custom image layer (cover) if available
+        if (bgType === 'custom' && customImgRef.current && customImgRef.current.complete) {
+          try {
+            const img = customImgRef.current
+            const iw = img.naturalWidth || img.width
+            const ih = img.naturalHeight || img.height
+            if (iw && ih) {
+              const scale = Math.max(w/iw, hh/ih)
+              const dw = iw*scale, dh = ih*scale
+              const dx = (w - dw)/2, dy = (hh - dh)/2
+              ctx.globalAlpha = 0.96
+              ctx.drawImage(img, dx, dy, dw, dh)
+              ctx.globalAlpha = 1
+            }
+          } catch (e) { console.debug('[BackgroundCanvas] Custom image draw error:', e) }
+        }
+
+        if (bgType !== 'nyancat' && bgType !== 'custom') {
+          ctx.globalAlpha = 1
+          drawAmbient(ctx, bgType, w, hh, t)
+          ctx.globalAlpha = 1
+          for (let i=particles.length-1;i>=0;i--) {
+            const dead = updateParticle(particles[i], bgType, w, hh, dt)
+            if (dead) particles[i] = makeParticle(bgType, w, hh, false)
+            drawParticle(ctx, particles[i], bgType, w, hh, energy)
           }
-        } catch {}
-      }
-
-      if (bgType !== 'nyancat' && bgType !== 'custom') {
-        ctx.globalAlpha = 1
-        drawAmbient(ctx, bgType, w, hh, t)
-        ctx.globalAlpha = 1
-        for (let i=particles.length-1;i>=0;i--) {
-          const dead = updateParticle(particles[i], bgType, w, hh, dt)
-          if (dead) particles[i] = makeParticle(bgType, w, hh, false)
-          drawParticle(ctx, particles[i], bgType, w, hh, energy)
+          ctx.globalAlpha = 1
+          drawForeground(ctx, bgType, w, hh, t, energy)
         }
-        ctx.globalAlpha = 1
-        drawForeground(ctx, bgType, w, hh, t, energy)
-      }
 
-      ctx.globalAlpha = 1
-      animId = requestAnimationFrame(tick)
+        ctx.globalAlpha = 1
+      } catch (e) {
+        console.error('[BackgroundCanvas] Render error:', e)
+      }
     }
     animId = requestAnimationFrame(tick)
-    return () => { cancelAnimationFrame(animId); window.removeEventListener('resize', resize) }
+    return () => {
+      cancelAnimationFrame(animId)
+      window.removeEventListener('resize', resize)
+      canvas.removeEventListener('webglcontextlost', handleContextLoss)
+      canvas.removeEventListener('webglcontextrestored', handleContextRestoration)
+    }
   }, [bgType, activeType, bpm, _beatRef, particleDensityScale])
 
   const scanlinesOn = selectedEffects.includes('effect_retro_crt')

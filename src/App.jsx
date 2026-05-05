@@ -58,6 +58,7 @@ import SettingsPage from './components/SettingsPage'
 import LoadingScreen from './components/LoadingScreen'
 import GlitchOverlay from './components/GlitchOverlay'
 import SynesthesiaMotionLayer from './components/SynesthesiaMotionLayer'
+import { hardResetAndReload } from './logic/hardReset'
 import { useTheme } from './contexts/ThemeContext'
 import { useAuth } from './contexts/AuthContext'
 import { MusicManager } from './audio/musicManager'
@@ -2050,20 +2051,7 @@ export default function App() {
   }, [refreshNowPlaying])
 
   const hardRefreshApp = useCallback(async () => {
-    try {
-      if ('serviceWorker' in navigator) {
-        const regs = await navigator.serviceWorker.getRegistrations()
-        await Promise.all(regs.map((r) => r.unregister()))
-      }
-      if ('caches' in window) {
-        const keys = await caches.keys()
-        await Promise.all(keys.map((k) => caches.delete(k)))
-      }
-    } catch (e) {
-      console.warn('Cache clear failed:', e)
-    } finally {
-      window.location.reload()
-    }
+    await hardResetAndReload()
   }, [])
 
   useEffect(() => {

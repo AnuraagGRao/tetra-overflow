@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import SettingsPage from '../components/SettingsPage'
+import { hardResetAndReload } from '../logic/hardReset'
 import leaderboardIconUrl from '../icons/leaderboard-button.png'
 import playIconUrl from '../icons/play-button.png'
 import settingsIconUrl from '../icons/settings-button.png'
@@ -192,6 +193,10 @@ export default function MainMenuPage() {
     return () => document.removeEventListener('mousedown', close)
   }, [showDrop])
 
+  const handleHardRefresh = useCallback(async () => {
+    await hardResetAndReload()
+  }, [])
+
   return (
     <div style={{ position: 'fixed', inset: 0, background: '#0a0a14', display: 'flex', flexDirection: 'column', fontFamily: '"Courier New", monospace', overflow: 'hidden' }}>
       {/* Animated background */}
@@ -303,6 +308,7 @@ export default function MainMenuPage() {
         <SettingsPage
           config={config}
           onConfig={setConfig}
+          onClearCache={handleHardRefresh}
           onClose={() => setShowSettings(false)}
         />
       )}

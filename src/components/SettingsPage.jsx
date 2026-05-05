@@ -188,22 +188,24 @@ export default function SettingsPage({ config, onConfig, onClose, onClearCache }
         </div>
 
         {/* Update / cache tools */}
-        <div className="settings-section">
-          <div className="settings-section-title">Update</div>
-          <div className="settings-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
-            <span className="settings-label" style={{ fontSize: '0.68rem', color: '#888' }}>
-              If an update looks stale, clear cached assets and reload.
-            </span>
-            <button
-              type="button"
-              className="about-install-btn"
-              onClick={() => onClearCache?.()}
-              style={{ marginTop: 0, width: '100%' }}
-            >
-              Clear Cache + Reload
-            </button>
+        {typeof onClearCache === 'function' && (
+          <div className="settings-section">
+            <div className="settings-section-title">Update</div>
+            <div className="settings-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+              <span className="settings-label" style={{ fontSize: '0.68rem', color: '#888' }}>
+                If updates look stale, run a hard reset (cache, storage, cookies) and reload.
+              </span>
+              <button
+                type="button"
+                className="about-install-btn"
+                onClick={() => onClearCache?.()}
+                style={{ marginTop: 0, width: '100%' }}
+              >
+                Hard Reset + Reload
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         <button type="button" className="about-install-btn" onClick={onClose}>
           Done

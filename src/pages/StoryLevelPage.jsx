@@ -16,6 +16,8 @@ import BackgroundCanvas from '../components/BackgroundCanvas'
 import SynesthesiaMotionLayer from '../components/SynesthesiaMotionLayer'
 import { StoryMusicManager } from '../audio/storyMusicManager'
 import { emitSynesthesia, SYNESTHESIA_EVENT } from '../logic/synesthesiaBus'
+import { hardResetAndReload } from '../logic/hardReset'
+import GlitchOverlay from '../components/GlitchOverlay'
 
 // Uses shared mapping in logic/themeMappings.js
 
@@ -80,7 +82,7 @@ function PieceMini({ type, pieceTheme, size = 11 }) {
 // ─── Minimal game loop hook ────────────────────────────────────────────────────
 // levelStartLinesRef: ref to the engine line count when this level started
 // levelKey: changes whenever the level advances — resets the completion guard
-function useStoryGameLoop(engine, targetLines, levelStartLinesRef, levelKey, onComplete, storyMusicRef, beatRef) {
+function useStoryGameLoop(engine, targetLines, levelStartLinesRef, levelKey, onComplete, storyMusicRef, beatRef, active = true) {
   const heldRef   = useRef({ left: false, right: false, softDrop: false })
   const actionRef = useRef({})
   const [state, setState] = useState(() => engine.getState())
@@ -159,6 +161,12 @@ function useStoryGameLoop(engine, targetLines, levelStartLinesRef, levelKey, onC
     prevPieceTypeRef.current = null
     let frameId, lastTime = performance.now()
     const frame = (now) => {
+      if (!active) {
+        setState(engine.getState())
+        frameId = requestAnimationFrame(frame)
+        return
+      }
+
       const dt = Math.min(now - lastTime, MAX_FRAME_MS); lastTime = now
 
       const actions = actionRef.current
@@ -192,6 +200,7 @@ function useStoryGameLoop(engine, targetLines, levelStartLinesRef, levelKey, onC
           lines: ns.lines,
           linesThisLevel,
           gameOver: ns.gameOver,
+          gameOverReason: ns.gameOverReason,
           tSpins: tSpinsRef.current,
           iPieceLines: iPieceLinesRef.current,
           piecesPlaced: piecesPlacedRef.current,
@@ -207,13 +216,13 @@ function useStoryGameLoop(engine, targetLines, levelStartLinesRef, levelKey, onC
     }
     frameId = requestAnimationFrame(frame)
     return () => cancelAnimationFrame(frameId)
-  }, [engine, targetLines, levelKey, onComplete]) // eslint-disable-line
+  }, [engine, targetLines, levelKey, onComplete, active]) // eslint-disable-line
 
   return { state, paused, triggerAction, handlePress, handleRelease, togglePause }
 }
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
-const PHASE = { STORY: 'story', GAME: 'game', TRANSITION: 'transition', COMPLETE: 'complete', FAIL: 'fail', ENDING: 'ending' }
+const PHASE = { STORY: 'story', GAME: 'game', TRANSITION: 'transition', COMPLETE: 'complete', FAIL: 'fail', ENDING: 'ending', MATRIX_ASCENT: 'matrix-ascent', MATRIX_END: 'matrix-end' }
 
 function MediaControls({ storyMusicRef, chapterColor }) {
   const [_bump, setBump] = useState(0)
@@ -257,14 +266,19 @@ export default function StoryLevelPage() {
   const found     = useMemo(() => findLevel(currentChapterId, currentLevelId), [currentChapterId, currentLevelId])
   const nextLevel = useMemo(() => getNextLevel(currentChapterId, currentLevelId), [currentChapterId, currentLevelId])
   // Compute piece theme early so effects and callbacks can safely reference it
-  const pieceTheme = BG_TYPE_TO_PIECE_THEME[found?.level?.bgType] ?? 'classic'
+  const pieceTheme = currentChapterId === 'ch8'
+    ? 'terminal'
+    : (BG_TYPE_TO_PIECE_THEME[found?.level?.bgType] ?? 'classic')
 
   const [phase,      setPhase]      = useState(PHASE.STORY)
   const [finalLines, setFinalLines] = useState(0)
   const [finalScore, setFinalScore] = useState(0)
+  const [finalReadyToTopOut, setFinalReadyToTopOut] = useState(false)
   const [saving,     setSaving]     = useState(false)
   const [storyCountdown, setStoryCountdown] = useState(null) // auto-begin countdown
   const [transitionCountdown, setTransitionCountdown] = useState(null) // countdown to auto-advance
+  const [matrixCountdown, setMatrixCountdown] = useState(null)
+  const [glitchActive, setGlitchActive] = useState(false) // glitch effect when lines >= 40 in Ch7L5
   const transitionAdvanceRef = useRef(null) // stores the advance fn so CONTINUE button can call it
   const [focus, setFocus] = useState(() => { try { return localStorage.getItem('focus-mode') === '1' } catch { return false } })
   const [easyMode, setEasyMode] = useState(() => { try { return localStorage.getItem('story-easy') === '1' } catch { return false } })
@@ -283,6 +297,8 @@ export default function StoryLevelPage() {
   const [_musicTick, _setMusicTick] = useState(0) // force UI refresh on media actions
   const [storyMuted, setStoryMuted] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const finalClearSavedRef = useRef(false)
+  const isFinalConvergence = currentChapterId === 'ch7' && currentLevelId === 'l5'
   const CONFIG_KEY = 'tetris-config'
   const DEFAULT_CONFIG = { sfxEnabled: true, hapticEnabled: true, musicVolume: 1.0, sfxVolume: 2.0, das: 110, arr: 25, showOnScreenControls: false }
   const loadConfig = () => { try { return { ...DEFAULT_CONFIG, ...JSON.parse(localStorage.getItem(CONFIG_KEY) ?? '{}') } } catch { return { ...DEFAULT_CONFIG } } }
@@ -328,6 +344,12 @@ export default function StoryLevelPage() {
 
   // Persist easy mode toggle
   useEffect(() => { try { localStorage.setItem('story-easy', easyMode ? '1' : '0') } catch {} }, [easyMode])
+
+  useEffect(() => {
+    setFinalReadyToTopOut(false)
+    finalClearSavedRef.current = false
+    setMatrixCountdown(null)
+  }, [currentChapterId, currentLevelId])
 
   // Engine reset — only for fresh starts and explicit retries (not seamless transitions)
   useEffect(() => {
@@ -403,23 +425,36 @@ export default function StoryLevelPage() {
     return () => { clearInterval(id); transitionAdvanceRef.current = null }
   }, [phase, currentChapterId, currentLevelId, engine]) // eslint-disable-line
 
+  useEffect(() => {
+    if (phase !== PHASE.MATRIX_ASCENT) { setMatrixCountdown(null); return }
+
+    setMatrixCountdown(6)
+    let remaining = 6
+    const id = setInterval(() => {
+      remaining -= 1
+      setMatrixCountdown(remaining)
+      if (remaining <= 0) {
+        clearInterval(id)
+        pendingResetRef.current = true
+        setCurrentChapterId('ch8')
+        setCurrentLevelId('l1')
+        setPhase(PHASE.STORY)
+        navigate('/story/ch8/l1', { replace: true })
+      }
+    }, 1000)
+
+    return () => clearInterval(id)
+  }, [phase, navigate])
+
   const showOnScreenControls = (() => {
     try { return JSON.parse(localStorage.getItem('tetris-config') ?? '{}').showOnScreenControls ?? false }
     catch { return false }
   })()
 
-  const handleComplete = useCallback(async ({ score, lines, linesThisLevel: ltl, gameOver, tSpins = 0, iPieceLines = 0, piecesPlaced = 0, holdUses = 0, tetrisClears = 0, hardDrops = 0 }) => {
-    const lt = ltl ?? lines
+  const persistLevelCompletion = useCallback(({ score, linesThisLevel, tSpins = 0, iPieceLines = 0, piecesPlaced = 0, holdUses = 0, tetrisClears = 0, hardDrops = 0 }) => {
+    const lt = Number(linesThisLevel || 0)
     const scoreThisLevel = Math.max(0, Number(score || 0) - Number(levelStartScoreRef.current || 0))
-    setFinalScore(score)
-    setFinalLines(lt)
 
-    if (gameOver) {
-      setPhase(PHASE.FAIL)
-      return
-    }
-
-    // Save progress for the completed level
     if (user && easyMode) {
       markEasyModePlayed(user.uid).catch(() => {})
       setActiveBadge(user.uid, 'badge_noob').catch(() => {})
@@ -437,7 +472,6 @@ export default function StoryLevelPage() {
           : [found.level.themeUnlock]
         unlockThemes.filter(Boolean).forEach((id) => unlocks.push(unlockItem(user.uid, id)))
       }
-      // Also record a score entry for overall totals/coins under 'story' mode
       try {
         const lv = engine.getState().level || 1
         const survivalMs = Math.max(0, Number(engine.getState().elapsedTime || 0))
@@ -458,21 +492,42 @@ export default function StoryLevelPage() {
       }
       Promise.all(unlocks).finally(() => setSaving(false))
     }
+  }, [user, easyMode, found, currentChapterId, currentLevelId, engine])
+
+  const handleComplete = useCallback(async ({ score, lines, linesThisLevel: ltl, gameOver, gameOverReason, tSpins = 0, iPieceLines = 0, piecesPlaced = 0, holdUses = 0, tetrisClears = 0, hardDrops = 0 }) => {
+    const lt = ltl ?? lines
+    setFinalScore(score)
+    setFinalLines(lt)
+
+    if (gameOver) {
+      if (isFinalConvergence && finalReadyToTopOut && gameOverReason === 'topout') {
+        if (!finalClearSavedRef.current) {
+          finalClearSavedRef.current = true
+          persistLevelCompletion({ score, linesThisLevel: lt, tSpins, iPieceLines, piecesPlaced, holdUses, tetrisClears, hardDrops })
+        }
+        // Show "CONVERGENCE MASTERED" ending; player can then choose to enter ch8
+        setPhase(PHASE.ENDING)
+        return
+      }
+      setPhase(PHASE.FAIL)
+      return
+    }
+
+    persistLevelCompletion({ score, linesThisLevel: lt, tSpins, iPieceLines, piecesPlaced, holdUses, tetrisClears, hardDrops })
 
     const next = getNextLevel(currentChapterId, currentLevelId)
-    if (currentChapterId === 'ch7' && currentLevelId === 'l5') {
-      // Final level of the entire story — always show the grand ending screen,
-      // regardless of ch8 (secret chapter) existing in the data
-      engine.togglePause()
-      setPhase(PHASE.ENDING)
-    } else if (next) {
+    if (next) {
       engine.togglePause()   // freeze board during cinematic overlay
       setPhase(PHASE.TRANSITION)
+    } else if (currentChapterId === 'ch8' && currentLevelId === 'l1') {
+      // Secret final level complete — true ending
+      engine.togglePause()
+      setPhase(PHASE.MATRIX_END)
     } else {
       engine.togglePause()   // freeze on last level too
       setPhase(PHASE.COMPLETE)
     }
-  }, [user, currentChapterId, currentLevelId, found, engine, easyMode])
+  }, [currentChapterId, currentLevelId, engine, isFinalConvergence, finalReadyToTopOut, persistLevelCompletion])
 
   const levelKey = `${currentChapterId}-${currentLevelId}`
 
@@ -483,15 +538,48 @@ export default function StoryLevelPage() {
     return typeof easyOverride === 'number' ? easyOverride : Math.round(tl * 0.75)
   })()
 
+  const loopTargetLines = isFinalConvergence ? 0 : effectiveTargetLines
+
+  const loopActive = phase === PHASE.GAME
+
   const { state, paused, triggerAction, handlePress, handleRelease, togglePause } = useStoryGameLoop(
     engine,
-    effectiveTargetLines,
+    loopTargetLines,
     levelStartLinesRef,
     levelKey,
     handleComplete,
     storyMusicRef,
     beatRef,
+    loopActive,
   )
+
+  const linesThisLevel = state.lines - levelStartLinesRef.current
+
+  useEffect(() => {
+    if (!isFinalConvergence || phase !== PHASE.GAME || finalReadyToTopOut) return
+    if (effectiveTargetLines <= 0 || linesThisLevel < effectiveTargetLines) return
+
+    setFinalReadyToTopOut(true)
+    setFinalLines(linesThisLevel)
+    setFinalScore(state.score)
+    if (!finalClearSavedRef.current) {
+      finalClearSavedRef.current = true
+      persistLevelCompletion({ score: state.score, linesThisLevel })
+    }
+  }, [isFinalConvergence, phase, finalReadyToTopOut, effectiveTargetLines, linesThisLevel, state.score, persistLevelCompletion])
+
+  // Trigger glitch effect when lines reach 40 in Chapter 7 Level 5
+  useEffect(() => {
+    if (isFinalConvergence && phase === PHASE.GAME && linesThisLevel >= 40) {
+      setGlitchActive(true)
+    } else if (!isFinalConvergence || phase !== PHASE.GAME) {
+      setGlitchActive(false)
+    }
+  }, [isFinalConvergence, phase, linesThisLevel])
+
+  const handleHardRefresh = useCallback(async () => {
+    await hardResetAndReload()
+  }, [])
 
   const handleDragBegin = useCallback((dir) => {
     if (dir === 'left' || dir === 'right') {
@@ -590,7 +678,6 @@ export default function StoryLevelPage() {
   }
 
   const { chapter, level } = found
-  const linesThisLevel = state.lines - levelStartLinesRef.current
 
   // Board alpha syncs to bass beat energy — pulses more transparent on heavy hits
   // so the background animations show through the matrix
@@ -701,7 +788,7 @@ export default function StoryLevelPage() {
                 </button>
                 {level.targetLines > 0 && (
                   <span style={{ color: '#555', fontSize: '0.62rem' }}>
-                    {Math.min(linesThisLevel, effectiveTargetLines)} / {effectiveTargetLines} lines
+                    {Math.min(linesThisLevel, effectiveTargetLines)} / {effectiveTargetLines} lines{isFinalConvergence && finalReadyToTopOut ? ' · SURVIVE' : ''}
                   </span>
                 )}
                 {state.combo > 1 && (
@@ -729,6 +816,12 @@ export default function StoryLevelPage() {
           {level.targetLines > 0 && (
             <div style={{ height: 3, background: 'rgba(255,255,255,0.08)', flexShrink: 0 }}>
               <div style={{ height: '100%', background: chapter.color, width: `${Math.min(100, (linesThisLevel / effectiveTargetLines) * 100)}%`, transition: 'width 0.3s ease' }} />
+            </div>
+          )}
+
+          {isFinalConvergence && finalReadyToTopOut && (
+            <div style={{ padding: '6px 12px', background: 'rgba(0, 20, 0, 0.65)', color: '#90ff90', fontSize: '0.58rem', letterSpacing: '0.16em', textAlign: 'center', borderTop: '1px solid rgba(120,255,120,0.25)', borderBottom: '1px solid rgba(120,255,120,0.25)' }}>
+              LINE TARGET CLEARED. KEEP PLAYING UNTIL TOPOUT TO BREACH THE MATRIX.
             </div>
           )}
 
@@ -763,7 +856,7 @@ export default function StoryLevelPage() {
                 {focus && (() => {
                   const zoneReady = state.zoneMeter >= ZONE_MIN_METER && !state.zoneActive
                   const zoneFillPct = Math.max(0, Math.min(100, state.zoneActive
-                    ? (state.zoneTimer / (state.zoneDuration || ZONE_DURATION_MS)) * 100
+                    ? (state.zoneTimer / Math.max(1, state.zoneDuration || ZONE_DURATION_MS)) * 100
                     : (state.zoneMeter || 0)))
                   return (
                     <div className="fullscreen-mini-hud" style={{ right: 0 }}>
@@ -955,10 +1048,80 @@ export default function StoryLevelPage() {
               <div style={{ fontSize: '0.8rem', letterSpacing: '0.16em', color: '#fff' }}>SETTINGS</div>
               <button onClick={() => setShowSettings(false)} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontSize: '0.72rem', fontFamily: 'inherit' }}>✕ Close</button>
             </div>
-            <SettingsPage config={config} onConfig={setConfig} onClose={() => setShowSettings(false)} />
+            <SettingsPage config={config} onConfig={setConfig} onClearCache={handleHardRefresh} onClose={() => setShowSettings(false)} />
           </div>
         </div>
       )}
+
+      {/* ── Glitch effect overlay — appears when lines reach 40 in Ch7L5 ──── */}
+      {glitchActive && (
+        <div style={{ position: 'absolute', inset: 0, zIndex: 60, pointerEvents: 'none' }}>
+          <GlitchOverlay active={glitchActive} />
+        </div>
+      )}
+
+      {/* ── MATRIX ASCENT — after Ch7/L5 target + topout ───────────────── */}
+      <AnimatePresence>
+        {phase === PHASE.MATRIX_ASCENT && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{ position: 'absolute', inset: 0, zIndex: 120, background: 'radial-gradient(ellipse at 50% 45%, rgba(0, 40, 0, 0.55) 0%, rgba(0, 0, 0, 0.96) 72%)', overflow: 'hidden' }}
+          >
+            <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', opacity: 0.45 }}>
+              {Array.from({ length: 54 }).map((_, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ y: '-20%', opacity: 0 }}
+                  animate={{ y: '120%', opacity: [0, 0.6, 0.1] }}
+                  transition={{ duration: 2.4 + (i % 6) * 0.55, delay: (i % 11) * 0.1, repeat: Infinity, ease: 'linear' }}
+                  style={{ position: 'absolute', left: `${(i * 1.9) % 100}%`, top: '-10%', color: i % 8 === 0 ? '#9eff9e' : '#2cff7c', fontSize: `${0.52 + (i % 4) * 0.05}rem`, letterSpacing: '0.08em', whiteSpace: 'nowrap' }}
+                >
+                  {i % 14 === 0 ? 'TETRA OVERFLOW ULTRA' : i % 5 === 0 ? '01001101' : i % 3 === 0 ? 'MATRIX' : '1010'}
+                </motion.div>
+              ))}
+
+              {Array.from({ length: 30 }).map((_, i) => {
+                const pieceGlyphs = ['I', 'O', 'T', 'S', 'Z', 'J', 'L']
+                const glyph = pieceGlyphs[i % pieceGlyphs.length]
+                const colors = ['#00ff41', '#00cc44', '#00dd55', '#00aa33']
+                return (
+                  <motion.div
+                    key={`mx-piece-${i}`}
+                    initial={{ y: '-24%', opacity: 0.1, rotate: 0 }}
+                    animate={{ y: '125%', opacity: [0.08, 0.4, 0.08], rotate: [0, 45, 90, 135] }}
+                    transition={{ duration: 3.6 + (i % 5) * 0.6, delay: (i % 9) * 0.15, repeat: Infinity, ease: 'linear' }}
+                    style={{ position: 'absolute', left: `${(i * 3.3 + 7) % 100}%`, top: '-10%', fontSize: `${0.7 + (i % 3) * 0.18}rem`, color: colors[i % colors.length], fontWeight: 900, textShadow: '0 0 8px rgba(0,255,65,0.6)' }}
+                  >
+                    {glyph}
+                  </motion.div>
+                )
+              })}
+            </div>
+
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
+              <motion.div
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.15 }}
+                style={{ textAlign: 'center', maxWidth: 460 }}
+              >
+                <div style={{ fontSize: '0.58rem', letterSpacing: '0.42em', color: '#65ff9b', marginBottom: 10 }}>SYSTEM BREACH</div>
+                <div style={{ fontSize: '1.7rem', fontWeight: 900, color: '#d6ffd6', letterSpacing: '0.14em', marginBottom: 10 }}>THE MATRIX OPENS</div>
+                <p style={{ color: '#87d787', fontSize: '0.78rem', lineHeight: 1.85, letterSpacing: '0.08em', margin: '0 0 1rem' }}>
+                  You held the final pattern past completion and crashed the system from inside.
+                  <br />
+                  Redirecting to Chapter 8 / Level 1...
+                </p>
+                <div style={{ fontSize: '0.6rem', color: '#65ff9b', letterSpacing: '0.2em' }}>
+                  {matrixCountdown && matrixCountdown > 0 ? `JUMP IN ${matrixCountdown}` : 'CONNECTING'}
+                </div>
+              </motion.div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── Completion / fail overlay ────────────────────────────────────── */}
       <AnimatePresence>
@@ -1095,12 +1258,138 @@ export default function StoryLevelPage() {
                 transition={{ delay: 2.8 }}
                 style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}
               >
+                {/* Only show when arriving from ch7/l5 — lets player enter the secret chapter */}
+                {currentChapterId === 'ch7' && currentLevelId === 'l5' && (
+                  <motion.button
+                    whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
+                    onClick={() => setPhase(PHASE.MATRIX_ASCENT)}
+                    style={{ background: '#00ff41', border: 'none', color: '#000', borderRadius: 8, padding: '11px 28px', fontSize: '0.82rem', fontWeight: 900, letterSpacing: '0.18em', cursor: 'pointer', fontFamily: 'inherit', textTransform: 'uppercase', textShadow: 'none' }}
+                  >
+                    ▶ ENTER THE MATRIX
+                  </motion.button>
+                )}
                 <motion.button
                   whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
                   onClick={() => navigate('/story', { replace: true })}
                   style={{ background: '#ffd700', border: 'none', color: '#000', borderRadius: 8, padding: '11px 28px', fontSize: '0.82rem', fontWeight: 900, letterSpacing: '0.18em', cursor: 'pointer', fontFamily: 'inherit', textTransform: 'uppercase' }}
                 >
                   ★ WORLD MAP
+                </motion.button>
+                <button
+                  onClick={() => navigate('/', { replace: true })}
+                  style={{ background: 'none', border: '1px solid rgba(255,255,255,0.18)', color: '#888', borderRadius: 8, padding: '10px 20px', cursor: 'pointer', fontSize: '0.72rem', letterSpacing: '0.12em', fontFamily: 'inherit' }}
+                >
+                  Main Menu
+                </button>
+              </motion.div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── MATRIX END — true finale after ch8/l1 ───────────────────────── */}
+      <AnimatePresence>
+        {phase === PHASE.MATRIX_END && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            style={{ position: 'absolute', inset: 0, zIndex: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem', background: 'radial-gradient(ellipse at 50% 40%, rgba(0,80,0,0.15) 0%, rgba(0,0,0,0.97) 70%)' }}
+          >
+            {/* Faint falling matrix columns in background */}
+            <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', opacity: 0.18 }}>
+              {Array.from({ length: 30 }).map((_, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ y: '-10%', opacity: 0 }}
+                  animate={{ y: '110%', opacity: [0, 0.7, 0] }}
+                  transition={{ duration: 3.5 + (i % 5) * 0.7, delay: (i % 13) * 0.12, repeat: Infinity, ease: 'linear' }}
+                  style={{ position: 'absolute', left: `${(i * 3.4) % 100}%`, top: '-10%', color: '#00ff41', fontSize: '0.55rem', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}
+                >
+                  {i % 5 === 0 ? '01001101' : i % 3 === 0 ? 'TETRA' : '1010'}
+                </motion.div>
+              ))}
+            </div>
+
+            <motion.div
+              initial={{ scale: 0.88, y: 32, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              transition={{ delay: 0.2, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+              style={{ textAlign: 'center', maxWidth: 460, width: '100%', position: 'relative' }}
+            >
+              <motion.div
+                initial={{ scale: 0, rotate: -30 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ delay: 0.6, type: 'spring', stiffness: 180, damping: 14 }}
+                style={{ fontSize: '3.5rem', marginBottom: '1rem', filter: 'drop-shadow(0 0 24px #00ff41)' }}
+              >
+                ◈
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.9 }}
+                style={{ fontSize: '0.55rem', letterSpacing: '0.5em', color: '#00ff41', textTransform: 'uppercase', marginBottom: 8 }}
+              >
+                System Override Complete
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1.1 }}
+                style={{ fontSize: '2.2rem', fontWeight: 900, letterSpacing: '0.1em', color: '#d6ffd6', marginBottom: '0.4rem', textShadow: '0 0 32px #00ff4166' }}
+              >
+                THE MATRIX FALLS
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1.4 }}
+                style={{ fontSize: '0.58rem', color: '#00ff41', letterSpacing: '0.3em', textTransform: 'uppercase', marginBottom: '1.6rem', border: '1px solid #00ff4133', borderRadius: 4, padding: '3px 14px', display: 'inline-block' }}
+              >
+                MATRIX MASTERED
+              </motion.div>
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1.8 }}
+                style={{ color: '#bbb', fontSize: '0.9rem', lineHeight: 1.85, letterSpacing: '0.04em', margin: '0 0 1.6rem' }}
+              >
+                You rewrote the source code from inside.
+                <br /><br />
+                Every chapter, every line, every block — it was never random. The system placed each piece with intention. You played back.
+                <br /><br />
+                The board is clear. The matrix is silent. You left fingerprints on the source.
+              </motion.p>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 2.4 }}
+                style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap', marginBottom: '1.2rem' }}
+              >
+                <div style={{ background: 'rgba(0,255,65,0.06)', border: '1px solid rgba(0,255,65,0.2)', borderRadius: 10, padding: '10px 18px', textAlign: 'center', minWidth: 90 }}>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#00ff41' }}>{finalLines}</div>
+                  <div style={{ fontSize: '0.55rem', color: '#888', letterSpacing: '0.14em' }}>LINES</div>
+                </div>
+                <div style={{ background: 'rgba(0,255,65,0.06)', border: '1px solid rgba(0,255,65,0.2)', borderRadius: 10, padding: '10px 18px', textAlign: 'center', minWidth: 90 }}>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#00ff41' }}>{finalScore.toLocaleString()}</div>
+                  <div style={{ fontSize: '0.55rem', color: '#888', letterSpacing: '0.14em' }}>FINAL PTS</div>
+                </div>
+              </motion.div>
+              {saving && (
+                <div style={{ fontSize: '0.6rem', color: '#888', letterSpacing: '0.12em', marginBottom: 12 }}>Saving progress…</div>
+              )}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 2.8 }}
+                style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}
+              >
+                <motion.button
+                  whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
+                  onClick={() => navigate('/story', { replace: true })}
+                  style={{ background: '#00ff41', border: 'none', color: '#000', borderRadius: 8, padding: '11px 28px', fontSize: '0.82rem', fontWeight: 900, letterSpacing: '0.18em', cursor: 'pointer', fontFamily: 'inherit', textTransform: 'uppercase' }}
+                >
+                  ◈ WORLD MAP
                 </motion.button>
                 <button
                   onClick={() => navigate('/', { replace: true })}
