@@ -117,7 +117,7 @@ export default function AboutPage({ onClose, installPrompt, onInstall }) {
             <span style={{ fontSize: '1.2rem' }}>🅖</span>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#34d399', letterSpacing: '0.08em' }}>Google Pay (UPI)</div>
-              <div style={{ fontSize: '0.58rem', color: '#7c8aa5', overflow: 'hidden', textOverflow: 'ellipsis' }}>{GPay_UPI || 'Set VITE_GPAY_UPI in .env'}</div>
+              <div style={{ fontSize: '0.58rem', color: '#7c8aa5', overflow: 'hidden', textOverflow: 'ellipsis' }}>{GPay_UPI}</div>
             </div>
             <button
               onClick={async () => { if (!GPay_UPI) return; try { await navigator.clipboard?.writeText(GPay_UPI); setCopied(true); setTimeout(()=>setCopied(false), 1400) } catch {} }}

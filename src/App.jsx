@@ -2828,7 +2828,9 @@ export default function App() {
 
       {/* Focus/fullscreen controls: keep touch inputs available when UI is hidden */}
       {isUiHidden && config.showOnScreenControls && (
-        <TouchControls onPress={_handlePress} onRelease={_handleRelease} />
+        <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 60, pointerEvents: 'auto' }}>
+          <TouchControls onPress={_handlePress} onRelease={_handleRelease} />
+        </div>
       )}
 
       {/* Bottom panel: same controls as landscape */}
