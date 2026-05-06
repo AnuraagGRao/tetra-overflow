@@ -29,6 +29,10 @@ export const BACKGROUND_THEME_PROFILES = {
       zoom: 0.52,
     },
   },
+  serpent: {
+    category: 'cosmic', cssClass: 'bg-theme-serpent bg-cat-cosmic', parallax: 8,
+    preferCanvas: true,
+  },
   maelstorm: {
     category: 'aggressive',
     cssClass: 'bg-theme-storm bg-cat-aggressive',

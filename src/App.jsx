@@ -1600,8 +1600,8 @@ export default function App() {
             if (sfxDuckTimerRef.current) clearTimeout(sfxDuckTimerRef.current)
             sfxDuckTimerRef.current = setTimeout(() => setSfxDuck(1.0), 1700)
           } catch {}
-          // After floor 15: make jumpscares more frequent (10–20s). Otherwise 1–2 min.
-          jumpscareCooldownRef.current = (ns.towerFloor >= 15)
+          // After floor 10: make jumpscares more frequent (10–20s). Otherwise 1–2 min.
+          jumpscareCooldownRef.current = (ns.towerFloor >= 10)
             ? (12_000 + Math.random() * 8_000)
             : (60_000 + Math.random() * 60_000)
           setTimeout(() => setJumpscare(null), 1650)
@@ -2450,7 +2450,7 @@ export default function App() {
                         alt=""
                         initial={{ scale: 1.2, opacity: 0.06 }}
                         animate={{ rotate: [0, 360], opacity: [0.08, 0.12, 0.08], scale: [1.2, 1.0] }}
-                        transition={{ duration: 1.2, ease: 'linear' }}
+                        transition={{ duration: 3.0, ease: 'linear' }}
                         style={{ position: 'absolute', width: '140%', height: '140%', objectFit: 'cover', filter: 'contrast(110%) saturate(108%)' }}
                       />
                     )}

@@ -7,5 +7,5 @@ export const BG_TYPE_TO_PIECE_THEME = {
   clouds: 'sketch', aurora: 'sketch',
   stars: 'classic', nebula: 'blueprint', warp: 'sketch', blackhole: 'dmg',
   abyss: 'dmg', matrix: 'dmg', grid: 'dmg', oiia: 'classic',
-  deepsea: 'blueprint', stellar: 'classic', geometry: 'sketch', ritual: 'dmg',
+  deepsea: 'blueprint', stellar: 'classic', geometry: 'sketch', ritual: 'dmg', serpent: 'dmg',
 }

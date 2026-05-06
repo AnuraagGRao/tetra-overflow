@@ -17,6 +17,7 @@ const BG_BASE = {
   inferno:'#100000', aurora:'#000410', warp:'#000008', abyss:'#000000',
   oiia:'#0a0010', nyancat:'#020008', custom:'#000006',
   maelstorm:'#010308',
+  stellar:'#060200', geometry:'#010603', serpent:'#000d03',
 }
 
 // ── Layer 1: Animated ambient gradient ───────────────────────────────────────
@@ -319,6 +320,96 @@ function drawAmbient(ctx, bgType, w, h, t) {
       g.addColorStop(0,'rgba(5,0,12,0.5)'); g.addColorStop(1,'rgba(0,0,0,0)')
       ctx.fillStyle = g; ctx.fillRect(0,0,w,h); break
     }
+    case 'stellar': {
+      // Deep space with blazing sun at top-center
+      const g = ctx.createLinearGradient(0, 0, 0, h)
+      g.addColorStop(0, 'rgba(30,8,0,1)'); g.addColorStop(0.4, 'rgba(12,3,0,1)'); g.addColorStop(1, 'rgba(4,1,0,1)')
+      ctx.fillStyle = g; ctx.fillRect(0, 0, w, h)
+      // Sun corona glow — massive radial at top-center
+      const sx = w * 0.5, sy = -h * 0.06
+      const pulse = 0.82 + 0.18 * Math.sin(t * 0.0018)
+      const sunR = Math.min(w, h) * 0.55 * pulse
+      const sunGrad = ctx.createRadialGradient(sx, sy, 0, sx, sy, sunR)
+      sunGrad.addColorStop(0,    'rgba(255,250,180,0.95)')
+      sunGrad.addColorStop(0.04, 'rgba(255,200,60,0.80)')
+      sunGrad.addColorStop(0.12, 'rgba(255,130,10,0.52)')
+      sunGrad.addColorStop(0.30, 'rgba(220,60,0,0.24)')
+      sunGrad.addColorStop(0.55, 'rgba(140,25,0,0.10)')
+      sunGrad.addColorStop(1,    'rgba(0,0,0,0)')
+      ctx.fillStyle = sunGrad; ctx.fillRect(0, 0, w, h)
+      // Corona rays
+      ctx.save(); ctx.globalAlpha = 0.036 + beat * 0.055
+      for (let i = 0; i < 10; i++) {
+        const angle = (i / 10) * Math.PI * 2 + t * 0.00025
+        const rInner = sunR * 0.13
+        const rOuter = sunR * (0.38 + 0.24 * Math.abs(Math.sin(t * 0.0016 + i * 0.7)))
+        ctx.strokeStyle = `rgba(255,${145 + i * 9},0,1)`
+        ctx.lineWidth = 1.5 + Math.sin(i * 1.4) * 0.8
+        ctx.shadowColor = 'rgba(255,140,0,1)'; ctx.shadowBlur = 14
+        ctx.beginPath()
+        ctx.moveTo(sx + Math.cos(angle) * rInner, sy + Math.sin(angle) * rInner)
+        ctx.lineTo(sx + Math.cos(angle) * rOuter, sy + Math.sin(angle) * rOuter)
+        ctx.stroke()
+      }
+      ctx.restore(); break
+    }
+    case 'geometry': {
+      // Dark emerald base with rotating sacred geometry
+      const g = ctx.createLinearGradient(0, 0, 0, h)
+      g.addColorStop(0, 'rgba(0,5,2,1)'); g.addColorStop(0.5, 'rgba(0,9,4,1)'); g.addColorStop(1, 'rgba(0,5,2,1)')
+      ctx.fillStyle = g; ctx.fillRect(0, 0, w, h)
+      const cx2 = w * 0.5, cy2 = h * 0.5
+      const cg = ctx.createRadialGradient(cx2, cy2, 0, cx2, cy2, Math.min(w, h) * 0.55)
+      cg.addColorStop(0, 'rgba(0,80,40,0.12)'); cg.addColorStop(0.5, 'rgba(0,40,20,0.06)'); cg.addColorStop(1, 'rgba(0,0,0,0)')
+      ctx.fillStyle = cg; ctx.fillRect(0, 0, w, h)
+      // Rotating hexagonal rings
+      const hexR = Math.min(w, h) * 0.12
+      const rot = t * 0.00016
+      ctx.save(); ctx.translate(cx2, cy2); ctx.rotate(rot); ctx.globalAlpha = 0.05
+      for (let ring = 1; ring <= 5; ring++) {
+        ctx.strokeStyle = `rgba(${40 + ring * 12},${178 + ring * 10},${100 + ring * 8},1)`
+        ctx.lineWidth = 0.8; ctx.shadowColor = 'rgba(60,220,130,0.4)'; ctx.shadowBlur = 5
+        ctx.beginPath()
+        for (let corner = 0; corner <= 6; corner++) {
+          const a = (corner / 6) * Math.PI * 2; const r = hexR * ring
+          corner === 0 ? ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r) : ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r)
+        }
+        ctx.stroke()
+        ctx.globalAlpha = 0.022
+        for (let s2 = 0; s2 < 6; s2++) {
+          const a = (s2 / 6) * Math.PI * 2
+          ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a) * hexR * ring, Math.sin(a) * hexR * ring); ctx.stroke()
+        }
+        ctx.globalAlpha = 0.05
+      }
+      ctx.restore(); break
+    }
+    case 'serpent': {
+      // Deep void with sinuous green coils
+      const g = ctx.createLinearGradient(0, 0, 0, h)
+      g.addColorStop(0, 'rgba(0,0,1,1)'); g.addColorStop(0.5, 'rgba(0,8,2,1)'); g.addColorStop(1, 'rgba(0,2,1,1)')
+      ctx.fillStyle = g; ctx.fillRect(0, 0, w, h)
+      // Sinuous serpentine glow curves
+      ctx.save()
+      for (let pass = 0; pass < 3; pass++) {
+        const phase = t * 0.00042 + pass * Math.PI * 0.65
+        ctx.globalAlpha = Math.max(0, (0.07 - pass * 0.018) * (1 + beat * 0.9))
+        ctx.strokeStyle = `rgba(0,${185 + pass * 22},${75 + pass * 16},1)`
+        ctx.lineWidth = (3.5 - pass) * 2.2
+        ctx.shadowColor = 'rgba(0,255,90,0.8)'; ctx.shadowBlur = 22 - pass * 6
+        ctx.beginPath()
+        for (let xi = -20; xi <= w + 20; xi += 5) {
+          const yi = h * 0.5 + Math.sin(xi * 0.0078 + phase) * h * 0.26 * Math.sin(t * 0.00028 + xi * 0.0018)
+          xi === -20 ? ctx.moveTo(xi, yi) : ctx.lineTo(xi, yi)
+        }
+        ctx.stroke()
+      }
+      ctx.restore()
+      // Dark radial vignette
+      const vg = ctx.createRadialGradient(w * 0.5, h * 0.5, h * 0.15, w * 0.5, h * 0.5, h * 0.75)
+      vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.38)')
+      ctx.fillStyle = vg; ctx.fillRect(0, 0, w, h); break
+    }
     case 'oiia': {
       // Pink/purple dreamy pulsing glow
       const g = ctx.createRadialGradient(w*0.5+Math.sin(t*0.0006)*w*0.2, h*0.5+Math.cos(t*0.0008)*h*0.15, 0, w*0.5, h*0.5, h*0.8)
@@ -506,6 +597,60 @@ function makeParticle(bgType, w, h, init=false) {
       return { x:w/2, y:h/2, angle, dist:Math.random()*25, speed:3+Math.random()*4, length:5+Math.random()*15, hue:200+Math.random()*60, life:1, decay:0 }
     }
     case 'abyss':  return { x, y:Math.random()*h, vx:(Math.random()-0.5)*0.1, vy:(Math.random()-0.5)*0.1, r:3+Math.random()*16, hue:250+Math.random()*95, life:Math.random(), decay:0.0012+Math.random()*0.001, growing:Math.random()<0.5, pulse:Math.random()*Math.PI*2 }
+    case 'stellar': {
+      // 50% background stars, 50% solar sparks
+      if (Math.random() < 0.5) {
+        return {
+          x, y: Math.random() * h,
+          vx: (Math.random() - 0.5) * 0.025, vy: (Math.random() - 0.5) * 0.025,
+          r: 0.4 + Math.random() * 1.5, hue: 25 + Math.random() * 25,
+          life: 1, decay: 0,
+          twinkle: Math.random() * Math.PI * 2, twinkleSpeed: 0.025 + Math.random() * 0.04,
+          subtype: 'star',
+          color: `rgba(${210 + Math.floor(Math.random()*45)},${195 + Math.floor(Math.random()*45)},${150 + Math.floor(Math.random()*50)},1)`,
+        }
+      }
+      const angle = -Math.PI * 0.5 + (Math.random() - 0.5) * Math.PI * 0.7
+      const speed = 1.0 + Math.random() * 2.2
+      return {
+        x: init ? Math.random() * w : (w * 0.5 + (Math.random() - 0.5) * w * 0.18),
+        y: init ? Math.random() * h : (-h * 0.08 + Math.random() * h * 0.12),
+        vx: Math.cos(angle) * speed * 0.35, vy: Math.abs(Math.sin(angle)) * speed * 0.5 + 0.5,
+        r: 1.2 + Math.random() * 3.8, hue: 8 + Math.random() * 32,
+        life: 1, decay: 0.003 + Math.random() * 0.005, glow: true, subtype: 'spark',
+      }
+    }
+    case 'geometry': {
+      if (Math.random() < 0.55) {
+        return {
+          x, y: Math.random() * h,
+          vx: (Math.random() - 0.5) * 0.07, vy: (Math.random() - 0.5) * 0.07,
+          r: 5 + Math.random() * 20, hue: 110 + Math.random() * 70,
+          life: 0.3 + Math.random() * 0.5, decay: 0.0008 + Math.random() * 0.0007,
+          rot: Math.random() * Math.PI, rotSpeed: (Math.random() - 0.5) * 0.008, subtype: 'trace',
+        }
+      }
+      return {
+        x, y: Math.random() * h,
+        vx: (Math.random() - 0.5) * 0.1, vy: (Math.random() - 0.5) * 0.1,
+        r: 0.8 + Math.random() * 2.2, hue: 110 + Math.random() * 80,
+        life: 0.3 + Math.random() * 0.6, decay: 0.0006 + Math.random() * 0.0007,
+        glow: true, twinkle: Math.random() * Math.PI * 2, twinkleSpeed: 0.015 + Math.random() * 0.02,
+        subtype: 'node',
+      }
+    }
+    case 'serpent': {
+      const angle = Math.random() * Math.PI * 2
+      const dist = 45 + Math.random() * 210
+      const isRing = Math.random() < 0.18
+      return {
+        x: w * 0.5 + Math.cos(angle) * dist, y: h * 0.5 + Math.sin(angle) * dist,
+        angle, dist, speed: 0.0035 + Math.random() * 0.0055,
+        r: isRing ? (3.5 + Math.random() * 4) : (1.2 + Math.random() * 2.8),
+        hue: 115 + Math.random() * 40, life: 0.45 + Math.random() * 0.55,
+        decay: 0.001 + Math.random() * 0.0012, glow: true, subtype: isRing ? 'ring' : 'orb',
+      }
+    }
     case 'oiia': {
       // Spinning cat-colored stars
       const angle = Math.random()*Math.PI*2
@@ -522,6 +667,7 @@ function createParticles(bgType, w, h, densityScale = 1) {
     ocean: isMobile ? 40 : 70, bubbles: 80, glacier: 80, clouds: 54, deepsea: 60,
     stars: 340, nebula: 100, warp: 80, blackhole: 100, abyss: 80,
     matrix: 200, grid: 100, crystal: 100, forest: 60, aurora: 100, oiia: 50,
+    stellar: isMobile ? 80 : 160, geometry: 70, serpent: isMobile ? 55 : 100,
   }
   const n = Math.max(8, Math.round((counts[bgType] || 80) * densityScale))
   return Array.from({ length:n }, () => makeParticle(bgType, w, h, true))
@@ -643,6 +789,33 @@ function updateParticle(p, bgType, w, h, dt) {
     if (p.x < -p.r*2) p.x=w+p.r*2; else if (p.x > w+p.r*2) p.x=-p.r*2
     if (p.y < -p.r*2) p.y=h+p.r*2; else if (p.y > h+p.r*2) p.y=-p.r*2
     return false
+  }
+  if (bgType === 'stellar') {
+    p.x += p.vx * s; p.y += p.vy * s
+    if (p.subtype === 'star') {
+      p.twinkle = (p.twinkle || 0) + (p.twinkleSpeed || 0.03) * s
+      if (p.x < -3) p.x = w + 3; else if (p.x > w + 3) p.x = -3
+      if (p.y < -3) p.y = h + 3; else if (p.y > h + 3) p.y = -3
+      return false
+    }
+    p.life -= p.decay * s
+    return p.y > h + 20 || p.life <= 0
+  }
+  if (bgType === 'geometry') {
+    p.x += p.vx * s; p.y += p.vy * s
+    if (p.rotSpeed) p.rot = (p.rot || 0) + p.rotSpeed * s
+    if (p.subtype === 'node') p.twinkle = (p.twinkle || 0) + (p.twinkleSpeed || 0.018) * s
+    p.life -= p.decay * s
+    if (p.x < -p.r * 2) p.x = w + p.r * 2; else if (p.x > w + p.r * 2) p.x = -p.r * 2
+    if (p.y < -p.r * 2) p.y = h + p.r * 2; else if (p.y > h + p.r * 2) p.y = -p.r * 2
+    return p.life <= 0
+  }
+  if (bgType === 'serpent') {
+    p.angle += p.speed * s
+    p.x = w * 0.5 + Math.cos(p.angle) * p.dist
+    p.y = h * 0.5 + Math.sin(p.angle) * p.dist
+    p.life -= p.decay * s
+    return p.life <= 0
   }
   if (bgType === 'oiia') {
     p.x += p.vx*s; p.y += p.vy*s
@@ -963,6 +1136,69 @@ function drawParticle(ctx, p, bgType, w, h, beat = 0) {
     ctx.restore(); return
   }
 
+  // Stellar: stars + solar sparks
+  if (bgType === 'stellar') {
+    if (p.subtype === 'star') {
+      const alpha = 0.22 + 0.62 * Math.abs(Math.sin(p.twinkle || 0))
+      ctx.globalAlpha = alpha
+      ctx.fillStyle = p.color || '#fffbe8'
+      if (p.r > 1.2) { ctx.shadowColor = p.color || '#ffe890'; ctx.shadowBlur = 7 }
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill()
+      if (p.r > 1.3) {
+        ctx.globalAlpha = alpha * 0.32
+        ctx.strokeStyle = p.color || '#ffe890'; ctx.lineWidth = 0.5
+        ctx.beginPath(); ctx.moveTo(p.x - p.r * 1.6, p.y); ctx.lineTo(p.x + p.r * 1.6, p.y); ctx.stroke()
+        ctx.beginPath(); ctx.moveTo(p.x, p.y - p.r * 1.6); ctx.lineTo(p.x, p.y + p.r * 1.6); ctx.stroke()
+      }
+    } else {
+      // solar spark
+      ctx.globalAlpha = Math.max(0, p.life * 0.88) * (1 + beat * 0.3)
+      const col = `hsl(${p.hue}, 95%, 62%)`
+      ctx.fillStyle = col
+      ctx.shadowColor = col; ctx.shadowBlur = (10 + p.r * 3) * (1 + beat * 2)
+      ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(0.3, p.r), 0, Math.PI * 2); ctx.fill()
+    }
+    ctx.restore(); return
+  }
+
+  // Geometry: floating nodes (diamonds) + trace lines
+  if (bgType === 'geometry') {
+    if (p.subtype === 'trace') {
+      ctx.globalAlpha = Math.max(0, p.life * 0.52)
+      ctx.strokeStyle = `hsl(${p.hue}, 78%, 56%)`
+      ctx.lineWidth = 0.7
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot || 0)
+      ctx.beginPath(); ctx.moveTo(-p.r, 0); ctx.lineTo(p.r, 0); ctx.stroke()
+      ctx.restore()
+    } else {
+      const alpha = 0.2 + 0.55 * Math.abs(Math.sin(p.twinkle || 0))
+      ctx.globalAlpha = Math.max(0, alpha * p.life)
+      const col = `hsl(${p.hue}, 85%, 58%)`
+      ctx.fillStyle = col
+      if (p.r > 1.2) { ctx.shadowColor = col; ctx.shadowBlur = 8 + beat * 10 }
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(Math.PI / 4)
+      ctx.fillRect(-p.r * 0.7, -p.r * 0.7, p.r * 1.4, p.r * 1.4)
+      ctx.restore()
+    }
+    ctx.restore(); return
+  }
+
+  // Serpent: orbiting green wisps
+  if (bgType === 'serpent') {
+    const alpha = Math.max(0, p.life * 0.72 * (1 + beat * 0.28))
+    const col = `hsl(${p.hue}, 88%, 52%)`
+    ctx.globalAlpha = alpha
+    ctx.shadowColor = col; ctx.shadowBlur = 8 + p.r * 2.5
+    if (p.subtype === 'ring') {
+      ctx.strokeStyle = col; ctx.lineWidth = 0.9
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.stroke()
+    } else {
+      ctx.fillStyle = col
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill()
+    }
+    ctx.restore(); return
+  }
+
   // OIIA spinning cat-paw star shapes
   if (bgType==='oiia') {
     if (p.rot!==undefined) p.rot += (p.rotSpeed||0.014)
@@ -1246,6 +1482,52 @@ function drawForeground(ctx, bgType, w, h, t, beat = 0) {
       const og=ctx.createRadialGradient(w*0.5,h*0.5,h*0.1,w*0.5,h*0.5,h*0.8)
       og.addColorStop(0,'rgba(255,110,180,0.14)'); og.addColorStop(0.5,`rgba(180,50,255,${pulse})`); og.addColorStop(1,'rgba(0,0,0,0)')
       ctx.fillStyle=og; ctx.fillRect(0,0,w,h); break
+    }
+    case 'stellar': {
+      // Heat haze near the top sun + solar prominence arcs
+      const hg = ctx.createLinearGradient(0, 0, 0, h * 0.42)
+      hg.addColorStop(0, `rgba(255,${80 + Math.round(beat * 60)},0,${0.06 + beat * 0.10})`)
+      hg.addColorStop(1, 'rgba(0,0,0,0)')
+      ctx.fillStyle = hg; ctx.fillRect(0, 0, w, h * 0.42)
+      ctx.save(); ctx.globalAlpha = 0.05 + beat * 0.07
+      for (let i = 0; i < 4; i++) {
+        const ax = w * (0.18 + i * 0.24) + Math.sin(t * 0.0004 + i * 0.9) * 28
+        const ay = -14 + Math.sin(t * 0.0007 + i) * 9
+        const arcH = h * 0.11 + Math.sin(t * 0.001 + i * 1.2) * h * 0.045
+        ctx.strokeStyle = `rgba(255,${118 + i * 18},0,1)`
+        ctx.lineWidth = 2.5; ctx.shadowColor = 'rgba(255,140,0,1)'; ctx.shadowBlur = 18
+        ctx.beginPath(); ctx.arc(ax, ay, arcH, 0, Math.PI); ctx.stroke()
+      }
+      ctx.restore(); break
+    }
+    case 'geometry': {
+      // Fine precision grid overlay
+      ctx.save(); ctx.globalAlpha = 0.034 + beat * 0.034
+      ctx.strokeStyle = 'rgba(80,220,130,0.55)'; ctx.lineWidth = 0.5
+      const gs = Math.round(Math.min(w, h) * 0.055)
+      const gd = (t * 0.007) % gs
+      for (let gx = 0; gx <= w + gs; gx += gs) {
+        ctx.beginPath(); ctx.moveTo(gx + gd, 0); ctx.lineTo(gx + gd, h); ctx.stroke()
+      }
+      for (let gy = 0; gy <= h + gs; gy += gs) {
+        ctx.beginPath(); ctx.moveTo(0, gy + gd * 0.6); ctx.lineTo(w, gy + gd * 0.6); ctx.stroke()
+      }
+      ctx.restore(); break
+    }
+    case 'serpent': {
+      // Bottom shadow + coil edge glows
+      const sg = ctx.createLinearGradient(0, h * 0.72, 0, h)
+      sg.addColorStop(0, 'rgba(0,0,0,0)'); sg.addColorStop(1, 'rgba(0,12,4,0.28)')
+      ctx.fillStyle = sg; ctx.fillRect(0, 0, w, h)
+      // Faint side coil echoes
+      ctx.save(); ctx.globalAlpha = 0.04 + beat * 0.04
+      for (let side = 0; side < 2; side++) {
+        const ex = side === 0 ? 0 : w
+        const eg = ctx.createLinearGradient(ex, 0, ex + (side === 0 ? 60 : -60), 0)
+        eg.addColorStop(0, 'rgba(0,180,80,0.22)'); eg.addColorStop(1, 'rgba(0,0,0,0)')
+        ctx.fillStyle = eg; ctx.fillRect(side === 0 ? 0 : w - 60, 0, 60, h)
+      }
+      ctx.restore(); break
     }
     default: break
   }

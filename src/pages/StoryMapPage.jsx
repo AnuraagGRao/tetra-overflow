@@ -7,6 +7,11 @@ import { STORY_CHAPTERS } from '../logic/storyData'
 import { playTap, playZoomIn, playZoomOut, playBack } from '../audio/uiSfx'
 import homeIconUrl from '../icons/home-button.png'
 
+// Season 2 unlock: ch8 l1 must be completed
+function isS2Unlocked(progress) {
+  return !!progress['ch8_l1_completed']
+}
+
 // Returns true if a level is unlocked given progress data
 function isLevelUnlocked(chIdx, lvIdx, progress) {
   if (chIdx === 0 && lvIdx === 0) return true
@@ -313,6 +318,41 @@ export default function StoryMapPage() {
               )}
             </AnimatePresence>
           </div>
+          {/* ── Season 2 Portal ── */}
+          {isS2Unlocked(progress) && (
+            <motion.div
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              style={{ display: 'flex', justifyContent: 'center', padding: '0.5rem 1.4rem 0', flexShrink: 0 }}
+            >
+              <motion.button
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.96 }}
+                onClick={() => { playZoomIn(); navigate('/zodiac') }}
+                style={{
+                  background: 'linear-gradient(135deg, rgba(168,85,247,0.15), rgba(0,212,255,0.1))',
+                  border: '1px solid rgba(168,85,247,0.5)',
+                  color: '#fff',
+                  borderRadius: 10,
+                  padding: '10px 28px',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  boxShadow: '0 0 24px rgba(168,85,247,0.2)',
+                }}
+              >
+                <span style={{ fontSize: '1.4rem', filter: 'drop-shadow(0 0 8px #a855f7)' }}>⛎</span>
+                <div style={{ textAlign: 'left' }}>
+                  <div style={{ fontSize: '0.55rem', color: '#a855f7', letterSpacing: '0.28em', textTransform: 'uppercase', marginBottom: 2 }}>Season 2</div>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 900, letterSpacing: '0.14em' }}>THE ZODIAC ARC</div>
+                </div>
+                <span style={{ fontSize: '0.7rem', color: '#a855f7', marginLeft: 4 }}>→</span>
+              </motion.button>
+            </motion.div>
+          )}
+
           {/* Reset Progress Option */}
           <div style={{width:'100%', display:'flex', justifyContent:'center', marginTop:'1.25rem'}}>
             {!resetPending ? (

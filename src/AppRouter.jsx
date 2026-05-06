@@ -14,6 +14,8 @@ import ThemePage from './pages/ThemePage'
 import ArtworkPage from './pages/ArtworkPage'
 import InfoPage from './pages/InfoPage'
 import StoryLorePage from './pages/StoryLorePage'
+import ZodiacMapPage from './pages/ZodiacMapPage'
+import ZodiacLevelPage from './pages/ZodiacLevelPage'
 
 function NowPlayingToast() {
   const [toast, setToast] = useState(null)
@@ -101,6 +103,8 @@ export default function AppRouter() {
         <Route path="/multiplayer" element={<AuthRoute><MultiplayerPage /></AuthRoute>} />
         <Route path="/themes" element={<AuthRoute><ThemePage /></AuthRoute>} />
         <Route path="/lore" element={<AuthRoute><StoryLorePage /></AuthRoute>} />
+        <Route path="/zodiac" element={<AuthRoute><ZodiacMapPage /></AuthRoute>} />
+        <Route path="/zodiac/:bossId" element={<AuthRoute><ZodiacLevelPage /></AuthRoute>} />
         <Route path="/artwork" element={<ArtworkPage />} />
         <Route path="/info" element={<InfoPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />

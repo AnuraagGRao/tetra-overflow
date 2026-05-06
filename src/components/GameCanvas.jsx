@@ -830,15 +830,6 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
         ctx.fillRect(0, y0 - barH * 0.2, w, barH * 1.4)
       }
 
-      // Subtle "FLOOR N" label
-      ctx.globalCompositeOperation = 'source-over'
-      ctx.globalAlpha = 0.22 * (bandAlpha / 0.9)
-      ctx.fillStyle = '#eab308'
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'alphabetic'
-      ctx.font = '700 22px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
-      try { ctx.fillText(`FLOOR ${state.towerFloor || 1}`, w * 0.5, y0 + barH - 8) } catch {}
-
       ctx.restore()
     }
 
