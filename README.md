@@ -1,4 +1,4 @@
-# tetris-mobile-clone
+# tetra-overflow-ultra
 
 A mobile-first Tetris Progressive Web App built with React + canvas.
 
