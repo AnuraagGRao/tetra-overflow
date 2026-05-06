@@ -1,5 +1,5 @@
 // ─── App version (keep in sync for cache/localStorage rescans) ─────────────
-const APP_VERSION = '0.6.3-2026.05.04';
+const APP_VERSION = (typeof __APP_VERSION__ !== 'undefined') ? __APP_VERSION__ : 'dev';
 
 // Clear versioned localStorage keys on first load after a version bump
 if (typeof window !== 'undefined') {

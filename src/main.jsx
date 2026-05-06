@@ -6,6 +6,7 @@ import AppRouter from './AppRouter.jsx'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { AuthProvider } from './contexts/AuthContext'
 import { setDailyFavicon } from './rotateFavicon.js';
+import { startVersionWatcher } from './logic/versionCheck.js'
 
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
@@ -34,6 +35,9 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
 
 // Set the favicon based on the current day (icon rotates daily)
 setDailyFavicon();
+
+// Kick off a lightweight background version check; mismatches hard reset
+startVersionWatcher()
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
