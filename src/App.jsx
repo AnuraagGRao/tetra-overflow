@@ -2891,7 +2891,7 @@ export default function App() {
     <>
       {isLoading && <LoadingScreen onDone={() => setIsLoading(false)} />}
       {showSWBanner && <SWUpdateBanner onReload={() => window.location.reload()} onHardRefresh={hardRefreshApp} />}
-      <div className={`app${state.zoneActive ? ' zone-active' : ''}`} style={!isMobile ? { '--board-w': `calc(260px * ${zoom})` } : undefined}>
+      <div className={`app${state.zoneActive ? ' zone-active' : ''}${config.showOnScreenControls ? ' osc-on' : ''}`} style={!isMobile ? { '--board-w': `calc(260px * ${zoom})` } : undefined}>
       {renderInstallBanner()}
       {isMobile
         ? (isLandscape ? renderMobileLandscape() : renderMobileNormal())

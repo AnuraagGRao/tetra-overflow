@@ -944,6 +944,12 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
     opacity: 0;
   }
 
+  /* When on-screen controls are shown in fullscreen, reserve bottom space so
+     the canvas doesn't extend under the buttons (solo mode). */
+  .app.osc-on .mobile-layout.ui-hidden .mobile-canvas-wrap {
+    padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
   /* ── Floating UI toggle tab ── */
   .ui-toggle-tab {
     position: fixed;
@@ -1193,6 +1199,12 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
   padding: 0;
   margin: 0;
   border: 0;
+}
+
+/* In landscape fullscreen with on-screen controls, also reserve bottom space
+   so the board doesn't sit beneath the buttons. */
+.app.osc-on .mobile-ls.ui-hidden .ls-canvas-wrap {
+  padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
 }
 
 /* ── Centre column: HUD bar + zone bar + canvas ─────────────────────────── */
