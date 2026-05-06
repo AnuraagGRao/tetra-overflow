@@ -3,3 +3,17 @@ body,
 #root {
   min-height: 100%;
 }
+
+/* Prevent iOS text auto-resize and focus zoom on inputs */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+input, select, textarea, button { font-size: 16px; }
+textarea { resize: none; }
+/* Allow text selection/copy in form fields despite global user-select rules */
+input, select, textarea, [contenteditable="true"] {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+}
+/* Improve tap behavior without enabling zoom */
+button, a { touch-action: manipulation; }

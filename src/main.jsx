@@ -39,6 +39,16 @@ setDailyFavicon();
 // Kick off a lightweight background version check; mismatches hard reset
 startVersionWatcher()
 
+// Prevent browser-level zoom gestures while preserving game pointer events
+try {
+  // iOS Safari gesture events
+  document.addEventListener('gesturestart', (e) => e.preventDefault())
+  document.addEventListener('gesturechange', (e) => e.preventDefault())
+  document.addEventListener('gestureend', (e) => e.preventDefault())
+  // Desktop ctrl/cmd + wheel zoom
+  window.addEventListener('wheel', (e) => { if (e.ctrlKey || e.metaKey) e.preventDefault() }, { passive: false })
+} catch {}
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ThemeProvider>
