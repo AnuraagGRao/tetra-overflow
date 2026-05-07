@@ -21,7 +21,7 @@ const BG_BASE = {
 }
 
 // ── Layer 1: Animated ambient gradient ───────────────────────────────────────
-function drawAmbient(ctx, bgType, w, h, t) {
+function drawAmbient(ctx, bgType, w, h, t, beat = 0) {
   switch (bgType) {
     // ── Existing ──────────────────────────────────────────────────────────────
     case 'lava':
@@ -2002,7 +2002,7 @@ export default function BackgroundCanvas({ bgType = 'stars', style, beatRef: _be
 
         if (bgType !== 'nyancat' && bgType !== 'custom') {
           ctx.globalAlpha = 1
-          drawAmbient(ctx, bgType, w, hh, t)
+          drawAmbient(ctx, bgType, w, hh, t, beat)
           ctx.globalAlpha = 1
           for (let i=particles.length-1;i>=0;i--) {
             const dead = updateParticle(particles[i], bgType, w, hh, dt)

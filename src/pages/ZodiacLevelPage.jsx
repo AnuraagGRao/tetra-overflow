@@ -32,7 +32,7 @@ const KEY_BINDINGS = {
   KeyP:       { action: 'pause' },
 }
 
-const PHASE = { STORY: 'story', GAME: 'game', COMPLETE: 'complete', FAIL: 'fail' }
+const PHASE = { STORY: 'story', LOADING: 'loading', GAME: 'game', COMPLETE: 'complete', FAIL: 'fail' }
 
 // ─── Mini piece preview ────────────────────────────────────────────────────────
 function getPieceColor(type, theme) {
@@ -92,6 +92,18 @@ function useBossAbility({ bossId, engine, state, linesThisLevel, isActive }) {
   const [abilityActive,    setAbilityActive]     = useState(false)
   const [abilityLabel,     setAbilityLabel]      = useState('')
   const [poisonSet,        setPoisonSet]         = useState(() => new Set())
+  const [abilityToast,     setAbilityToast]      = useState(null)   // floating toast text
+  const [toastId,          setToastId]           = useState(0)      // unique key per toast
+  const [_attackTick,      setAttackTick]        = useState(0)      // ticks to update countdown
+
+  const queueBossGarbage = useCallback((lines) => {
+    const amount = Math.max(0, lines | 0)
+    if (amount <= 0) return
+    try {
+      if (engine.mode === GAME_MODE.VERSUS) engine.receiveGarbage(amount)
+      else engine.pendingGarbage = (engine.pendingGarbage ?? 0) + amount
+    } catch {}
+  }, [engine])
 
   // Internal refs (avoid stale-closure issues in timers)
   const linesRef         = useRef(0)
@@ -102,6 +114,10 @@ function useBossAbility({ bossId, engine, state, linesThisLevel, isActive }) {
   const piecesPlacedRef  = useRef(0)
   const colorShiftRef    = useRef(0)
   const colorRafRef      = useRef(null)
+  const toastTimerRef    = useRef(null)  // setTimeout for auto-hiding toast
+  const attackTickRef    = useRef(null)  // setInterval for countdown display
+  const attackStartRef   = useRef(null)  // when current timer interval started
+  const attackTotalRef   = useRef(null)  // total interval duration in ms
 
   // Clear all timers on unmount or boss change
   useEffect(() => {
@@ -111,6 +127,8 @@ function useBossAbility({ bossId, engine, state, linesThisLevel, isActive }) {
       clearInterval(whirlTimerRef.current)
       clearInterval(tremorTimerRef.current)
       cancelAnimationFrame(colorRafRef.current)
+      clearInterval(attackTickRef.current)
+      clearTimeout(toastTimerRef.current)
     }
   }, [bossId])
 
@@ -141,14 +159,19 @@ function useBossAbility({ bossId, engine, state, linesThisLevel, isActive }) {
   useEffect(() => {
     if (bossId !== 'taurus' || !isActive) return
     clearInterval(tremorTimerRef.current)
+    attackStartRef.current = performance.now()
+    attackTotalRef.current = 10000
+    clearInterval(attackTickRef.current)
+    attackTickRef.current = setInterval(() => setAttackTick(t => t + 1), 100)
     tremorTimerRef.current = setInterval(() => {
       if (!isActive) return
       try { engine.hardDrop() } catch {}
       setAbilityActive(true)
       setAbilityLabel('TREMOR')
+      attackStartRef.current = performance.now()
       setTimeout(() => { setAbilityActive(false); setAbilityLabel('') }, 800)
     }, 10000)
-    return () => clearInterval(tremorTimerRef.current)
+    return () => { clearInterval(tremorTimerRef.current); clearInterval(attackTickRef.current) }
   }, [bossId, isActive, engine])
 
   // ── Ability: meteor strike — garbage every 5 lines (Aries) ───────────────
@@ -160,30 +183,35 @@ function useBossAbility({ bossId, engine, state, linesThisLevel, isActive }) {
       linesThisLevel > 0 &&
       Math.floor(linesThisLevel / TRIGGER_EVERY) > Math.floor(prevLines / TRIGGER_EVERY)
     ) {
-      try { engine.receiveGarbage(1) } catch {}
+      queueBossGarbage(3)
       setAbilityActive(true)
       setAbilityLabel('METEOR STRIKE')
       setTimeout(() => { setAbilityActive(false); setAbilityLabel('') }, 1200)
     }
     linesRef.current = linesThisLevel
-  }, [bossId, linesThisLevel, isActive, engine])
+  }, [bossId, linesThisLevel, isActive, queueBossGarbage])
 
   // ── Ability: high tide — fog every 15s (Cancer) ───────────────────────────
   useEffect(() => {
     if (bossId !== 'cancer' || !isActive) return
     clearInterval(fogTimerRef.current)
+    attackStartRef.current = performance.now()
+    attackTotalRef.current = 15000
+    clearInterval(attackTickRef.current)
+    attackTickRef.current = setInterval(() => setAttackTick(t => t + 1), 100)
     fogTimerRef.current = setInterval(() => {
       if (!isActive) return
       setFogRows(true)
       setAbilityActive(true)
       setAbilityLabel('HIGH TIDE')
+      attackStartRef.current = performance.now()
       setTimeout(() => {
         setFogRows(false)
         setAbilityActive(false)
         setAbilityLabel('')
       }, 8000)
     }, 15000)
-    return () => clearInterval(fogTimerRef.current)
+    return () => { clearInterval(fogTimerRef.current); clearInterval(attackTickRef.current) }
   }, [bossId, isActive])
 
   // ── Ability: solar flare — hide next 3 pieces on Tetris (Leo) ────────────
@@ -234,8 +262,13 @@ function useBossAbility({ bossId, engine, state, linesThisLevel, isActive }) {
   // ── Ability: imbalance — check height diff periodically (Libra) ──────────
   useEffect(() => {
     if (bossId !== 'libra' || !isActive) return
+    attackStartRef.current = performance.now()
+    attackTotalRef.current = 4000
+    clearInterval(attackTickRef.current)
+    attackTickRef.current = setInterval(() => setAttackTick(t => t + 1), 100)
     const id = setInterval(() => {
       if (!isActive) return
+      attackStartRef.current = performance.now()
       try {
         const board = engine.board
         if (!board) return
@@ -251,15 +284,15 @@ function useBossAbility({ bossId, engine, state, linesThisLevel, isActive }) {
         for (let c = 0; c < half; c++) leftMax = Math.max(leftMax, getColHeight(c))
         for (let c = half; c < W; c++) rightMax = Math.max(rightMax, getColHeight(c))
         if (Math.abs(leftMax - rightMax) >= 5) {
-          try { engine.receiveGarbage(1) } catch {}
+          queueBossGarbage(3)
           setAbilityActive(true)
           setAbilityLabel('IMBALANCE')
           setTimeout(() => { setAbilityActive(false); setAbilityLabel('') }, 1200)
         }
       } catch {}
     }, 4000)
-    return () => clearInterval(id)
-  }, [bossId, isActive, engine])
+    return () => { clearInterval(id); clearInterval(attackTickRef.current) }
+  }, [bossId, isActive, engine, queueBossGarbage])
 
   // ── Ability: poison blocks (Scorpio) ─────────────────────────────────────
   // Tag every 3rd queued piece as poisoned; on line-clear with poisoned piece → speed boost
@@ -310,36 +343,40 @@ function useBossAbility({ bossId, engine, state, linesThisLevel, isActive }) {
     const cur = state.lastClear
     if (cur && cur !== prevClearSag.current && cur.lines > 0) {
       prevClearSag.current = cur
-      if (Math.random() < 0.30) {
-        try { engine.receiveGarbage(1) } catch {}
+      if (Math.random() < 0.45) {
+        queueBossGarbage(3)
         setAbilityActive(true)
         setAbilityLabel('VOLLEY SHOT')
         setTimeout(() => { setAbilityActive(false); setAbilityLabel('') }, 1000)
       }
     }
-  }, [bossId, state.lastClear, isActive, engine])
+  }, [bossId, state.lastClear, isActive, queueBossGarbage])
 
-  // ── Ability: avalanche — 2 garbage every 10 lines (Capricorn) ────────────
+  // ── Ability: avalanche — 2 garbage every 5 lines (Capricorn) ────────────
   useEffect(() => {
     if (bossId !== 'capricorn' || !isActive) return
-    const TRIGGER_EVERY = 10
+    const TRIGGER_EVERY = 5
     const prevLines = linesRef.current
     if (
       linesThisLevel > 0 &&
       Math.floor(linesThisLevel / TRIGGER_EVERY) > Math.floor(prevLines / TRIGGER_EVERY)
     ) {
-      try { engine.receiveGarbage(2) } catch {}
+      queueBossGarbage(2)
       setAbilityActive(true)
       setAbilityLabel('AVALANCHE')
       setTimeout(() => { setAbilityActive(false); setAbilityLabel('') }, 1400)
     }
     linesRef.current = linesThisLevel
-  }, [bossId, linesThisLevel, isActive, engine])
+  }, [bossId, linesThisLevel, isActive, queueBossGarbage])
 
   // ── Ability: whirlwind — random nudge every 3.5s (Aquarius) ──────────────
   useEffect(() => {
     if (bossId !== 'aquarius' || !isActive) return
     clearInterval(whirlTimerRef.current)
+    attackStartRef.current = performance.now()
+    attackTotalRef.current = 3500
+    clearInterval(attackTickRef.current)
+    attackTickRef.current = setInterval(() => setAttackTick(t => t + 1), 100)
     whirlTimerRef.current = setInterval(() => {
       if (!isActive) return
       try {
@@ -348,9 +385,10 @@ function useBossAbility({ bossId, engine, state, linesThisLevel, isActive }) {
       } catch {}
       setAbilityActive(true)
       setAbilityLabel('WHIRLWIND')
+      attackStartRef.current = performance.now()
       setTimeout(() => { setAbilityActive(false); setAbilityLabel('') }, 700)
     }, 3500)
-    return () => clearInterval(whirlTimerRef.current)
+    return () => { clearInterval(whirlTimerRef.current); clearInterval(attackTickRef.current) }
   }, [bossId, isActive, engine])
 
   // ── Ability: illusion — cycle hue rotation (Pisces) ──────────────────────
@@ -378,19 +416,49 @@ function useBossAbility({ bossId, engine, state, linesThisLevel, isActive }) {
       setConstrictionCols(newCols)
       // Send 2 garbage rows to simulate column lockoff
       if (newCols > constrictionCols) {
-        try { engine.receiveGarbage(2) } catch {}
+        queueBossGarbage(2)
         setAbilityActive(true)
         setAbilityLabel('CONSTRICTION')
         setTimeout(() => { setAbilityActive(false); setAbilityLabel('') }, 1600)
       }
     }
-  }, [bossId, linesThisLevel, isActive, constrictionCols, engine])
+  }, [bossId, linesThisLevel, isActive, constrictionCols, queueBossGarbage])
 
   // ── Sync linesRef for multi-use bosses ────────────────────────────────────
   useEffect(() => {
     if (!['aries', 'capricorn'].includes(bossId)) return
     linesRef.current = linesThisLevel
   }, [bossId, linesThisLevel])
+
+  // ── Toast: show floating label on every ability activation ────────────────
+  const prevAbilityActiveRef = useRef(false)
+  useEffect(() => {
+    if (abilityActive && !prevAbilityActiveRef.current) {
+      setAbilityToast(abilityLabel)
+      setToastId(id => id + 1)
+      clearTimeout(toastTimerRef.current)
+      toastTimerRef.current = setTimeout(() => setAbilityToast(null), 2500)
+    }
+    prevAbilityActiveRef.current = abilityActive
+  }, [abilityActive, abilityLabel])
+
+  // ── Attack indicator: countdown (timer bosses) or fill bar (line bosses) ───
+  let attackIndicator = null
+  if (isActive) {
+    if (['taurus', 'cancer', 'aquarius', 'libra'].includes(bossId) && attackStartRef.current !== null) {
+      const elapsed = performance.now() - attackStartRef.current
+      const total   = attackTotalRef.current
+      attackIndicator = { type: 'timer', ms: Math.max(0, total - elapsed), total }
+    } else if (bossId === 'aries') {
+      attackIndicator = { type: 'line', fill: (linesThisLevel % 5) / 5, label: 'METEOR STRIKE' }
+    } else if (bossId === 'gemini') {
+      attackIndicator = { type: 'line', fill: (linesThisLevel % 8) / 8, label: 'MIRROR IMAGE' }
+    } else if (bossId === 'capricorn') {
+      attackIndicator = { type: 'line', fill: (linesThisLevel % 10) / 10, label: 'AVALANCHE' }
+    } else if (bossId === 'ophiuchus') {
+      attackIndicator = { type: 'line', fill: (linesThisLevel % 10) / 10, label: 'CONSTRICTION' }
+    }
+  }
 
   return {
     mirrorControls,
@@ -403,6 +471,9 @@ function useBossAbility({ bossId, engine, state, linesThisLevel, isActive }) {
     speedBoostActive,
     abilityActive,
     abilityLabel,
+    abilityToast,
+    toastId,
+    attackIndicator,
   }
 }
 
@@ -531,6 +602,16 @@ export default function ZodiacLevelPage() {
   const [showSettings, setShowSettings] = useState(false)
   const [easyMode,   setEasyMode]   = useState(() => { try { return localStorage.getItem('story-easy') === '1' } catch { return false } })
   const [focus,      setFocus]      = useState(() => { try { return localStorage.getItem('focus-mode') === '1' } catch { return false } })
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768)
+  const [zoom, setZoom] = useState(() => {
+    const saved = Number(localStorage.getItem('tetris-zoom') || 1)
+    return saved >= 1 && saved <= 1.5 ? saved : 1
+  })
+  const cycleZoom = useCallback(() => setZoom((z) => {
+    const next = z >= 1.5 ? 1 : z >= 1.25 ? 1.5 : 1.25
+    localStorage.setItem('tetris-zoom', next)
+    return next
+  }), [])
 
   const engine = useMemo(() => new TetrisEngine(), [])
 
@@ -546,19 +627,25 @@ export default function ZodiacLevelPage() {
     getStoryProgress(user.uid).then(p => setProgress(p || {})).catch(() => setProgress({}))
   }, [user])
 
+  const effectiveProgress = useMemo(() => (
+    phase === PHASE.COMPLETE
+      ? { ...progress, [`zodiac_${bossId}_completed`]: true }
+      : progress
+  ), [progress, phase, bossId])
+
   const nextBossId = useMemo(() => {
     try {
       const order = ZODIAC_BOSSES.map(b => b.id)
       // Offer Ophiuchus at the end only once all 12 are beaten and Ophiuchus not yet cleared
-      if (allZodiacBeaten(progress) && !ophiuchusBeaten(progress)) order.push('ophiuchus')
+      if (allZodiacBeaten(effectiveProgress) && !ophiuchusBeaten(effectiveProgress)) order.push('ophiuchus')
       const start = Math.max(0, order.indexOf(bossId))
       for (let i = 1; i <= order.length; i++) {
         const id = order[(start + i) % order.length]
-        if (!progress[`zodiac_${id}_completed`]) return id
+        if (!effectiveProgress[`zodiac_${id}_completed`]) return id
       }
       return null
     } catch { return null }
-  }, [bossId, progress])
+  }, [bossId, effectiveProgress])
 
   const CONFIG_KEY = 'tetris-config'
   const DEFAULT_CONFIG = { sfxEnabled: true, hapticEnabled: true, musicVolume: 1.0, sfxVolume: 2.0, das: 110, arr: 25, showOnScreenControls: false }
@@ -581,9 +668,24 @@ export default function ZodiacLevelPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  useEffect(() => {
+    pendingResetRef.current = true
+    levelStartLinesRef.current = 0
+    setFinalLines(0)
+    setFinalScore(0)
+    setStoryCountdown(null)
+    setPhase(PHASE.STORY)
+  }, [bossId])
+
   // Music
   useEffect(() => {
-    if (phase === PHASE.GAME) {
+    if (phase === PHASE.LOADING || phase === PHASE.GAME) {
       const Ctx = window.AudioContext || window.webkitAudioContext
       if (Ctx && !musicRef.current) musicRef.current = new Season2MusicManager(new Ctx())
       musicRef.current?.playForBoss(bossId)
@@ -620,10 +722,19 @@ export default function ZodiacLevelPage() {
       if (remaining <= 0) {
         clearInterval(id)
         pendingResetRef.current = true
-        setPhase(PHASE.GAME)
+        setPhase(PHASE.LOADING)
       }
     }, 1000)
     return () => clearInterval(id)
+  }, [phase, bossId])
+
+  useEffect(() => {
+    if (phase !== PHASE.LOADING) return
+    const id = setTimeout(() => {
+      pendingResetRef.current = true
+      setPhase(PHASE.GAME)
+    }, 650)
+    return () => clearTimeout(id)
   }, [phase, bossId])
 
   const effectiveTargetLines = easyMode ? (boss?.easyTargetLines ?? 32) : (boss?.targetLines ?? 40)
@@ -693,6 +804,9 @@ export default function ZodiacLevelPage() {
     poisonSet,
     abilityActive,
     abilityLabel,
+    abilityToast,
+    toastId,
+    attackIndicator,
   } = useBossAbility({ bossId, engine, state, linesThisLevel, isActive: loopActive && !paused })
 
   // Keep refs in sync — read by keyboard handler and drag callbacks each frame
@@ -906,7 +1020,7 @@ export default function ZodiacLevelPage() {
 
                 <motion.button
                   whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
-                  onClick={() => { pendingResetRef.current = true; setPhase(PHASE.GAME) }}
+                  onClick={() => { pendingResetRef.current = true; setPhase(PHASE.LOADING) }}
                   style={{ background: boss.color, border: 'none', color: '#000', borderRadius: 8, padding: '11px 28px', fontSize: '0.82rem', fontWeight: 900, letterSpacing: '0.2em', cursor: 'pointer', fontFamily: 'inherit', textTransform: 'uppercase' }}
                 >
                   {storyCountdown !== null && storyCountdown > 0 ? `CHALLENGE (${storyCountdown}s)` : 'CHALLENGE'}
@@ -918,6 +1032,31 @@ export default function ZodiacLevelPage() {
                 >
                   ← Zodiac Map
                 </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {phase === PHASE.LOADING && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{ position: 'absolute', inset: 0, zIndex: 105, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(4px)' }}
+          >
+            <motion.div initial={{ y: 10, opacity: 0 }} animate={{ y: 0, opacity: 1 }} style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '0.56rem', letterSpacing: '0.24em', color: boss.color, marginBottom: 12 }}>
+                SUMMONING CONSTELLATION
+              </div>
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 0.85, repeat: Infinity, ease: 'linear' }}
+                style={{ width: 36, height: 36, margin: '0 auto 10px', borderRadius: '50%', border: `2px solid ${boss.color}55`, borderTopColor: boss.color }}
+              />
+              <div style={{ fontSize: '0.62rem', color: '#9ca3af', letterSpacing: '0.12em' }}>
+                Loading boss music and arena...
               </div>
             </motion.div>
           </motion.div>
@@ -975,14 +1114,44 @@ export default function ZodiacLevelPage() {
                 >
                   {paused ? '▶' : '⏸'}
                 </button>
+                {!isMobile && (
+                  <button
+                    onClick={cycleZoom}
+                    style={{ background: 'none', border: '1px solid rgba(255,255,255,0.2)', color: '#aaa', cursor: 'pointer', fontSize: '0.6rem', padding: '3px 8px', borderRadius: 4, fontFamily: 'inherit' }}
+                    title="Cycle zoom"
+                  >
+                    🔍 {Math.round(zoom * 100)}%
+                  </button>
+                )}
               </div>
             </div>
           )}
 
-          {/* Lines progress bar */}
-          <div style={{ height: 3, background: 'rgba(255,255,255,0.08)', flexShrink: 0 }}>
-            <div style={{ height: '100%', background: boss.color, width: `${Math.min(100, (linesThisLevel / effectiveTargetLines) * 100)}%`, transition: 'width 0.3s ease' }} />
-          </div>
+          {/* Boss HP bar — drains left as player clears lines */}
+          {(() => {
+            const hpPct = Math.max(0, Math.min(100, 100 - (linesThisLevel / effectiveTargetLines) * 100))
+            const hpColor = hpPct > 60 ? boss.color
+              : hpPct > 30 ? '#f59e0b'
+              : '#ef4444'
+            return (
+              <div style={{ height: 6, background: 'rgba(255,255,255,0.06)', flexShrink: 0, position: 'relative', overflow: 'hidden' }}>
+                {/* Segmented tick marks */}
+                {[25, 50, 75].map(pct => (
+                  <div key={pct} style={{ position: 'absolute', top: 0, bottom: 0, left: `${pct}%`, width: 1, background: 'rgba(0,0,0,0.4)', zIndex: 2 }} />
+                ))}
+                {/* HP fill — starts full and shrinks from the right */}
+                <motion.div
+                  style={{ position: 'absolute', top: 0, left: 0, bottom: 0, background: hpColor, transformOrigin: 'left center', boxShadow: `0 0 6px ${hpColor}88` }}
+                  animate={{ width: `${hpPct}%`, background: hpColor }}
+                  transition={{ duration: 0.4, ease: 'easeOut' }}
+                />
+                {/* HP label */}
+                <div style={{ position: 'absolute', right: 4, top: 0, bottom: 0, display: 'flex', alignItems: 'center', fontSize: '0.38rem', color: 'rgba(255,255,255,0.45)', letterSpacing: '0.12em', zIndex: 3, pointerEvents: 'none' }}>
+                  HP
+                </div>
+              </div>
+            )
+          })()}
 
           {/* Canvas area */}
           <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'stretch' }}>
@@ -992,7 +1161,7 @@ export default function ZodiacLevelPage() {
               <SynesthesiaMotionLayer style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>
                 <div style={{ position: 'relative', height: '100%', display: 'flex', alignItems: 'center' }}>
                   {/* Illusion effect wrapper (Pisces) */}
-                  <div style={{ ...illusionStyle }}>
+                  <div style={{ ...illusionStyle, ...(!isMobile ? { transform: `scale(${zoom})`, transformOrigin: 'center center' } : {}) }}>
                     <GameCanvas
                       state={{
                         ...state,
@@ -1014,6 +1183,11 @@ export default function ZodiacLevelPage() {
                       onHardDrop={handleHardDrop}
                       themeOverride={pieceTheme}
                       boardAlpha={boardAlpha}
+                      activePieceEffect={
+                        bossId === 'scorpio' && speedBoostActive ? 'poison'
+                        : bossId === 'virgo' && rotationLocked ? 'rotlock'
+                        : null
+                      }
                     />
                   </div>
 
@@ -1082,6 +1256,39 @@ export default function ZodiacLevelPage() {
                       ☀ FLARE<br />({hideNextCount})
                     </div>
                   )}
+
+                  {/* Floating ability toast */}
+                  <AnimatePresence>
+                    {abilityToast && (
+                      <motion.div
+                        key={toastId}
+                        initial={{ opacity: 0, y: 8, scale: 0.88 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -8, scale: 0.94 }}
+                        transition={{ duration: 0.22 }}
+                        style={{
+                          position: 'absolute',
+                          top: '10%',
+                          left: '50%',
+                          transform: 'translateX(-50%)',
+                          background: 'rgba(0,0,0,0.88)',
+                          border: `1px solid ${boss.color}cc`,
+                          borderRadius: 8,
+                          padding: '6px 16px',
+                          fontSize: '0.72rem',
+                          color: boss.color,
+                          letterSpacing: '0.2em',
+                          fontWeight: 900,
+                          whiteSpace: 'nowrap',
+                          zIndex: 25,
+                          pointerEvents: 'none',
+                          boxShadow: `0 0 18px ${boss.color}55`,
+                        }}
+                      >
+                        ⚡ {abilityToast}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
 
                 {/* Focus toggle */}
@@ -1103,6 +1310,23 @@ export default function ZodiacLevelPage() {
                     : (state.zoneMeter || 0)))
                   return (
                     <div className="fullscreen-mini-hud" style={{ right: 0 }}>
+                      {/* Boss HP bar in focus mode */}
+                      {(() => {
+                        const hpPct = Math.max(0, 100 - Math.min(100, (linesThisLevel / effectiveTargetLines) * 100))
+                        const hpColor = hpPct > 60 ? boss.color : hpPct > 30 ? '#f59e0b' : '#ef4444'
+                        return (
+                          <div style={{ width: '100%', padding: '4px 5px 0', boxSizing: 'border-box' }}>
+                            <div style={{ fontSize: '0.38rem', color: '#555', letterSpacing: '0.1em', marginBottom: 2, textAlign: 'center' }}>BOSS HP</div>
+                            <div style={{ height: 4, background: 'rgba(255,255,255,0.07)', borderRadius: 2, overflow: 'hidden', position: 'relative' }}>
+                              <motion.div
+                                style={{ height: '100%', background: hpColor, borderRadius: 2, boxShadow: `0 0 5px ${hpColor}88`, transformOrigin: 'left center' }}
+                                animate={{ width: `${hpPct}%`, background: hpColor }}
+                                transition={{ duration: 0.4, ease: 'easeOut' }}
+                              />
+                            </div>
+                          </div>
+                        )
+                      })()}
                       <div className="fmh-hold">
                         <div className="fmh-label">Hold</div>
                         <PieceMini type={state.hold} pieceTheme={pieceTheme} size={8} />
@@ -1117,6 +1341,32 @@ export default function ZodiacLevelPage() {
                         ))}
                         {hideNextCount > 0 && <div style={{ fontSize: '0.7rem', color: '#ffcc00' }}>☀</div>}
                       </div>
+                      {/* Attack indicator — timer countdown or line fill bar */}
+                      {attackIndicator && !paused && (
+                        <div style={{ padding: '6px 5px 2px', textAlign: 'center', minWidth: 0, width: '100%' }}>
+                          {attackIndicator.type === 'timer' ? (
+                            <>
+                              <div style={{ fontSize: '0.42rem', color: '#777', letterSpacing: '0.1em', marginBottom: 4, textTransform: 'uppercase' }}>Next Attack</div>
+                              <div style={{ fontSize: '0.72rem', color: boss.color, fontWeight: 900, fontVariantNumeric: 'tabular-nums' }}>
+                                {(attackIndicator.ms / 1000).toFixed(1)}s
+                              </div>
+                              <div style={{ width: '100%', height: 3, background: 'rgba(255,255,255,0.08)', borderRadius: 2, overflow: 'hidden', marginTop: 5 }}>
+                                <div style={{ height: '100%', width: `${Math.min(100, (1 - attackIndicator.ms / attackIndicator.total) * 100)}%`, background: boss.color, borderRadius: 2, transition: 'none' }} />
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div style={{ fontSize: '0.42rem', color: '#777', letterSpacing: '0.1em', marginBottom: 4, textTransform: 'uppercase' }}>Charging</div>
+                              <div style={{ width: '100%', height: 3, background: 'rgba(255,255,255,0.08)', borderRadius: 2, overflow: 'hidden' }}>
+                                <div style={{ height: '100%', width: `${Math.round(attackIndicator.fill * 100)}%`, background: `linear-gradient(90deg, ${boss.color}88, ${boss.color})`, borderRadius: 2 }} />
+                              </div>
+                              <div style={{ fontSize: '0.52rem', color: boss.color, fontWeight: 700, marginTop: 4, letterSpacing: '0.12em' }}>
+                                {attackIndicator.label}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )
                 })()}

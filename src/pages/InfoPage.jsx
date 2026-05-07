@@ -68,7 +68,7 @@ export default function InfoPage() {
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2000) }
   const GPay_UPI  = import.meta.env.VITE_GPAY_UPI || ''
-  const GPay_NAME = import.meta.env.VITE_GPAY_NAME || 'Tetra Overflow'
+  const GPay_NAME = 'Tetra Overflow'
   const gpayUrl   = GPay_UPI ? `upi://pay?pa=${encodeURIComponent(GPay_UPI)}&pn=${encodeURIComponent(GPay_NAME)}&cu=INR` : ''
 
   const CRYPTO_ADDRESSES = [
@@ -227,7 +227,7 @@ export default function InfoPage() {
             <span style={{ fontSize: '1.4rem' }}>🅖</span>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#34d399', letterSpacing: '0.1em' }}>Google Pay (UPI)</div>
-              <div style={{ fontSize: '0.58rem', color: '#555', letterSpacing: '0.06em', overflow: 'hidden', textOverflow: 'ellipsis' }}>{GPay_UPI || 'Set VITE_GPAY_UPI in .env'}</div>
+              <div style={{ fontSize: '0.58rem', color: '#555', letterSpacing: '0.06em', overflow: 'hidden', textOverflow: 'ellipsis' }}>{GPay_UPI}</div>
             </div>
             <button
               onClick={async () => { if (!GPay_UPI) return; try { await navigator.clipboard?.writeText(GPay_UPI); showToast('✓ UPI copied'); } catch {} }}

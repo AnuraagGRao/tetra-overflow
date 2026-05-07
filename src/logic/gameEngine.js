@@ -826,8 +826,15 @@ export class TetrisEngine {
 
   // Versus: receive garbage from opponent
   receiveGarbage(lines) {
-    this.incomingGarbage = (this.incomingGarbage ?? 0) + Math.max(0, lines | 0)
-    this.incomingDelayLocks = 2
+    const amount = Math.max(0, lines | 0)
+    if (amount <= 0) return
+    if (this.mode === GAME_MODE.VERSUS) {
+      this.incomingGarbage = (this.incomingGarbage ?? 0) + amount
+      this.incomingDelayLocks = 2
+      return
+    }
+    // Story/Zodiac/single-player attacks use the legacy immediate queue path.
+    this.pendingGarbage = (this.pendingGarbage ?? 0) + amount
   }
 
   _applyGarbage(lines) {

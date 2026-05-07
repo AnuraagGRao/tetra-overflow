@@ -1218,6 +1218,27 @@ export default function App() {
   const _chaosSfxMutedUntilRef = useRef(0)
   const chaosCueEndAtRef = useRef(0)
   const [floorFx, setFloorFx] = useState(null) // { until, floor, burstCat }
+
+  // ─── Illusion effect (purchasable store effect: effect_illusion) ──────────
+  const [hasIllusion] = useState(() => {
+    try { return (JSON.parse(localStorage.getItem('selectedEffects') ?? '[]')).includes('effect_illusion') }
+    catch { return false }
+  })
+  const illusionShiftRef = useRef(0)
+  const illusionRafRef   = useRef(null)
+  const [illusionShift,  setIllusionShift]  = useState(0)
+  useEffect(() => {
+    if (!hasIllusion) { cancelAnimationFrame(illusionRafRef.current); return }
+    let prev = performance.now()
+    const tick = (now) => {
+      const dt = now - prev; prev = now
+      illusionShiftRef.current = (illusionShiftRef.current + dt * 0.12) % 360
+      setIllusionShift(illusionShiftRef.current)
+      illusionRafRef.current = requestAnimationFrame(tick)
+    }
+    illusionRafRef.current = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(illusionRafRef.current)
+  }, [hasIllusion])
   useEffect(() => {
     const el = new Audio(catMusicUrl)
     el.loop = false
@@ -1754,6 +1775,7 @@ export default function App() {
           saveGameResult(user.uid, gameModeRef.current, ns.score, {
             lines: ns.lines,
             level: ns.level,
+            blocksPurified: ns.mode === GAME_MODE.PURIFY ? (ns.blocksPurified || 0) : 0,
             floors: ns.towerFloor || 0,
             tSpins: sessionTSpinsRef.current || 0,
             iPieceLines: sessionILinesRef.current || 0,
@@ -2080,6 +2102,8 @@ export default function App() {
   const isUltimate = state.mode === GAME_MODE.ULTIMATE
   const isVersus   = state.mode === GAME_MODE.VERSUS
   const showZone   = state.mode === GAME_MODE.NORMAL || state.mode === GAME_MODE.ULTIMATE
+  const illusionFilterStyle = hasIllusion && !state.gameOver
+    ? { filter: `hue-rotate(${Math.round(illusionShift)}deg)` } : {}
 
   // Glitch effect: active in Ultimate when stack reaches row 10 from top
   const glitchActive = isUltimate && (() => {
@@ -2422,7 +2446,7 @@ export default function App() {
               </div>
             )}
       {state.backToBack && <div className="b2b-badge">🔥 B2B x{(state.b2bCount ?? 0) + 1}</div>}
-            <SynesthesiaMotionLayer className={`game-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`}>
+            <SynesthesiaMotionLayer className={`game-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`} style={illusionFilterStyle}>
               <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
                 onTwoFingerTap={() => triggerAction('activateZone')}
                 onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop}
@@ -2602,12 +2626,7 @@ export default function App() {
               style={{ width: `${zoneFillPct}%` }} />
           </div>
         )}
-        {/* chaos bar (Ultimate) */}
-        {isUltimate && !state.gameOver && (
-          <div style={{ marginTop: 6, width: '100%', height: 6, background: 'rgba(255,255,255,0.08)', borderRadius: 3, overflow: 'hidden' }}>
-            <div style={{ width: `${Math.round(Math.max(0, Math.min(1, 1 - (state.ultimateTimer / (state.ultimatePeriod || 1)))) * 100)}%`, height: '100%', background: 'linear-gradient(90deg,#a855f7,#22d3ee)' }} />
-          </div>
-        )}
+
         {isPurify && !state.gameOver && (
           <div title="Next infection wave" style={{ marginTop: 6, width: '100%', display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ fontSize: '0.66rem', color: '#a78bfa', letterSpacing: '0.08em' }}>INF</span>
@@ -2619,7 +2638,7 @@ export default function App() {
         )}
 
         {/* board */}
-        <SynesthesiaMotionLayer className={`ls-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`} style={{ background: 'transparent' }}>
+        <SynesthesiaMotionLayer className={`ls-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`} style={{ background: 'transparent', ...illusionFilterStyle }}>
           <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
             onTwoFingerTap={() => triggerAction('activateZone')}
             onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop}
@@ -2770,7 +2789,7 @@ export default function App() {
           <span style={{ fontSize: '0.68rem', color: '#a78bfa', width: 28, textAlign: 'right' }}>{Math.ceil((state.infectionTimer || 0) / 1000)}s</span>
         </div>
       )}
-      <SynesthesiaMotionLayer className={`mobile-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`} style={{ background: 'transparent' }}>
+      <SynesthesiaMotionLayer className={`mobile-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`} style={{ background: 'transparent', ...illusionFilterStyle }}>
         <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
           onTwoFingerTap={() => triggerAction('activateZone')}
           onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop}

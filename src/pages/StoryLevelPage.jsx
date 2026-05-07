@@ -222,7 +222,7 @@ function useStoryGameLoop(engine, targetLines, levelStartLinesRef, levelKey, onC
 }
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
-const PHASE = { STORY: 'story', GAME: 'game', TRANSITION: 'transition', COMPLETE: 'complete', FAIL: 'fail', ENDING: 'ending', MATRIX_ASCENT: 'matrix-ascent', MATRIX_END: 'matrix-end' }
+const PHASE = { STORY: 'story', LOADING: 'loading', GAME: 'game', TRANSITION: 'transition', COMPLETE: 'complete', FAIL: 'fail', ENDING: 'ending', MATRIX_ASCENT: 'matrix-ascent', MATRIX_END: 'matrix-end' }
 
 function MediaControls({ storyMusicRef, chapterColor }) {
   const [_bump, setBump] = useState(0)
@@ -282,6 +282,16 @@ export default function StoryLevelPage() {
   const transitionAdvanceRef = useRef(null) // stores the advance fn so CONTINUE button can call it
   const [focus, setFocus] = useState(() => { try { return localStorage.getItem('focus-mode') === '1' } catch { return false } })
   const [easyMode, setEasyMode] = useState(() => { try { return localStorage.getItem('story-easy') === '1' } catch { return false } })
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768)
+  const [zoom, setZoom] = useState(() => {
+    const saved = Number(localStorage.getItem('tetris-zoom') || 1)
+    return saved >= 1 && saved <= 1.5 ? saved : 1
+  })
+  const cycleZoom = useCallback(() => setZoom((z) => {
+    const next = z >= 1.5 ? 1 : z >= 1.25 ? 1.5 : 1.25
+    localStorage.setItem('tetris-zoom', next)
+    return next
+  }), [])
 
   // Engine persists across seamless level transitions — never reset between levels
   const engine = useMemo(() => new TetrisEngine(), [])  
@@ -318,9 +328,9 @@ export default function StoryLevelPage() {
     } catch { /* use engine defaults */ }
   }, [engine])
 
-  // Music: start on GAME, continue through TRANSITION, stop on FAIL / COMPLETE
+  // Music: warm up in LOADING, keep through GAME/TRANSITION, stop on FAIL / COMPLETE
   useEffect(() => {
-    if (phase === PHASE.GAME) {
+    if (phase === PHASE.LOADING || phase === PHASE.GAME) {
       const Ctx = window.AudioContext || window.webkitAudioContext
       if (Ctx && !storyMusicRef.current) storyMusicRef.current = new StoryMusicManager(new Ctx())
       storyMusicRef.current?.playForLevelContinuous(currentChapterId, currentLevelId)
@@ -340,6 +350,12 @@ export default function StoryLevelPage() {
     const onKey = (e) => { if (e.code === 'KeyF') setFocus(f => !f) }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
   }, [])
 
   // Persist easy mode toggle
@@ -378,11 +394,20 @@ export default function StoryLevelPage() {
       if (remaining <= 0) {
         clearInterval(id)
         pendingResetRef.current = true
-        setPhase(PHASE.GAME)
+        setPhase(PHASE.LOADING)
       }
     }, 1000)
     return () => clearInterval(id)
   }, [phase, currentChapterId, currentLevelId]) // reset timer on each new level story screen
+
+  useEffect(() => {
+    if (phase !== PHASE.LOADING) return
+    const id = setTimeout(() => {
+      pendingResetRef.current = true
+      setPhase(PHASE.GAME)
+    }, 650)
+    return () => clearTimeout(id)
+  }, [phase, currentChapterId, currentLevelId])
 
   // Seamless transition: pause to let the player read storyAfter text, then advance
   useEffect(() => {
@@ -746,7 +771,7 @@ export default function StoryLevelPage() {
                 )}
                 <motion.button
                   whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
-                  onClick={() => { pendingResetRef.current = true; setPhase(PHASE.GAME) }}
+                  onClick={() => { pendingResetRef.current = true; setPhase(PHASE.LOADING) }}
                   style={{ background: chapter.color, border: 'none', color: '#000', borderRadius: 8, padding: '11px 28px', fontSize: '0.82rem', fontWeight: 900, letterSpacing: '0.2em', cursor: 'pointer', fontFamily: 'inherit', textTransform: 'uppercase' }}
                 >
                   {storyCountdown !== null && storyCountdown > 0 ? `BEGIN (${storyCountdown}s)` : 'BEGIN'}
@@ -754,6 +779,35 @@ export default function StoryLevelPage() {
                 <button onClick={() => navigate('/story', { replace: true })} style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: '0.65rem', letterSpacing: '0.12em', fontFamily: 'inherit', marginTop: 4 }}>
                   ← Back to map
                 </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {phase === PHASE.LOADING && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{ position: 'absolute', inset: 0, zIndex: 105, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(4px)' }}
+          >
+            <motion.div
+              initial={{ y: 12, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              style={{ textAlign: 'center' }}
+            >
+              <div style={{ fontSize: '0.56rem', letterSpacing: '0.24em', color: chapter.color, marginBottom: 12 }}>
+                PREPARING BATTLE
+              </div>
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 0.85, repeat: Infinity, ease: 'linear' }}
+                style={{ width: 36, height: 36, margin: '0 auto 10px', borderRadius: '50%', border: `2px solid ${chapter.color}55`, borderTopColor: chapter.color }}
+              />
+              <div style={{ fontSize: '0.62rem', color: '#9ca3af', letterSpacing: '0.12em' }}>
+                Loading music and matrix...
               </div>
             </motion.div>
           </motion.div>
@@ -808,6 +862,15 @@ export default function StoryLevelPage() {
                 >
                   {paused ? '▶' : '⏸'}
                 </button>
+                {!isMobile && (
+                  <button
+                    onClick={cycleZoom}
+                    style={{ background: 'none', border: '1px solid rgba(255,255,255,0.2)', color: '#aaa', cursor: 'pointer', fontSize: '0.6rem', padding: '3px 8px', borderRadius: 4, fontFamily: 'inherit', letterSpacing: '0.1em' }}
+                    title="Cycle zoom"
+                  >
+                    🔍 {Math.round(zoom * 100)}%
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -833,16 +896,18 @@ export default function StoryLevelPage() {
             {/* Canvas */}
             <div className="mobile-canvas-wrap" style={{ background: 'transparent', flex: 1, minWidth: 0 }}>
               <SynesthesiaMotionLayer style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>
-                <GameCanvas
-                  state={state}
-                  onTap={() => { if (config?.sfxEnabled && !paused) try { playRotateSFX(pieceTheme || 'classic') } catch {}; emitSynesthesia(SYNESTHESIA_EVENT.ROTATE, { intensity: 1.0, source: 'story-tap' }); triggerAction('rotateCW'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
-                  onTwoFingerTap={() => { if (config?.sfxEnabled && !paused) try { playZoneActivateSFX(pieceTheme || 'classic') } catch {}; triggerAction('activateZone'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
-                  onDragBegin={handleDragBegin}
-                  onDragEnd={handleDragEnd}
-                  onHardDrop={handleHardDrop}
-                  themeOverride={pieceTheme}
-                  boardAlpha={boardAlpha}
-                />
+                <div style={!isMobile ? { transform: `scale(${zoom})`, transformOrigin: 'center center' } : undefined}>
+                  <GameCanvas
+                    state={state}
+                    onTap={() => { if (config?.sfxEnabled && !paused) try { playRotateSFX(pieceTheme || 'classic') } catch {}; emitSynesthesia(SYNESTHESIA_EVENT.ROTATE, { intensity: 1.0, source: 'story-tap' }); triggerAction('rotateCW'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
+                    onTwoFingerTap={() => { if (config?.sfxEnabled && !paused) try { playZoneActivateSFX(pieceTheme || 'classic') } catch {}; triggerAction('activateZone'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
+                    onDragBegin={handleDragBegin}
+                    onDragEnd={handleDragEnd}
+                    onHardDrop={handleHardDrop}
+                    themeOverride={pieceTheme}
+                    boardAlpha={boardAlpha}
+                  />
+                </div>
                 {/* Focus toggle styled like Solo's UI tab */}
                 <button
                   onClick={() => setFocus(f => !f)}

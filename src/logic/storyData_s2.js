@@ -180,7 +180,7 @@ export const ZODIAC_BOSSES = [
     easyTargetLines: 32,
     ability: 'avalanche',
     abilityLabel: 'AVALANCHE',
-    abilityDesc: 'Every 10 lines cleared, 2 stone garbage rows surge up from the bottom.',
+    abilityDesc: 'Every 5 lines cleared, 2 stone garbage rows surge up from the bottom.',
     storyBefore: "The climb is treacherous, and the peak is reserved only for the enduring. You will fall to the abyss.",
     storyAfter: "I have reached... the precipice... and slipped.",
   },

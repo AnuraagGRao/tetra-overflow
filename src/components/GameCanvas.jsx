@@ -95,7 +95,7 @@ const HARD_DROP_VEL_PX_MS = 0.45 // px/ms threshold for hard-drop vs soft-drop
 
 // drawCell is defined per-frame inside the useEffect as a theme-aware closure
 
-export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, onDragEnd, onHardDrop, themeOverride, boardAlpha, renderQuality = 'balanced' }) {
+export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, onDragEnd, onHardDrop, themeOverride, boardAlpha, renderQuality = 'balanced', activePieceEffect = null }) {
   const { theme: contextTheme, colorMode, bgTheme } = useTheme()
   // Solo/Casual: allow mixing — use explicit theme unless an override is passed
   const theme = themeOverride ?? contextTheme
@@ -940,7 +940,66 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
       })
     })
 
-    // ── Visual Effects (equipped) ─────────────────────────────────────────
+    // ── Active-piece boss effect overlays ─────────────────────────────────
+    // 'poison'  → sickly green tint + skull dots
+    // 'rotlock' → purple vine overlay
+    if (activePieceEffect === 'poison' || activePieceEffect === 'rotlock') {
+      const tNow = Date.now()
+      const pulse = 0.5 + 0.5 * Math.sin(tNow / 260)
+      state.current.matrix.forEach((row, py) => {
+        row.forEach((cell, px) => {
+          if (!cell) return
+          const bx = (state.current.x + px) * CELL_SIZE
+          const by = (state.current.y + py) * CELL_SIZE
+          if (state.current.y + py < 0) return
+          ctx.save()
+          if (activePieceEffect === 'poison') {
+            // Green tint wash
+            ctx.globalAlpha = 0.45 + 0.15 * pulse
+            ctx.fillStyle = '#22ff66'
+            ctx.fillRect(bx + 1, by + 1, CELL_SIZE - 2, CELL_SIZE - 2)
+            // Skull-dot cluster (3 tiny circles)
+            ctx.globalAlpha = 0.90
+            ctx.fillStyle = '#004400'
+            const dots = [[0.28, 0.30], [0.62, 0.58], [0.48, 0.72]]
+            for (const [dx, dy] of dots) {
+              ctx.beginPath()
+              ctx.arc(bx + dx * CELL_SIZE, by + dy * CELL_SIZE, 1.8, 0, Math.PI * 2)
+              ctx.fill()
+            }
+            // Bright outline
+            ctx.globalAlpha = 0.80 + 0.20 * pulse
+            ctx.strokeStyle = '#44ff88'
+            ctx.lineWidth = 1.2
+            ctx.shadowColor = '#44ff88'; ctx.shadowBlur = 6
+            ctx.strokeRect(bx + 1, by + 1, CELL_SIZE - 2, CELL_SIZE - 2)
+          } else {
+            // rotlock: purple vine tendrils
+            ctx.globalAlpha = 0.40 + 0.20 * pulse
+            ctx.fillStyle = '#aa44ff'
+            ctx.fillRect(bx + 1, by + 1, CELL_SIZE - 2, CELL_SIZE - 2)
+            // Cross crack lines
+            ctx.globalAlpha = 0.85
+            ctx.strokeStyle = '#55ff44'
+            ctx.lineWidth = 1.5
+            ctx.shadowColor = '#55ff44'; ctx.shadowBlur = 5
+            const mid = CELL_SIZE / 2
+            ctx.beginPath()
+            ctx.moveTo(bx + 2, by + mid); ctx.lineTo(bx + CELL_SIZE - 2, by + mid)
+            ctx.moveTo(bx + mid, by + 2); ctx.lineTo(bx + mid, by + CELL_SIZE - 2)
+            ctx.stroke()
+            // Corner spirals (simple arcs)
+            ctx.globalAlpha = 0.65 + 0.20 * pulse
+            ctx.strokeStyle = '#88ff66'; ctx.lineWidth = 1; ctx.shadowBlur = 4
+            ctx.beginPath()
+            ctx.arc(bx + 4, by + 4, 3.5, 0, Math.PI * 1.5); ctx.stroke()
+            ctx.beginPath()
+            ctx.arc(bx + CELL_SIZE - 4, by + CELL_SIZE - 4, 3.5, Math.PI, Math.PI * 2.5); ctx.stroke()
+          }
+          ctx.restore()
+        })
+      })
+    }
     const effs = Array.isArray(selectedEffectRef.current) ? selectedEffectRef.current : []
     // Helpers for trails effect
     const drawTrails = () => {

@@ -134,14 +134,17 @@ export const saveGameResult = async (uid, mode, score, extra = {}) => {
     lastPlayed: serverTimestamp(),
   }, { merge: true })
 
-  // Score-based earnings with diminishing returns and per-match cap.
-  const scoreCoins = calculateCoinsEarned(score)
+  // Purify mode pays 1 coin per purified block; other modes use score-based earnings.
+  const scoreCoins = mode === 'purify'
+    ? Math.max(0, Number(extra.blocksPurified || 0))
+    : calculateCoinsEarned(score)
   if (scoreCoins > 0) {
     await addCoinsWithLedger(uid, scoreCoins, {
       mode,
       source: 'score',
       score,
       lines: extra.lines || 0,
+      ...(mode === 'purify' ? { blocksPurified: Math.max(0, Number(extra.blocksPurified || 0)) } : {}),
     })
   }
 

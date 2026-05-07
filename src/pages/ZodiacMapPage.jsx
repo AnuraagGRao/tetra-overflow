@@ -202,6 +202,7 @@ export default function ZodiacMapPage() {
         <div style={{ fontSize: '0.65rem', color: '#555', letterSpacing: '0.1em' }}>
           {defeatedCount}/12
           {ophiuchus13 && <span style={{ color: '#00ff99', marginLeft: 4 }}>+⛎</span>}
+          {!allBeaten && defeatedCount > 0 && <span style={{ color: '#555', marginLeft: 4, fontSize: '0.55rem' }}>— beat all 12 to reveal the truth</span>}
         </div>
       </header>
 
@@ -296,19 +297,23 @@ export default function ZodiacMapPage() {
               )
             })}
 
-            {/* ── Center: Ophiuchus ── */}
+            {/* ── Center: Ophiuchus — only shown after all 12 beaten ── */}
+            {allBeaten && (
             <motion.g
+              initial={{ opacity: 0, scale: 0.6 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.7, ease: 'backOut' }}
               onClick={e => {
                 e.stopPropagation()
-                if (allBeaten) { playZoomIn(); setSelected('ophiuchus') }
+                playZoomIn(); setSelected('ophiuchus')
               }}
-              style={{ cursor: allBeaten ? 'pointer' : 'not-allowed' }}
+              style={{ cursor: 'pointer' }}
             >
               {/* Pulsing ring */}
               <motion.circle
                 cx="50" cy="50" r="10"
                 fill="none"
-                stroke={allBeaten ? '#00ff99' : 'rgba(255,255,255,0.08)'}
+                stroke='#00ff99'
                 strokeWidth="0.35"
                 strokeDasharray="2,2"
                 animate={{ rotate: [0, 360] }}
@@ -316,20 +321,18 @@ export default function ZodiacMapPage() {
                 style={{ transformOrigin: '50px 50px' }}
               />
               {/* Center glow */}
-              {allBeaten && (
-                <motion.circle
-                  cx="50" cy="50" r="7.5"
-                  fill="#00ff99"
-                  opacity={0.07}
-                  animate={{ r: [7.5, 10, 7.5] }}
-                  transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-                />
-              )}
+              <motion.circle
+                cx="50" cy="50" r="7.5"
+                fill="#00ff99"
+                opacity={0.07}
+                animate={{ r: [7.5, 10, 7.5] }}
+                transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+              />
               {/* Center circle */}
               <circle
                 cx="50" cy="50" r="6"
-                fill={ophiuchus13 ? '#00ff99' : allBeaten ? '#0a1a10' : '#08080f'}
-                stroke={allBeaten ? '#00ff99' : 'rgba(255,255,255,0.12)'}
+                fill={ophiuchus13 ? '#00ff99' : '#0a1a10'}
+                stroke='#00ff99'
                 strokeWidth="0.5"
               />
               {/* Glyph */}
@@ -337,23 +340,24 @@ export default function ZodiacMapPage() {
                 x="50" y="51.5"
                 textAnchor="middle"
                 fontSize="5.5"
-                fill={allBeaten ? (ophiuchus13 ? '#000' : '#00ff99') : 'rgba(255,255,255,0.18)'}
+                fill={ophiuchus13 ? '#000' : '#00ff99'}
                 style={{ pointerEvents: 'none', fontFamily: 'serif' }}
               >
-                {allBeaten ? '⛎' : '🔒'}
+                ⛎
               </text>
               {/* Label */}
               <text
                 x="50" y="60"
                 textAnchor="middle"
                 fontSize="2.2"
-                fill={allBeaten ? '#00ff99' : 'rgba(255,255,255,0.2)'}
+                fill='#00ff99'
                 letterSpacing="0.3"
                 style={{ pointerEvents: 'none', fontFamily: '"Courier New", monospace' }}
               >
-                {allBeaten ? 'OPHIUCHUS' : 'DEFEAT ALL 12'}
+                OPHIUCHUS
               </text>
             </motion.g>
+            )}
           </svg>
 
           {/* ── Boss card overlay ── */}

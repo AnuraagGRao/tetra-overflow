@@ -106,6 +106,11 @@ export const STORE_ITEMS = [
     name: 'SPARKLES', description: 'Tiny twinkles across the matrix.',
     price: 1600, emoji: '✨', accent: '#a855f7', tier: 'rare',
   },
+  {
+    id: 'effect_illusion', type: 'effect',
+    name: 'ILLUSION', description: 'Cycle all piece colors through every hue as you play. The Pisces gift.',
+    price: 3000, emoji: '🌈', accent: '#ff77ee', tier: 'epic',
+  },
 
   // ─── World / background themes (unlocked via story, not purchasable) ──────
   { id: 'bg_quake',     type: 'bg', bgType: 'quake',     name: 'QUAKE',      description: 'Cracked earth glowing with magma veins.',   price: 0, emoji: '🪨', accent: '#c87820', tier: 'story', storyUnlock: true, unlockCondition: 'Complete Ch.1 — EARTH' },
