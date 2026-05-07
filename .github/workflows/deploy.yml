@@ -31,6 +31,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Set env
+        run: echo "VITE_GPAY_UPI=${{ secrets.VITE_GPAY_UPI }}" >> $GITHUB_ENV
+
       - name: Build
         run: npm run build
 
