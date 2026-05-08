@@ -1157,59 +1157,55 @@ export default function ZodiacLevelPage() {
           <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'stretch' }}>
             {!focus && <div style={{ width: 6, flexShrink: 0, background: boss.color, opacity: 0.25 }} />}
 
-            <div
+            <SynesthesiaMotionLayer
               className="mobile-canvas-wrap"
               style={{
                 background: 'transparent',
                 flex: 1,
                 minWidth: 0,
+                ...(isMobile ? illusionStyle : {}),
                 paddingBottom: focus && showOnScreenControls
                   ? 'calc(4.5rem + env(safe-area-inset-bottom, 0px))'
                   : 0,
               }}
             >
-              <SynesthesiaMotionLayer style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>
-                <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {/* Illusion effect wrapper (Pisces) */}
-                  <div
-                    style={{
-                      ...illusionStyle,
-                      height: '100%',
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      ...(!isMobile ? { transform: `scale(${zoom})`, transformOrigin: 'center center' } : {}),
+              {(() => {
+                const gc = (
+                  <GameCanvas
+                    state={{
+                      ...state,
+                      // Leo: hide next queue
+                      queue: hideNextCount > 0 ? [] : state.queue,
                     }}
-                  >
-                    <GameCanvas
-                      state={{
-                        ...state,
-                        // Leo: hide next queue
-                        queue: hideNextCount > 0 ? [] : state.queue,
-                      }}
-                      onTap={() => {
-                        if (rotationLocked) return
-                        if (config?.sfxEnabled && !paused) try { playRotateSFX(pieceTheme || 'classic') } catch {}
-                        emitSynesthesia(SYNESTHESIA_EVENT.ROTATE, { intensity: 1.0, source: 'zodiac-tap' })
-                        triggerAction('rotateCW')
-                      }}
-                      onTwoFingerTap={() => {
-                        if (config?.sfxEnabled && !paused) try { playZoneActivateSFX(pieceTheme || 'classic') } catch {}
-                        triggerAction('activateZone')
-                      }}
-                      onDragBegin={handleDragBegin}
-                      onDragEnd={handleDragEnd}
-                      onHardDrop={handleHardDrop}
-                      themeOverride={pieceTheme}
-                      boardAlpha={boardAlpha}
-                      activePieceEffect={
-                        bossId === 'scorpio' && speedBoostActive ? 'poison'
-                        : bossId === 'virgo' && rotationLocked ? 'rotlock'
-                        : null
-                      }
-                    />
+                    onTap={() => {
+                      if (rotationLocked) return
+                      if (config?.sfxEnabled && !paused) try { playRotateSFX(pieceTheme || 'classic') } catch {}
+                      emitSynesthesia(SYNESTHESIA_EVENT.ROTATE, { intensity: 1.0, source: 'zodiac-tap' })
+                      triggerAction('rotateCW')
+                    }}
+                    onTwoFingerTap={() => {
+                      if (config?.sfxEnabled && !paused) try { playZoneActivateSFX(pieceTheme || 'classic') } catch {}
+                      triggerAction('activateZone')
+                    }}
+                    onDragBegin={handleDragBegin}
+                    onDragEnd={handleDragEnd}
+                    onHardDrop={handleHardDrop}
+                    themeOverride={pieceTheme}
+                    boardAlpha={boardAlpha}
+                    activePieceEffect={
+                      bossId === 'scorpio' && speedBoostActive ? 'poison'
+                      : bossId === 'virgo' && rotationLocked ? 'rotlock'
+                      : null
+                    }
+                  />
+                )
+                if (!isMobile) return (
+                  <div style={{ ...illusionStyle, height: '100%', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', transform: `scale(${zoom})`, transformOrigin: 'center center' }}>
+                    {gc}
                   </div>
+                )
+                return gc
+              })()}
 
                   {/* Cancer: fog overlay on bottom rows */}
                   <AnimatePresence>
@@ -1309,7 +1305,6 @@ export default function ZodiacLevelPage() {
                       </motion.div>
                     )}
                   </AnimatePresence>
-                </div>
 
                 {/* Focus toggle */}
                 <button
@@ -1437,7 +1432,6 @@ export default function ZodiacLevelPage() {
                   </div>
                 )}
               </SynesthesiaMotionLayer>
-            </div>
           </div>
 
           {showOnScreenControls && !focus && (

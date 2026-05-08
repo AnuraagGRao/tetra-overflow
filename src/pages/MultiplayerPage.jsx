@@ -1449,8 +1449,7 @@ export default function MultiplayerPage() {
                 )}
 
                 {/* Canvas */}
-                <div className="mobile-canvas-wrap" style={{ background: 'transparent', flex: 1, minWidth: 0 }}>
-                    <SynesthesiaMotionLayer style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>
+                <SynesthesiaMotionLayer className="mobile-canvas-wrap" style={{ background: 'transparent', flex: 1, minWidth: 0 }}>
                     <GameCanvas
                       state={myState}
                       onTap={() => triggerAction('rotateCW')}
@@ -1530,8 +1529,7 @@ export default function MultiplayerPage() {
                       )}
                     </AnimatePresence>
                     {/* Pause overlay removed in Versus */}
-                    </SynesthesiaMotionLayer>
-                </div>
+                </SynesthesiaMotionLayer>
 
                 {/* Right column removed per request to maximize board area */}
               </div>

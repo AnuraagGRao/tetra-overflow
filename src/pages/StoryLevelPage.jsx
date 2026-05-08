@@ -894,7 +894,7 @@ export default function StoryLevelPage() {
             {!focus && (<div style={{ width: 6, flexShrink: 0, background: chapter.color, opacity: 0.25 }} />)}
 
             {/* Canvas */}
-            <div
+            <SynesthesiaMotionLayer
               className="mobile-canvas-wrap"
               style={{
                 background: 'transparent',
@@ -905,8 +905,7 @@ export default function StoryLevelPage() {
                   : 0,
               }}
             >
-              <SynesthesiaMotionLayer style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>
-                <div style={!isMobile ? { transform: `scale(${zoom})`, transformOrigin: 'center center' } : undefined}>
+                {isMobile ? (
                   <GameCanvas
                     state={state}
                     onTap={() => { if (config?.sfxEnabled && !paused) try { playRotateSFX(pieceTheme || 'classic') } catch {}; emitSynesthesia(SYNESTHESIA_EVENT.ROTATE, { intensity: 1.0, source: 'story-tap' }); triggerAction('rotateCW'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
@@ -917,7 +916,20 @@ export default function StoryLevelPage() {
                     themeOverride={pieceTheme}
                     boardAlpha={boardAlpha}
                   />
-                </div>
+                ) : (
+                  <div style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}>
+                    <GameCanvas
+                      state={state}
+                      onTap={() => { if (config?.sfxEnabled && !paused) try { playRotateSFX(pieceTheme || 'classic') } catch {}; emitSynesthesia(SYNESTHESIA_EVENT.ROTATE, { intensity: 1.0, source: 'story-tap' }); triggerAction('rotateCW'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
+                      onTwoFingerTap={() => { if (config?.sfxEnabled && !paused) try { playZoneActivateSFX(pieceTheme || 'classic') } catch {}; triggerAction('activateZone'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
+                      onDragBegin={handleDragBegin}
+                      onDragEnd={handleDragEnd}
+                      onHardDrop={handleHardDrop}
+                      themeOverride={pieceTheme}
+                      boardAlpha={boardAlpha}
+                    />
+                  </div>
+                )}
                 {/* Focus toggle styled like Solo's UI tab */}
                 <button
                   onClick={() => setFocus(f => !f)}
@@ -1018,8 +1030,7 @@ export default function StoryLevelPage() {
                     </button>
                   </div>
                 )}
-              </SynesthesiaMotionLayer>
-            </div>
+            </SynesthesiaMotionLayer>
 
             {/* Zone end overlay — shows lines cleared + bonus when Zone deactivates */}
             <AnimatePresence>
