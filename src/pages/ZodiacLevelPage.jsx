@@ -905,6 +905,7 @@ export default function ZodiacLevelPage() {
 
   const beatEnergy = beatRef.current
   const boardAlpha = phase === PHASE.GAME ? Math.max(0.28, 0.46 - beatEnergy * 0.18) : undefined
+  const mobileFocusScale = isMobile && focus ? 1.06 : 1
 
   // Pisces illusion: apply CSS hue rotation to the canvas wrapper
   const illusion = bossId === 'pisces' && phase === PHASE.GAME
@@ -1157,11 +1158,32 @@ export default function ZodiacLevelPage() {
           <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'stretch' }}>
             {!focus && <div style={{ width: 6, flexShrink: 0, background: boss.color, opacity: 0.25 }} />}
 
-            <div className="mobile-canvas-wrap" style={{ background: 'transparent', flex: 1, minWidth: 0 }}>
+            <div
+              className="mobile-canvas-wrap"
+              style={{
+                background: 'transparent',
+                flex: 1,
+                minWidth: 0,
+                paddingBottom: focus && showOnScreenControls
+                  ? 'calc(4.5rem + env(safe-area-inset-bottom, 0px))'
+                  : 0,
+              }}
+            >
               <SynesthesiaMotionLayer style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>
-                <div style={{ position: 'relative', height: '100%', display: 'flex', alignItems: 'center' }}>
+                <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   {/* Illusion effect wrapper (Pisces) */}
-                  <div style={{ ...illusionStyle, ...(!isMobile ? { transform: `scale(${zoom})`, transformOrigin: 'center center' } : {}) }}>
+                  <div
+                    style={{
+                      ...illusionStyle,
+                      height: '100%',
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transform: `scale(${isMobile ? mobileFocusScale : zoom})`,
+                      transformOrigin: 'center center',
+                    }}
+                  >
                     <GameCanvas
                       state={{
                         ...state,
@@ -1420,8 +1442,14 @@ export default function ZodiacLevelPage() {
             </div>
           </div>
 
-          {showOnScreenControls && (
+          {showOnScreenControls && !focus && (
             <TouchControls onPress={handlePress} onRelease={handleRelease} />
+          )}
+
+          {showOnScreenControls && focus && (
+            <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 60, pointerEvents: 'auto' }}>
+              <TouchControls onPress={handlePress} onRelease={handleRelease} />
+            </div>
           )}
         </div>
       )}

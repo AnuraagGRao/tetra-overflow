@@ -120,7 +120,26 @@ export default function AboutPage({ onClose, installPrompt, onInstall }) {
               <div style={{ fontSize: '0.58rem', color: '#7c8aa5', overflow: 'hidden', textOverflow: 'ellipsis' }}>{GPay_UPI}</div>
             </div>
             <button
-              onClick={async () => { if (!GPay_UPI) return; try { await navigator.clipboard?.writeText(GPay_UPI); setCopied(true); setTimeout(()=>setCopied(false), 1400) } catch {} }}
+              onClick={async () => {
+                if (!GPay_UPI) return
+                try {
+                  if (navigator.clipboard?.writeText) {
+                    await navigator.clipboard.writeText(GPay_UPI)
+                  } else {
+                    // Fallback for older browsers or HTTPS restrictions
+                    const textarea = document.createElement('textarea')
+                    textarea.value = GPay_UPI
+                    document.body.appendChild(textarea)
+                    textarea.select()
+                    document.execCommand('copy')
+                    document.body.removeChild(textarea)
+                  }
+                  setCopied(true)
+                  setTimeout(()=>setCopied(false), 1400)
+                } catch (err) {
+                  console.error('Copy failed:', err)
+                }
+              }}
               disabled={!GPay_UPI}
               style={{ background: 'rgba(52,168,83,0.15)', border: '1px solid rgba(52,168,83,0.45)', color: '#34d399', borderRadius: 8, padding: '6px 10px', fontSize: '0.62rem', cursor: GPay_UPI ? 'pointer' : 'not-allowed', fontFamily: 'inherit', letterSpacing: '0.08em' }}
             >{copied ? '✓ Copied' : 'Copy UPI'}</button>

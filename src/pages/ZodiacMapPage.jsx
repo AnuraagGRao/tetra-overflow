@@ -25,13 +25,15 @@ function ConstellationLines({ positions }) {
   for (let i = 0; i < positions.length; i++) {
     const next = positions[(i + 1) % positions.length]
     lines.push(
-      <line
+      <motion.line
         key={i}
         x1={positions[i].x} y1={positions[i].y}
         x2={next.x} y2={next.y}
         stroke="rgba(255,255,255,0.06)"
         strokeWidth="0.35"
         strokeDasharray="1.4,1.4"
+        animate={{ strokeDashoffset: [0, -5] }}
+        transition={{ duration: 3 + (i % 4) * 0.45, repeat: Infinity, ease: 'linear' }}
       />
     )
   }
@@ -165,7 +167,7 @@ export default function ZodiacMapPage() {
     getStoryProgress(user.uid).then(p => { setProgress(p); setLoading(false) })
   }, [user])
 
-  const positions   = useMemo(() => getZodiacPositions(50, 50, 34), [])
+  const positions   = useMemo(() => getZodiacPositions(50, 50, 35.5), [])
   const allBeaten   = useMemo(() => allZodiacBeaten(progress), [progress])
   const ophiuchus13 = useMemo(() => ophiuchusBeaten(progress), [progress])
 
@@ -213,10 +215,15 @@ export default function ZodiacMapPage() {
       ) : (
         <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
           {/* ── SVG star-wheel ── */}
+          <motion.div
+            animate={{ scale: selected ? 1.1 : 1.04, y: selected ? '-2%' : '-1%' }}
+            transition={{ type: 'spring', stiffness: 120, damping: 18 }}
+            style={{ position: 'absolute', inset: 0 }}
+          >
           <svg
             viewBox="0 0 100 100"
             preserveAspectRatio="xMidYMid meet"
-            style={{ width: '100%', height: '100%', position: 'absolute', inset: 0 }}
+            style={{ width: '100%', height: '126%', position: 'absolute', inset: '-13% 0' }}
           >
             {/* Starfield */}
             {STARS.map(star => (
@@ -251,8 +258,8 @@ export default function ZodiacMapPage() {
                   key={boss.id}
                   onClick={e => { e.stopPropagation(); playZoomIn(); setSelected(boss.id) }}
                   style={{ cursor: 'pointer' }}
-                  animate={{ scale: isSel ? 1.18 : 1 }}
-                  transition={{ type: 'spring', stiffness: 200, damping: 18 }}
+                  animate={{ scale: isSel ? 1.18 : 1, y: [0, -0.55, 0, 0.55, 0] }}
+                  transition={{ scale: { type: 'spring', stiffness: 200, damping: 18 }, y: { duration: 2.8 + (i % 4) * 0.5, repeat: Infinity, ease: 'easeInOut' } }}
                   transformOrigin={`${p.x}px ${p.y}px`}
                 >
                   {/* Glow halo */}
@@ -359,6 +366,7 @@ export default function ZodiacMapPage() {
             </motion.g>
             )}
           </svg>
+          </motion.div>
 
           {/* ── Boss card overlay ── */}
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 20, pointerEvents: selected ? 'auto' : 'none' }}>

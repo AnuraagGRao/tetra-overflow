@@ -1591,10 +1591,12 @@ export default function App() {
       if (ns.ultimateGarbageAdded) {
           // Explicitly disable chaos/"infection" cue SFX (and vibration) in Ultimate.
           // No-op by design per request.
-        // Randomized jumpscare trigger after a hidden initial delay and long cooldown
+      }
+
+      // ─── Randomized jumpscare trigger (not tied to garbage; independent check every frame)
+      if (isUltimate && !state.gameOver) {
         const jsNow = performance.now()
         if (
-          isUltimate &&
           jsNow >= (jumpscareAllowedAfterRef.current || 0) &&
           jsNow - (lastJumpscareRef.current || 0) > (jumpscareCooldownRef.current || 0) &&
           Math.random() < (ns.towerFloor >= 15 ? 0.5 : 0.25)
@@ -1628,6 +1630,7 @@ export default function App() {
           setTimeout(() => setJumpscare(null), 1650)
         }
       }
+
       let playedClearCue = false
       if (ns.lastClear) {
         const { spinType, lines, isAllClear } = ns.lastClear
@@ -2102,7 +2105,7 @@ export default function App() {
   const isUltimate = state.mode === GAME_MODE.ULTIMATE
   const isVersus   = state.mode === GAME_MODE.VERSUS
   const showZone   = state.mode === GAME_MODE.NORMAL || state.mode === GAME_MODE.ULTIMATE
-  const illusionFilterStyle = hasIllusion && !state.gameOver
+  const illusionFilterStyle = hasIllusion
     ? { filter: `hue-rotate(${Math.round(illusionShift)}deg)` } : {}
 
   // Glitch effect: active in Ultimate when stack reaches row 10 from top

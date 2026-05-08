@@ -94,7 +94,7 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.55rem 1.4rem;
+  padding: calc(env(safe-area-inset-top, 0px) + 0.55rem) 1.4rem 0.55rem;
   background: rgba(8, 10, 20, 0.94);
   border-bottom: 1px solid var(--c-border);
   backdrop-filter: blur(8px);
