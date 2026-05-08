@@ -1163,7 +1163,6 @@ export default function ZodiacLevelPage() {
                 background: 'transparent',
                 flex: 1,
                 minWidth: 0,
-                ...(isMobile ? illusionStyle : {}),
                 paddingBottom: focus && showOnScreenControls
                   ? 'calc(4.5rem + env(safe-area-inset-bottom, 0px))'
                   : 0,
@@ -1204,7 +1203,11 @@ export default function ZodiacLevelPage() {
                     {gc}
                   </div>
                 )
-                return gc
+                // On mobile: wrap in a plain div so the filter never conflicts with
+                // framer-motion's own filter animations on SynesthesiaMotionLayer
+                return illusion
+                  ? <div style={illusionStyle}>{gc}</div>
+                  : gc
               })()}
 
                   {/* Cancer: fog overlay on bottom rows */}

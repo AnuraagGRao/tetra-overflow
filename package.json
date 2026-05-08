@@ -1,7 +1,7 @@
 {
   "name": "tetra-overflow-ultra",
   "private": true,
-  "version": "0.7.26",
+  "version": "0.7.54",
   "type": "module",
   "scripts": {
     "predev": "node scripts/write-version-json.js",

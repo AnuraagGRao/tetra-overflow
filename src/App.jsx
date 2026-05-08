@@ -2449,11 +2449,20 @@ export default function App() {
               </div>
             )}
       {state.backToBack && <div className="b2b-badge">🔥 B2B x{(state.b2bCount ?? 0) + 1}</div>}
-            <SynesthesiaMotionLayer className={`game-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`} style={illusionFilterStyle}>
-              <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
-                onTwoFingerTap={() => triggerAction('activateZone')}
-                onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop}
-                boardAlpha={bgTheme ? 0.32 : undefined} renderQuality={config.renderQuality} />
+            <SynesthesiaMotionLayer className={`game-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`}>
+              {hasIllusion ? (
+                <div style={illusionFilterStyle}>
+                  <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
+                    onTwoFingerTap={() => triggerAction('activateZone')}
+                    onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop}
+                    boardAlpha={bgTheme ? 0.32 : undefined} renderQuality={config.renderQuality} />
+                </div>
+              ) : (
+                <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
+                  onTwoFingerTap={() => triggerAction('activateZone')}
+                  onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop}
+                  boardAlpha={bgTheme ? 0.32 : undefined} renderQuality={config.renderQuality} />
+              )}
               <GlitchOverlay active={glitchActive} />
               {isUltimate && !state.gameOver && (
                 <div style={{ position: 'absolute', left: '50%', top: '22%', transform: 'translate(-50%, -50%)', zIndex: 5, pointerEvents: 'none', fontSize: 'clamp(3.2rem, 9vw, 7rem)', fontWeight: 900, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.08)', textShadow: '0 0 20px rgba(168,85,247,0.2)' }}>
@@ -2641,11 +2650,20 @@ export default function App() {
         )}
 
         {/* board */}
-        <SynesthesiaMotionLayer className={`ls-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`} style={{ background: 'transparent', ...illusionFilterStyle }}>
-          <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
-            onTwoFingerTap={() => triggerAction('activateZone')}
-            onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop}
-            boardAlpha={bgTheme ? 0.32 : undefined} renderQuality={config.renderQuality} />
+        <SynesthesiaMotionLayer className={`ls-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`} style={{ background: 'transparent' }}>
+          {hasIllusion ? (
+            <div style={illusionFilterStyle}>
+              <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
+                onTwoFingerTap={() => triggerAction('activateZone')}
+                onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop}
+                boardAlpha={bgTheme ? 0.32 : undefined} renderQuality={config.renderQuality} />
+            </div>
+          ) : (
+            <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
+              onTwoFingerTap={() => triggerAction('activateZone')}
+              onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop}
+              boardAlpha={bgTheme ? 0.32 : undefined} renderQuality={config.renderQuality} />
+          )}
           {isUltimate && !state.gameOver && (
             <div style={{ position: 'absolute', left: '50%', top: '46%', transform: 'translate(-50%, -50%)', zIndex: 5, pointerEvents: 'none', fontSize: 'clamp(2.4rem, 8vw, 4.6rem)', fontWeight: 900, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.08)', textShadow: '0 0 16px rgba(168,85,247,0.2)' }}>
               FLOOR {state.towerFloor || 1}
@@ -2792,11 +2810,20 @@ export default function App() {
           <span style={{ fontSize: '0.68rem', color: '#a78bfa', width: 28, textAlign: 'right' }}>{Math.ceil((state.infectionTimer || 0) / 1000)}s</span>
         </div>
       )}
-      <SynesthesiaMotionLayer className={`mobile-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`} style={{ background: 'transparent', ...illusionFilterStyle }}>
-        <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
-          onTwoFingerTap={() => triggerAction('activateZone')}
-          onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop}
-          boardAlpha={bgTheme ? 0.32 : undefined} renderQuality={config.renderQuality} />
+      <SynesthesiaMotionLayer className={`mobile-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`} style={{ background: 'transparent' }}>
+        {hasIllusion ? (
+          <div style={illusionFilterStyle}>
+            <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
+              onTwoFingerTap={() => triggerAction('activateZone')}
+              onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop}
+              boardAlpha={bgTheme ? 0.32 : undefined} renderQuality={config.renderQuality} />
+          </div>
+        ) : (
+          <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
+            onTwoFingerTap={() => triggerAction('activateZone')}
+            onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop}
+            boardAlpha={bgTheme ? 0.32 : undefined} renderQuality={config.renderQuality} />
+        )}
         <GlitchOverlay active={glitchActive} />
         {isUltimate && !state.gameOver && (
           <div style={{ position: 'absolute', left: '50%', top: '22%', transform: 'translate(-50%, -50%)', zIndex: 5, pointerEvents: 'none', fontSize: 'clamp(2.4rem, 15vw, 5.6rem)', fontWeight: 900, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.09)', textShadow: '0 0 18px rgba(168,85,247,0.26)' }}>
