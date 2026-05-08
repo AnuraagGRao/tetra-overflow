@@ -512,7 +512,7 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
       ctx.translate(cx, cy)
       const t = Date.now()
       const base = ((x + y) * 0.003) // per-cell phase offset
-      const ang = base + (t * 0.004)  // ~1.4 rad/sec
+      const ang = base + (t * 0.002)  // ~1.4 rad/sec
       ctx.rotate(ang)
       if (catImg.complete) {
         // Draw centered, slightly overfill for coverage when rotated

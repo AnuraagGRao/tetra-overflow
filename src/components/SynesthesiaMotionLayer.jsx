@@ -14,12 +14,14 @@ const FLASH_BY_EVENT = {
 function runBurst(controls, type, intensity = 1) {
   const i = Math.max(0.65, Math.min(1.7, intensity || 1))
   if (type === SYNESTHESIA_EVENT.HARD_DROP) {
+    const s = i * 1.5
     controls.start({
-      scale: [1, 1 + 0.012 * i, 0.998, 1],
-      x: [0, -1.6 * i, 1.6 * i, -0.9 * i, 0],
-      y: [0, -1.4 * i, 0.5, 0],
-      filter: ['brightness(1)', `brightness(${1 + 0.09 * i}) saturate(${1 + 0.12 * i})`, 'brightness(1) saturate(1)'],
-      transition: { duration: 0.22, times: [0, 0.35, 0.75, 1], ease: 'easeOut' },
+      scale: [1, 1 + 0.018 * s, 0.996, 1],
+      x: [0, -2.8 * s, 2.8 * s, -1.6 * s, 0.8 * s, 0],
+      y: [0, -1.9 * s, 0.8 * s, -0.35 * s, 0],
+      rotate: [0, -0.28 * s, 0.22 * s, -0.12 * s, 0],
+      filter: ['brightness(1)', `brightness(${1 + 0.12 * s}) saturate(${1 + 0.18 * s})`, 'brightness(1) saturate(1)'],
+      transition: { duration: 0.26, times: [0, 0.28, 0.56, 0.82, 1], ease: 'easeOut' },
     })
     return
   }

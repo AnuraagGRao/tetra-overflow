@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, useMotionValue, useSpring } from 'framer-motion'
 import catImageUrl from '../meme/oiia_cat_assets_by_awesomeconsoles7_djwlgwe-fullview.png'
+import nyancatImageUrl from '../images/nyancat.jpg'
 import { SYNESTHESIA_EVENT, useSynesthesiaEvent } from '../logic/synesthesiaBus'
 import { BGTYPE_VANTA_CONFIG, getBackgroundProfile } from '../logic/backgroundProfiles'
 import '../styles/backgroundEffects.css'
@@ -18,6 +19,8 @@ const BG_BASE = {
   oiia:'#0a0010', nyancat:'#020008', custom:'#000006',
   maelstorm:'#010308',
   stellar:'#060200', geometry:'#010603', serpent:'#000d03',
+  // Newly added themes
+  cyberpunk:'#0b001a', twilight:'#10002b', quantum:'#02050a',
 }
 
 // ── Layer 1: Animated ambient gradient ───────────────────────────────────────
@@ -100,6 +103,101 @@ function drawAmbient(ctx, bgType, w, h, t, beat = 0) {
       g.addColorStop(0,'rgba(0,20,40,1)'); g.addColorStop(1,'rgba(0,8,18,1)')
       ctx.fillStyle = g; ctx.fillRect(0,0,w,h); break
     }
+    case 'cyberpunk': {
+      // Neon scan + grid glow
+      const g = ctx.createLinearGradient(0, 0, w, h)
+      g.addColorStop(0, 'rgba(5,0,15,1)'); g.addColorStop(1, 'rgba(20,0,35,1)')
+      ctx.fillStyle = g; ctx.fillRect(0, 0, w, h)
+      // Diagonal neon sweep
+      const sweep = ctx.createLinearGradient(-w, 0, w*2, h)
+      const pulse = 0.4 + 0.2 * Math.sin(t * 0.002)
+      sweep.addColorStop(0.25, `rgba(255,0,100,0)`)
+      sweep.addColorStop(0.5,  `rgba(255,20,140,${0.18 + pulse*0.22})`)
+      sweep.addColorStop(0.75, `rgba(0,200,255,${0.10 + pulse*0.15})`)
+      ctx.fillStyle = sweep; ctx.fillRect(0, 0, w, h)
+      // Sparse grid lines
+      ctx.save(); ctx.globalAlpha = 0.1
+      ctx.strokeStyle = 'rgba(255,40,140,1)'; ctx.lineWidth = 1
+      const spacing = 36
+      const off = (t * 0.02) % spacing
+      for (let x = -off; x <= w; x += spacing) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x + h*0.15, h); ctx.stroke() }
+      ctx.strokeStyle = 'rgba(0,200,255,1)'
+      for (let y = off; y <= h; y += spacing) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y - w*0.15); ctx.stroke() }
+      ctx.restore(); break
+    }
+    case 'twilight': {
+      // Sunset violet → orange sky bands
+      const g = ctx.createLinearGradient(0, 0, 0, h)
+      g.addColorStop(0, 'rgba(16,0,43,1)')
+      g.addColorStop(0.6, 'rgba(65,20,110,1)')
+      g.addColorStop(1, 'rgba(120,60,20,1)')
+      ctx.fillStyle = g; ctx.fillRect(0,0,w,h)
+      // Thin glowing bands drifting
+      ctx.save()
+      for (let i = 0; i < 4; i++) {
+        const y = h * (0.2 + i * 0.18) + Math.sin(t * 0.00035 + i) * h * 0.02
+        const band = ctx.createLinearGradient(0, y - 30, 0, y + 30)
+        band.addColorStop(0, 'rgba(0,0,0,0)')
+        band.addColorStop(0.5, `rgba(${200 + i*10},${90 + i*8},${40 + i*6},${0.10 + i * 0.02})`)
+        band.addColorStop(1, 'rgba(0,0,0,0)')
+        ctx.fillStyle = band; ctx.fillRect(0, y - 30, w, 60)
+      }
+      ctx.restore(); break
+    }
+    case 'quantum': {
+      // Deep space with pulsing cyan/magenta nodes
+      const g = ctx.createRadialGradient(w*0.5, h*0.45, 0, w*0.5, h*0.5, Math.max(w,h)*0.8)
+      g.addColorStop(0, 'rgba(2,5,10,1)'); g.addColorStop(1, 'rgba(0,0,0,1)')
+      ctx.fillStyle = g; ctx.fillRect(0,0,w,h)
+      // Soft radial blooms
+      ctx.save(); ctx.globalAlpha = 0.08
+      const seeds = [[0.2,0.3,0.35,'#00ffcc'],[0.75,0.25,0.28,'#7000ff'],[0.5,0.7,0.3,'#33e6ff']]
+      for (const [bx,by,br,col] of seeds) {
+        const cx = w*bx + Math.sin(t*0.0005 + bx)*w*0.04
+        const cy = h*by + Math.cos(t*0.0006 + by)*h*0.04
+        const r = Math.min(w,h) * br
+        const rg = ctx.createRadialGradient(cx, cy, 0, cx, cy, r)
+        rg.addColorStop(0, `${col}AA`); rg.addColorStop(1, 'rgba(0,0,0,0)')
+        ctx.fillStyle = rg; ctx.fillRect(0,0,w,h)
+      }
+      ctx.restore(); break
+    }
+    case 'deepsea': {
+      // High-visibility deep sea: bright biolum pulses + moving spark dots
+      ctx.fillStyle = '#2a6abb'
+      ctx.fillRect(0, 0, w, h)
+
+      // Large bioluminescent pulses
+      for (let j = 0; j < 3; ++j) {
+        const cx = w * (0.21 + j * 0.32) + Math.sin(t * 0.00052 + j * 0.73) * w * 0.2
+        const cy = h * (0.39 + j * 0.28) + Math.cos(t * 0.00055 + j * 1.5) * h * 0.17
+        const radius = Math.min(w, h) * (0.22 + 0.08 * Math.sin(t * 0.0012 + j))
+        const gPulse = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius)
+        gPulse.addColorStop(0, 'rgba(110,255,255,0.41)')
+        gPulse.addColorStop(0.45, 'rgba(0,190,255,0.12)')
+        gPulse.addColorStop(1, 'rgba(10,28,64,0)')
+        ctx.globalAlpha = 1
+        ctx.fillStyle = gPulse
+        ctx.fillRect(cx - radius, cy - radius, 2 * radius, 2 * radius)
+      }
+
+      // Moving bright plankton/jelly dots
+      for (let i = 0; i < 15; ++i) {
+        const phase = (t * 0.13 + i * 180) % h
+        ctx.globalAlpha = 0.38 + 0.32 * Math.abs(Math.sin(t * 0.0012 + i * 0.73))
+        const x = w * 0.13
+          + Math.sin(t * 0.0018 + i * 0.51) * w * 0.68
+          + Math.sin(t * 0.00098 + i * 2.1) * w * 0.18
+        ctx.beginPath()
+        ctx.arc(x, h - phase, 7 + 2.5 * Math.sin(i + t * 0.0042), 0, Math.PI * 2)
+        ctx.fillStyle = 'rgba(110,255,255,0.84)'
+        ctx.shadowColor = 'rgba(150,255,255,0.54)'
+        ctx.shadowBlur = 13
+        ctx.fill()
+      }
+      ctx.globalAlpha = 1
+      break
+    }
     case 'storm': {
       const g = ctx.createLinearGradient(0,0,0,h)
       g.addColorStop(0,'rgba(5,8,20,1)'); g.addColorStop(0.5,'rgba(12,18,35,1)'); g.addColorStop(1,'rgba(3,5,12,1)')
@@ -160,6 +258,50 @@ function drawAmbient(ctx, bgType, w, h, t, beat = 0) {
         ctx.restore()
       }
       break
+    }
+    case 'cyberpunk': {
+      // Fast neon sparks drifting diagonally
+      const fast = Math.random() < 0.35
+      return {
+        x, y: init ? Math.random()*h : h + 10,
+        vx: (fast ? 0.6 : 0.3) + Math.random()*0.4,
+        vy: -((fast ? 1.4 : 0.8) + Math.random()*0.8),
+        r: fast ? 1.2 + Math.random()*1.6 : 0.8 + Math.random()*1.2,
+        hue: Math.random() < 0.6 ? 330 + Math.random()*20 : 190 + Math.random()*30,
+        life: 1,
+        decay: 0.002 + Math.random()*0.003,
+        glow: true,
+      }
+    }
+    case 'twilight': {
+      // Slow drifting motes
+      return {
+        x, y,
+        vx:(Math.random()-0.5)*0.06,
+        vy:-(0.03+Math.random()*0.06),
+        r:0.8+Math.random()*2.0,
+        hue: 26 + Math.random()*20,
+        life:1,
+        decay:0.0008+Math.random()*0.001,
+        glow:true,
+        a: 0.25 + Math.random()*0.2,
+      }
+    }
+    case 'quantum': {
+      // Pulsing quantum dots
+      const mag = Math.random() < 0.4
+      return {
+        x, y: Math.random()*h,
+        vx:(Math.random()-0.5)*0.05,
+        vy:(Math.random()-0.5)*0.05,
+        r: 0.7 + Math.random()*1.6,
+        hue: mag ? (280 + Math.random()*40) : (170 + Math.random()*40),
+        life: 1,
+        decay: 0.0009 + Math.random()*0.001,
+        glow: true,
+        twinkle: Math.random()*Math.PI*2,
+        twinkleSpeed: 0.02 + Math.random()*0.03,
+      }
     }
     case 'clouds': {
       const g = ctx.createLinearGradient(0,0,0,h)
@@ -416,7 +558,53 @@ function drawAmbient(ctx, bgType, w, h, t, beat = 0) {
       g.addColorStop(0,`hsla(${300+Math.sin(t*0.0007)*30},90%,28%,0.6)`)
       g.addColorStop(0.5,`hsla(${330+Math.cos(t*0.0005)*20},80%,15%,0.4)`)
       g.addColorStop(1,'rgba(10,0,16,0)')
-      ctx.fillStyle = g; ctx.fillRect(0,0,w,h); break
+      ctx.fillStyle = g; ctx.fillRect(0,0,w,h);
+
+      // --- Draw up to 30 rotating cats, stacking up, then rolling buffer ---
+      // Module-level cache for cats in oiia bg
+      if (!drawAmbient.oiiaCats) {
+        drawAmbient.oiiaCats = [];
+        drawAmbient.oiiaCatCounter = 0;
+      }
+      // Use a static property on drawAmbient for the cat image
+      if (!drawAmbient.oiiaImg) {
+        const img = new window.Image();
+        img.src = catImageUrl;
+        drawAmbient.oiiaImg = img;
+      }
+      const img = drawAmbient.oiiaImg;
+      const iw = 96, ih = 96;
+
+      // Each frame: Add a new cat if less than 30, else replace oldest (rolling buffer)
+      if (!drawAmbient.oiiaLastTime || t - drawAmbient.oiiaLastTime > 250) {
+        // Add a cat every ~15 frames (adjust if too fast/slow)
+        drawAmbient.oiiaLastTime = t;
+        const cats = drawAmbient.oiiaCats;
+        const slot = drawAmbient.oiiaCatCounter % 30;
+        // Place at a random position inside inner 80% of canvas
+        cats[slot] = {
+          x: Math.random() * w * 0.8 + w * 0.1,
+          y: Math.random() * h * 0.8 + h * 0.1,
+          angle: Math.random() * Math.PI * 2,
+        };
+        drawAmbient.oiiaCatCounter++;
+      }
+      // Draw all cats, rotating
+      if (img && img.complete) {
+        for (let i = 0; i < (drawAmbient.oiiaCats?.length||0); ++i) {
+          const cat = drawAmbient.oiiaCats[i];
+          if (!cat) continue;
+          // Increment cat.angle each frame for rotation, and keep angle bounded
+          cat.angle += 0.03; if (cat.angle > Math.PI * 2) cat.angle -= Math.PI * 2;
+          ctx.save();
+          ctx.translate(cat.x, cat.y);
+          ctx.rotate(cat.angle);
+          ctx.globalAlpha = 0.97;
+          ctx.drawImage(img, 0, 0, img.width, img.height, -iw/2, -ih/2, iw, ih);
+          ctx.restore();
+        }
+      }
+      break;
     }
     default:
       ctx.fillStyle = BG_BASE[bgType]||'#000'; ctx.fillRect(0,0,w,h)
@@ -432,6 +620,13 @@ function makeParticle(bgType, w, h, init=false) {
   switch (bgType) {
     case 'lava':   return { x, y, vx:(Math.random()-0.5)*0.5, vy:-(0.5+Math.random()*0.7), r:3+Math.random()*4, hue:10+Math.random()*25, life:1, decay:0.003+Math.random()*0.003, glow:true }
     case 'ember':  return { x, y, vx:(Math.random()-0.5)*0.8, vy:-(0.4+Math.random()*0.9), r:1.5+Math.random()*2.5, hue:5+Math.random()*40, life:1, decay:0.004+Math.random()*0.004, glow:true }
+    case 'inferno': return { x, y, vx:(Math.random()-0.5)*0.4, vy:-(0.6+Math.random()*1.0), r:1.5+Math.random()*3.0, hue:10+Math.random()*30, life:1, decay:0.003+Math.random()*0.003, glow:true }
+    case 'volcano': {
+      const spark = Math.random() < 0.55
+      return spark
+        ? { x, y, vx:(Math.random()-0.5)*0.9, vy:-(0.8+Math.random()*1.4), r:1.2+Math.random()*2.2, hue:5+Math.random()*30, life:1, decay:0.004+Math.random()*0.003, glow:true }
+        : { x, y, vx:(Math.random()-0.5)*0.3, vy:-(0.18+Math.random()*0.4), r:2.5+Math.random()*5.0, hue:20+Math.random()*20, life:0.9, decay:0.0012+Math.random()*0.001, glow:false, a:0.18 }
+    }
     case 'crystal': {
       const prism = Math.random() < 0.7
       return {
@@ -468,7 +663,36 @@ function makeParticle(bgType, w, h, init=false) {
         wobbleAmp: 0.25 + Math.random() * 0.55,
       }
     }
+    case 'deepsea': {
+      // Slow-rising biolum motes
+      return {
+        x,
+        y,
+        vx:(Math.random()-0.5)*0.06,
+        vy:-(0.05+Math.random()*0.12),
+        r:0.8+Math.random()*2.0,
+        hue: 185 + Math.random()*40,
+        life: 0.8 + Math.random()*0.4,
+        decay: 0.0008 + Math.random()*0.0008,
+        glow: true,
+        a: 0.25 + Math.random()*0.2,
+      }
+    }
     case 'storm':  return { x, y, vx:1.2+Math.random()*1.6, vy:6+Math.random()*6, r:0.7+Math.random()*0.4, hue:208+Math.random()*16, life:1, decay:0, glow:false }
+    case 'warp': {
+      const angle = Math.random() * Math.PI * 2
+      const dist = Math.random() * 22
+      const speed = 3 + Math.random() * 4
+      const x = w * 0.5 + Math.cos(angle) * dist
+      const y = h * 0.5 + Math.sin(angle) * dist
+      return { x, y, angle, dist, speed, length: 5 + Math.random() * 15, r: 0.7 + Math.random() * 1.4, hue: 200 + Math.random() * 40, life: 1, decay: 0, glow: true }
+    }
+    case 'abyss': {
+      const wisp = Math.random() < 0.35
+      return wisp
+        ? { x, y:Math.random()*h, vx:(Math.random()-0.5)*0.05, vy:(Math.random()-0.5)*0.05, r:3+Math.random()*6, hue:260+Math.random()*40, life:0.9, decay:0.0008+Math.random()*0.001, glow:true, a:0.06+Math.random()*0.08 }
+        : { x, y:Math.random()*h, vx:(Math.random()-0.5)*0.03, vy:(Math.random()-0.5)*0.03, r:0.6+Math.random()*1.4, hue:180+Math.random()*40, life:1, decay:0.0009+Math.random()*0.001, glow:true, a:0.18 }
+    }
     case 'maelstorm': {
       const subtype = Math.random() < 0.13 ? 'heavy' : Math.random() < 0.11 ? 'mist' : 'rain'
       if (subtype === 'mist') {
@@ -586,38 +810,6 @@ function makeParticle(bgType, w, h, init=false) {
         life:1,
         decay:subtype === 'mist' ? 0.0012 : 0,
         subtype,
-        rot:Math.random()*Math.PI*2,
-      }
-    }
-    case 'volcano':return { x:w*0.5+(Math.random()-0.5)*w*0.4, y:h*0.92, vx:(Math.random()-0.5)*3.5, vy:-(3+Math.random()*5), r:2+Math.random()*5, hue:10+Math.random()*30, life:1, decay:0.005+Math.random()*0.004, grav:0.07+Math.random()*0.04, glow:true }
-    case 'inferno':return { x, y, vx:(Math.random()-0.5)*1.5, vy:-(1.5+Math.random()*2.5), r:3+Math.random()*8, hue:Math.random()*30, life:1, decay:0.007+Math.random()*0.006, glow:true }
-    case 'aurora': return { x, y:Math.random()*h*0.6, vx:(Math.random()-0.5)*0.08, vy:(Math.random()-0.5)*0.04, r:0.5+Math.random()*2.2, hue:130+Math.random()*120, life:1, decay:0, twinkle:Math.random()*Math.PI*2, twinkleSpeed:0.04+Math.random()*0.05, color:`hsla(${130+Math.floor(Math.random()*120)},90%,70%,1)` }
-    case 'warp': {
-      const angle = Math.random()*Math.PI*2
-      return { x:w/2, y:h/2, angle, dist:Math.random()*25, speed:3+Math.random()*4, length:5+Math.random()*15, hue:200+Math.random()*60, life:1, decay:0 }
-    }
-    case 'abyss':  return { x, y:Math.random()*h, vx:(Math.random()-0.5)*0.1, vy:(Math.random()-0.5)*0.1, r:3+Math.random()*16, hue:250+Math.random()*95, life:Math.random(), decay:0.0012+Math.random()*0.001, growing:Math.random()<0.5, pulse:Math.random()*Math.PI*2 }
-    case 'stellar': {
-      // 50% background stars, 50% solar sparks
-      if (Math.random() < 0.5) {
-        return {
-          x, y: Math.random() * h,
-          vx: (Math.random() - 0.5) * 0.025, vy: (Math.random() - 0.5) * 0.025,
-          r: 0.4 + Math.random() * 1.5, hue: 25 + Math.random() * 25,
-          life: 1, decay: 0,
-          twinkle: Math.random() * Math.PI * 2, twinkleSpeed: 0.025 + Math.random() * 0.04,
-          subtype: 'star',
-          color: `rgba(${210 + Math.floor(Math.random()*45)},${195 + Math.floor(Math.random()*45)},${150 + Math.floor(Math.random()*50)},1)`,
-        }
-      }
-      const angle = -Math.PI * 0.5 + (Math.random() - 0.5) * Math.PI * 0.7
-      const speed = 1.0 + Math.random() * 2.2
-      return {
-        x: init ? Math.random() * w : (w * 0.5 + (Math.random() - 0.5) * w * 0.18),
-        y: init ? Math.random() * h : (-h * 0.08 + Math.random() * h * 0.12),
-        vx: Math.cos(angle) * speed * 0.35, vy: Math.abs(Math.sin(angle)) * speed * 0.5 + 0.5,
-        r: 1.2 + Math.random() * 3.8, hue: 8 + Math.random() * 32,
-        life: 1, decay: 0.003 + Math.random() * 0.005, glow: true, subtype: 'spark',
       }
     }
     case 'geometry': {
@@ -668,6 +860,8 @@ function createParticles(bgType, w, h, densityScale = 1) {
     stars: 340, nebula: 100, warp: 80, blackhole: 100, abyss: 80,
     matrix: 200, grid: 100, crystal: 100, forest: 60, aurora: 100, oiia: 50,
     stellar: isMobile ? 80 : 160, geometry: 70, serpent: isMobile ? 55 : 100,
+    // Newly added themes
+    cyberpunk: 120, twilight: 80, quantum: 140,
   }
   const n = Math.max(8, Math.round((counts[bgType] || 80) * densityScale))
   return Array.from({ length:n }, () => makeParticle(bgType, w, h, true))
@@ -777,8 +971,18 @@ function updateParticle(p, bgType, w, h, dt) {
     p.life -= p.decay*s; return p.y > h+25 || p.life<=0
   }
   if (bgType === 'warp') {
-    p.dist += (p.speed + p.dist*0.012)*s
-    if (p.dist > Math.max(w,h)*0.72) { p.dist = Math.random()*22; p.angle = Math.random()*Math.PI*2; p.length = 5+Math.random()*15; p.speed = 3+Math.random()*4 }
+    // Radial expansion from center
+    p.dist += (p.speed + p.dist * 0.012) * s
+    p.x = w * 0.5 + Math.cos(p.angle || 0) * p.dist
+    p.y = h * 0.5 + Math.sin(p.angle || 0) * p.dist
+    if (p.dist > Math.max(w, h) * 0.72) {
+      p.dist = Math.random() * 22
+      p.angle = Math.random() * Math.PI * 2
+      p.length = 5 + Math.random() * 15
+      p.speed = 3 + Math.random() * 4
+      p.x = w * 0.5 + Math.cos(p.angle) * p.dist
+      p.y = h * 0.5 + Math.sin(p.angle) * p.dist
+    }
     return false
   }
   if (bgType === 'abyss') {
@@ -840,7 +1044,7 @@ function updateParticle(p, bgType, w, h, dt) {
   if (bgType === 'storm') return p.y > h+20
   if (bgType === 'matrix') return p.y > h+20
   if (bgType === 'grid') return p.y > h+20
-  if (['lava','ember','ocean','bubbles','nebula','inferno'].includes(bgType)) return p.y < -30 || p.life<=0
+  if (['lava','ember','ocean','bubbles','nebula','inferno','deepsea'].includes(bgType)) return p.y < -30 || p.life<=0
   if (['crystal','clouds'].includes(bgType)) return p.y > h+30 || p.x > w+30
   return p.life<=0
 }
@@ -1725,20 +1929,51 @@ export default function BackgroundCanvas({ bgType = 'stars', style, beatRef: _be
     const burst = clearBurstRef.current
     const s = synRef.current
     switch (evt.type) {
-      case SYNESTHESIA_EVENT.MOVE:
-        s.impact = clamp(s.impact + 0.08, 0, 1.5)
-        break
-      case SYNESTHESIA_EVENT.ROTATE:
-        s.spin = clamp(s.spin + 0.2, 0, 1.7)
-        s.impact = clamp(s.impact + 0.05, 0, 1.5)
-        break
-      case SYNESTHESIA_EVENT.SOFT_DROP:
-        s.drop = clamp(s.drop + 0.1, 0, 1.2)
-        break
-      case SYNESTHESIA_EVENT.HARD_DROP:
-        s.impact = clamp(s.impact + 0.42, 0, 1.9)
-        s.drop = clamp(s.drop + 0.28, 0, 1.4)
-        break
+        case 'clouds': {
+          // Sky blue base
+          ctx.fillStyle = '#acd0ff';
+          ctx.fillRect(0, 0, w, h);
+
+          // Big sun pulse upper right
+          const sunX = w * 0.78, sunY = h * 0.19;
+          const sunR = h * (0.12 + 0.06 * Math.sin(t*0.0007));
+          const gSun = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, sunR);
+          gSun.addColorStop(0, 'rgba(255,255,224,0.41)');
+          gSun.addColorStop(0.56, 'rgba(255,255,206,0.16)');
+          gSun.addColorStop(1, 'rgba(255,255,255,0)');
+          ctx.globalAlpha = 0.85;
+          ctx.fillStyle = gSun; ctx.fillRect(sunX-sunR, sunY-sunR, 2*sunR, 2*sunR);
+          ctx.globalAlpha = 1;
+
+          // White fluffy layered clouds
+          for (let c = 0; c < 5; ++c) {
+            const baseX = w * (0.19 + 0.17*c) + Math.sin(t*0.00041+c*42)*w*0.04;
+            const cloudY = h * (0.14 + c*0.12) + Math.cos(t*0.00021+c*1.3)*h*0.02;
+            ctx.save();
+            ctx.beginPath();
+            for (let k = 0; k < 22; ++k) {
+              const ang = (Math.PI*2) * (k/21);
+              const rad = 43 + 13*Math.sin(ang*3+c*3)+14*Math.cos(ang*1.4+c*2);
+              ctx.lineTo(baseX + Math.cos(ang)*rad, cloudY + Math.sin(ang)*rad*0.56);
+            }
+            ctx.closePath();
+            ctx.fillStyle = c%2==0 ? 'rgba(255,255,255,0.7)' : 'rgba(240,244,255, 0.62)';
+            ctx.shadowColor = '#f7fbff'; ctx.shadowBlur = 22;
+            ctx.fill();
+            ctx.restore();
+          }
+
+          // Sun ray sparkles
+          ctx.save(); ctx.globalAlpha = 0.52;
+          for (let s=0; s<28; ++s) {
+            const sx = w*(0.12 + 0.75*Math.random());
+            const sy = h*0.08+Math.sin(t*0.0019+s*23)*h*0.035;
+            ctx.beginPath(); ctx.arc(sx,sy,1.3+Math.sin(t*0.002+s),0,Math.PI*2);
+            ctx.fillStyle = 'rgba(255,255,255,0.43)'; ctx.fill();
+          }
+          ctx.restore();
+          break;
+        }
       case SYNESTHESIA_EVENT.LINE_CLEAR:
         s.clear = clamp(s.clear + 0.5, 0, 1.8)
         s.impact = clamp(s.impact + 0.16, 0, 1.9)
@@ -1973,7 +2208,7 @@ export default function BackgroundCanvas({ bgType = 'stars', style, beatRef: _be
           ctx.globalAlpha = 1
           ctx.restore()
           // Small cat sprite gliding with gentle bob
-          if (!nyanImgRef.current) { const img = new Image(); img.src = catImageUrl; nyanImgRef.current = img }
+          if (!nyanImgRef.current) { const img = new Image(); img.src = nyancatImageUrl; nyanImgRef.current = img }
           const img = nyanImgRef.current
           if (img && img.complete) {
             const pathY = hh*0.4 + Math.sin(t*0.0013)*hh*0.05

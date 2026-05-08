@@ -1,3 +1,5 @@
+import { pre } from "framer-motion/client";
+
 export const BACKGROUND_THEME_PROFILES = {
   quake: {
     category: 'aggressive',
@@ -23,21 +25,21 @@ export const BACKGROUND_THEME_PROFILES = {
       type: 'waves',
       color: 0x3f246a,
       backgroundColor: 0x020205,
-      shininess: 62,
-      waveHeight: 42,
+      shininess: 50, // Reduced from 62 for better performance
+      waveHeight: 35, // Reduced from 42 to lower poly strain
       waveSpeed: 3.4,
-      zoom: 0.52,
+      zoom: 0.65, // Increased zoom slightly to render fewer total waves
     },
   },
   serpent: {
-    category: 'cosmic', cssClass: 'bg-theme-serpent bg-cat-cosmic', parallax: 8,
-    preferCanvas: true,
+    category: 'cosmic', 
+    cssClass: 'bg-theme-serpent bg-cat-cosmic', 
+    parallax: 8,
   },
   maelstorm: {
     category: 'aggressive',
     cssClass: 'bg-theme-storm bg-cat-aggressive',
     parallax: 11,
-    preferCanvas: true,
   },
   ember: {
     category: 'aggressive',
@@ -59,10 +61,10 @@ export const BACKGROUND_THEME_PROFILES = {
       type: 'waves',
       color: 0x0d5e89,
       backgroundColor: 0x01070f,
-      shininess: 48,
+      shininess: 40, // Optimized
       waveHeight: 15,
       waveSpeed: 0.42,
-      zoom: 0.83,
+      zoom: 0.9, // Optimized
     },
   },
   bubbles: {
@@ -74,10 +76,10 @@ export const BACKGROUND_THEME_PROFILES = {
       type: 'waves',
       color: 0x0d95a7,
       backgroundColor: 0x021018,
-      shininess: 66,
+      shininess: 55, // Optimized
       waveHeight: 12,
       waveSpeed: 0.5,
-      zoom: 0.9,
+      zoom: 1.0, // Optimized
     },
   },
   glacier: {
@@ -89,7 +91,7 @@ export const BACKGROUND_THEME_PROFILES = {
       type: 'cells',
       color1: 0x7ea4c7,
       color2: 0xc5eeff,
-      size: 2.7,
+      size: 3.2, // Increased from 2.7 (fewer cells = better FPS)
       speed: 0.18,
     },
   },
@@ -97,27 +99,28 @@ export const BACKGROUND_THEME_PROFILES = {
     category: 'fluid',
     cssClass: 'bg-theme-clouds bg-cat-fluid bg-depth-soft',
     parallax: 7,
-    preferCanvas: true,
     vanta: {
-      type: 'clouds',
-      backgroundColor: 0x050d17,
-      skyColor: 0x071321,
-      cloudColor: 0x2f6d86,
-      speed: 0.26,
-      zoom: 1.14,
+      type: 'fog',
+      backgroundColor: 0x5ba4f8,
+      skyColor: 0xbfe7ff,
+      cloudColor: 0xffffff,
+      speed: 0.56,
+      zoom: 1.02,
     },
   },
   deepsea: {
     category: 'fluid',
     cssClass: 'bg-theme-deepsea bg-cat-fluid bg-depth-soft',
     parallax: 8,
+    preferCanvas: true,
     vanta: {
-      type: 'clouds',
-      backgroundColor: 0x020b10,
-      skyColor: 0x05141d,
-      cloudColor: 0x00d9e6,
-      speed: 0.32,
-      zoom: 1.08,
+      type: 'waves',
+      color: 0x14cddd,
+      backgroundColor: 0x092060,
+      shininess: 45, // Optimized
+      waveHeight: 19,
+      waveSpeed: 0.14,
+      zoom: 0.85 // Optimized
     },
   },
 
@@ -132,7 +135,7 @@ export const BACKGROUND_THEME_PROFILES = {
       color: 0xe8f3ff,
       color2: 0x99f7ff,
       size: 2.1,
-      spacing: 15,
+      spacing: 18, // Increased spacing for better performance
       showLines: false,
     },
   },
@@ -140,7 +143,6 @@ export const BACKGROUND_THEME_PROFILES = {
     category: 'cosmic',
     cssClass: 'bg-theme-nebula bg-cat-cosmic',
     parallax: 7,
-    preferCanvas: true,
     vanta: {
       type: 'fog',
       highlightColor: 0x8ad4ff,
@@ -186,14 +188,13 @@ export const BACKGROUND_THEME_PROFILES = {
     category: 'cosmic',
     cssClass: 'bg-theme-abyss bg-cat-cosmic',
     parallax: 6,
-    preferCanvas: true,
     vanta: {
       type: 'fog',
-      highlightColor: 0x7d5ad1,
-      midtoneColor: 0x14061f,
-      lowlightColor: 0x020103,
+      // Dark, near-black base for a true dark theme
       baseColor: 0x000000,
-      blurFactor: 0.8,
+      lowlightColor: 0x000103,
+      backgroundColor: 0x000000,
+      size: 1.25,
       speed: 0.25,
       zoom: 1.45,
     },
@@ -222,9 +223,9 @@ export const BACKGROUND_THEME_PROFILES = {
       type: 'net',
       color: 0x39ff72,
       backgroundColor: 0x000500,
-      points: 24,
-      maxDistance: 26,
-      spacing: 11,
+      points: 18, // Reduced from 24 for significant performance boost
+      maxDistance: 22, // Reduced from 26
+      spacing: 14, // Increased spacing
       showDots: true,
     },
   },
@@ -237,9 +238,9 @@ export const BACKGROUND_THEME_PROFILES = {
       type: 'net',
       color: 0x66d9ff,
       backgroundColor: 0x020912,
-      points: 18,
-      maxDistance: 22,
-      spacing: 18,
+      points: 14, // Reduced from 18
+      maxDistance: 20, // Reduced from 22
+      spacing: 20, // Increased spacing
       showDots: true,
     },
   },
@@ -251,9 +252,9 @@ export const BACKGROUND_THEME_PROFILES = {
       type: 'net',
       color: 0xff2fb4,
       backgroundColor: 0x030007,
-      points: 15,
-      maxDistance: 26,
-      spacing: 20,
+      points: 12, // Reduced from 15
+      maxDistance: 22, // Reduced from 26
+      spacing: 22, // Increased spacing
       showDots: true,
     },
   },
@@ -267,7 +268,7 @@ export const BACKGROUND_THEME_PROFILES = {
       midtoneColor: 0x4a125d,
       lowlightColor: 0x170426,
       baseColor: 0x010001,
-      speed: 0.58,
+      speed: 1.9,
       zoom: 1.52,
     },
   },
@@ -291,7 +292,7 @@ export const BACKGROUND_THEME_PROFILES = {
       type: 'cells',
       color1: 0x2f57b8,
       color2: 0x65edff,
-      size: 1.8,
+      size: 2.2, // Increased from 1.8 for performance
       speed: 0.44,
     },
   },
@@ -309,7 +310,7 @@ export const BACKGROUND_THEME_PROFILES = {
       type: 'cells',
       color1: 0x0b3b4c,
       color2: 0x3affbe,
-      size: 1.38,
+      size: 1.8, // Increased from 1.38 for performance
       speed: 0.36,
     },
   },
@@ -318,7 +319,53 @@ export const BACKGROUND_THEME_PROFILES = {
     cssClass: 'bg-theme-custom',
     parallax: 6,
   },
-}
+
+  // --- NEW THEMES ADDED BELOW ---
+
+  cyberpunk: {
+    category: 'digital',
+    cssClass: 'bg-theme-cyberpunk bg-cat-digital',
+    parallax: 8,
+    vanta: {
+      type: 'net',
+      color: 0xff003c, // Neon pink/red
+      backgroundColor: 0x0b001a, // Very dark purple/blue
+      points: 12, // Low point count for excellent performance
+      maxDistance: 24,
+      spacing: 25, // Wide spacing for a structured, retro-tech feel
+      showDots: true,
+    },
+  },
+  twilight: {
+    category: 'fluid',
+    cssClass: 'bg-theme-twilight bg-cat-fluid bg-depth-soft',
+    parallax: 7,
+    vanta: {
+      type: 'fog', // Fog is highly performant
+      highlightColor: 0xff6b35, // Sunset orange
+      midtoneColor: 0x7b2cbf, // Deep purple
+      lowlightColor: 0x240046, // Dark violet background
+      baseColor: 0x10002b,
+      blurFactor: 0.75,
+      speed: 0.4, // Slow, relaxing movement
+      zoom: 1.2,
+    },
+  },
+  quantum: {
+    category: 'cosmic',
+    cssClass: 'bg-theme-quantum bg-cat-cosmic',
+    parallax: 9,
+    vanta: {
+      type: 'dots', // Extremely lightweight on the GPU
+      backgroundColor: 0x02050a, 
+      color: 0x00ffcc, // Quantum cyan
+      color2: 0x7000ff, // Deep ultraviolet
+      size: 1.8,
+      spacing: 22,
+      showLines: true, // Lines connecting sparse dots creates a great tech/physics web
+    },
+  },
+};
 
 export const BACKGROUND_DEFAULT_PROFILE = {
   category: 'other',

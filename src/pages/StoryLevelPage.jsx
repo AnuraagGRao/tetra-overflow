@@ -894,7 +894,17 @@ export default function StoryLevelPage() {
             {!focus && (<div style={{ width: 6, flexShrink: 0, background: chapter.color, opacity: 0.25 }} />)}
 
             {/* Canvas */}
-            <div className="mobile-canvas-wrap" style={{ background: 'transparent', flex: 1, minWidth: 0 }}>
+            <div
+              className="mobile-canvas-wrap"
+              style={{
+                background: 'transparent',
+                flex: 1,
+                minWidth: 0,
+                paddingBottom: focus && showOnScreenControls
+                  ? 'calc(4.5rem + env(safe-area-inset-bottom, 0px))'
+                  : 0,
+              }}
+            >
               <SynesthesiaMotionLayer style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>
                 <div style={!isMobile ? { transform: `scale(${zoom})`, transformOrigin: 'center center' } : undefined}>
                   <GameCanvas
@@ -1039,8 +1049,14 @@ export default function StoryLevelPage() {
             {/* Right strip removed per request to maximize board area */}
           </div>
 
-          {showOnScreenControls && (
+          {showOnScreenControls && !focus && (
             <TouchControls onPress={handlePress} onRelease={handleRelease} />
+          )}
+
+          {showOnScreenControls && focus && (
+            <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 60, pointerEvents: 'auto' }}>
+              <TouchControls onPress={handlePress} onRelease={handleRelease} />
+            </div>
           )}
         </div>
       )}

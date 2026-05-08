@@ -140,6 +140,9 @@ export const STORE_ITEMS = [
   { id: 'bg_deepsea',  type: 'bg', bgType: 'deepsea',   name: 'DEEP SEA',   description: 'Bioluminescent drift in the abyss.',         price: 3600, emoji: '🐋', accent: '#00f2ff', tier: 'legendary' },
   { id: 'bg_stellar',  type: 'bg', bgType: 'stellar',   name: 'STELLAR NURSERY', description: 'Pulsing halo of a newborn star.',         price: 3800, emoji: '✨', accent: '#ffd599', tier: 'legendary' },
   { id: 'bg_nyancat',  type: 'bg', bgType: 'nyancat',   name: 'NYAN CAT',   description: 'Rainbow trails across the stars. Meow!',     price: 4000, emoji: '🌈', accent: '#ff66cc', tier: 'legendary' },
+  { id: 'bg_cyberpunk', type: 'bg', bgType: 'cyberpunk', name: 'CYBERPUNK', description: 'Neon grid and synth sweep.',                  price: 3200, emoji: '💾', accent: '#ff003c', tier: 'epic' },
+  { id: 'bg_twilight',  type: 'bg', bgType: 'twilight',  name: 'TWILIGHT',  description: 'Sunset bands over deep violet.',              price: 2800, emoji: '🌇', accent: '#ff6b35', tier: 'rare' },
+  { id: 'bg_quantum',   type: 'bg', bgType: 'quantum',   name: 'QUANTUM',   description: 'Pulsing quantum field of nodes.',            price: 3400, emoji: '🧬', accent: '#00ffcc', tier: 'epic' },
   { id: 'bg_custom',   type: 'bg', bgType: 'custom',    name: 'CUSTOM IMAGE', description: 'Unlock the ability to apply any image/GIF.', price: 10000, emoji: '🖼️', accent: '#eab308', tier: 'legendary' },
 
   // ── Story Piece Themes (Changes the actual falling blocks) ────────────────

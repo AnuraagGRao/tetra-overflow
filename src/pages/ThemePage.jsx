@@ -12,7 +12,7 @@ const BG_ITEMS = STORE_ITEMS.filter(i => i.type === 'bg')
 const THEME_STORE_ITEMS = STORE_ITEMS.filter(i => i.type === 'theme')
 const THEME_STORE_MAP = Object.fromEntries(THEME_STORE_ITEMS.map(i => [i.themeKey, i]))
 const MAX_FAVS = 7
-const CUSTOM_PRICE = BG_ITEMS.find(i => i.bgType === 'custom')?.price ?? 600
+const CUSTOM_PRICE = 600
 
 // Compress an image File to a JPEG data-URL, capped at maxSide px
 function compressImage(file, maxSide = 1440, quality = 0.72) {

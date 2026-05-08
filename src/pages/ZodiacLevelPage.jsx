@@ -905,7 +905,6 @@ export default function ZodiacLevelPage() {
 
   const beatEnergy = beatRef.current
   const boardAlpha = phase === PHASE.GAME ? Math.max(0.28, 0.46 - beatEnergy * 0.18) : undefined
-  const mobileFocusScale = isMobile && focus ? 1.06 : 1
 
   // Pisces illusion: apply CSS hue rotation to the canvas wrapper
   const illusion = bossId === 'pisces' && phase === PHASE.GAME
@@ -1180,8 +1179,7 @@ export default function ZodiacLevelPage() {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      transform: `scale(${isMobile ? mobileFocusScale : zoom})`,
-                      transformOrigin: 'center center',
+                      ...(!isMobile ? { transform: `scale(${zoom})`, transformOrigin: 'center center' } : {}),
                     }}
                   >
                     <GameCanvas

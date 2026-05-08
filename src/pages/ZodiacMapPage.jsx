@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
@@ -7,16 +7,48 @@ import { ZODIAC_BOSSES, OPHIUCHUS, allZodiacBeaten, ophiuchusBeaten, getZodiacPo
 import { playTap, playZoomIn, playBack } from '../audio/uiSfx'
 import homeIconUrl from '../icons/home-button.png'
 
-// Stars for the background
-const STARS = Array.from({ length: 130 }).map((_, i) => ({
-  id: i,
-  x: (Math.sin(i * 19.87 + 1.3) * 48 + 50),
-  y: (Math.cos(i * 14.41 + 2.7) * 48 + 50),
-  r: 0.06 + (i % 5) * 0.07,
-  o: 0.10 + (i % 7) * 0.08,
-  dur: 4 + (i % 8) * 1.1,
-  delay: (i % 13) * 0.14,
-}))
+// Stars for the background (uniformly distributed across the full map)
+const pseudo = (n) => {
+  const v = Math.sin(n * 12.9898 + 78.233) * 43758.5453
+  return v - Math.floor(v)
+}
+
+const STARS = Array.from({ length: 220 }).map((_, i) => {
+  const x = 2 + pseudo(i * 2 + 1) * 96
+  const y = 2 + pseudo(i * 2 + 2) * 96
+  const base = 0.22 + (i % 6) * 0.09
+  const driftX = (pseudo(i * 2 + 3) - 0.5) * 0.8
+  const driftY = (pseudo(i * 2 + 4) - 0.5) * 1.15
+  return {
+    id: i,
+    x,
+    y,
+    r: 0.05 + pseudo(i * 2 + 5) * 0.34,
+    o: 0.08 + pseudo(i * 2 + 6) * 0.5,
+    driftX,
+    driftY,
+    dur: 4.5 + pseudo(i * 2 + 7) * 5.5,
+    delay: pseudo(i * 2 + 8) * 1.8,
+    amp: base,
+  }
+})
+
+// Always-on background stars (overscanned) so edges never look empty while panning/zooming
+const BG_STARS = Array.from({ length: 260 }).map((_, i) => {
+  const x = -8 + pseudo(i * 3 + 201) * 116
+  const y = -8 + pseudo(i * 3 + 202) * 116
+  return {
+    id: i,
+    x,
+    y,
+    r: 0.04 + pseudo(i * 3 + 203) * 0.22,
+    o: 0.06 + pseudo(i * 3 + 204) * 0.28,
+    driftX: (pseudo(i * 3 + 205) - 0.5) * 0.45,
+    driftY: (pseudo(i * 3 + 206) - 0.5) * 0.65,
+    dur: 5 + pseudo(i * 3 + 207) * 6,
+    delay: pseudo(i * 3 + 208) * 1.6,
+  }
+})
 
 // Constellation line decorations between adjacent zodiac nodes (cosmetic)
 function ConstellationLines({ positions }) {
@@ -158,18 +190,90 @@ function BossCard({ boss, completed, onClose, onPlay }) {
 export default function ZodiacMapPage() {
   const navigate   = useNavigate()
   const { user }   = useAuth()
+  const mapViewportRef = useRef(null)
+  const didAutoPickRef = useRef(false)
+  const gestureRef = useRef({
+    mode: 'none',
+    lastX: 0,
+    lastY: 0,
+    startDist: 0,
+    startZoom: 1,
+  })
   const [progress, setProgress] = useState({})
   const [loading,  setLoading]  = useState(true)
   const [selected, setSelected] = useState(null)   // boss id string
+  const [mapZoom, setMapZoom] = useState(1.02)
+  const [cameraBossId, setCameraBossId] = useState(null)
+  const [userPan, setUserPan] = useState({ x: 0, y: 0 })
 
   useEffect(() => {
     if (!user) return
     getStoryProgress(user.uid).then(p => { setProgress(p); setLoading(false) })
   }, [user])
 
-  const positions   = useMemo(() => getZodiacPositions(50, 50, 35.5), [])
+  const positions   = useMemo(() => getZodiacPositions(50, 50, 40), [])
   const allBeaten   = useMemo(() => allZodiacBeaten(progress), [progress])
   const ophiuchus13 = useMemo(() => ophiuchusBeaten(progress), [progress])
+
+  const unclearedBosses = useMemo(
+    () => ZODIAC_BOSSES.filter(b => !progress[`zodiac_${b.id}_completed`]),
+    [progress]
+  )
+
+  const pickRandomUncleared = () => {
+    if (!unclearedBosses.length) {
+      setCameraBossId('ophiuchus')
+      return
+    }
+    const idx = Math.floor(Math.random() * unclearedBosses.length)
+    setCameraBossId(unclearedBosses[idx].id)
+  }
+
+  useEffect(() => {
+    if (loading || didAutoPickRef.current) return
+    if (unclearedBosses.length > 0) {
+      const idx = Math.floor(Math.random() * unclearedBosses.length)
+      setCameraBossId(unclearedBosses[idx].id)
+    } else {
+      setCameraBossId('ophiuchus')
+    }
+    didAutoPickRef.current = true
+  }, [loading, unclearedBosses])
+
+  const cameraTargetId = selected || cameraBossId
+  const cameraPos = useMemo(() => {
+    if (cameraTargetId === 'ophiuchus') return { x: 50, y: 50 }
+    const idx = ZODIAC_BOSSES.findIndex(b => b.id === cameraTargetId)
+    if (idx >= 0) return positions[idx]
+    return { x: 50, y: 50 }
+  }, [cameraTargetId, positions])
+
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v))
+  const cameraShiftX = clamp((50 - cameraPos.x) * 0.55, -18, 18)
+  const cameraShiftY = clamp((50 - cameraPos.y) * 0.65, -22, 22)
+
+  const clampZoom = (z) => Math.max(0.9, Math.min(1.9, z))
+  const zoomIn = () => setMapZoom(z => clampZoom(z + 0.1))
+  const zoomOut = () => setMapZoom(z => clampZoom(z - 0.1))
+  const resetZoom = () => {
+    setSelected(null)
+    setCameraBossId(null)
+    setMapZoom(1.02)
+    setUserPan({ x: 0, y: 0 })
+  }
+
+  const clampPanByZoom = (pan, zoom) => {
+    const maxX = Math.max(0, (zoom - 1) * 45)
+    const maxY = Math.max(0, (zoom - 1) * 55)
+    return {
+      x: clamp(pan.x, -maxX, maxX),
+      y: clamp(pan.y, -maxY, maxY),
+    }
+  }
+
+  useEffect(() => {
+    setUserPan((p) => clampPanByZoom(p, mapZoom))
+  }, [mapZoom])
 
   const selectedBoss = selected
     ? (selected === 'ophiuchus' ? OPHIUCHUS : ZODIAC_BOSSES.find(b => b.id === selected))
@@ -213,17 +317,126 @@ export default function ZodiacMapPage() {
           LOADING…
         </div>
       ) : (
-        <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-          {/* ── SVG star-wheel ── */}
-          <motion.div
-            animate={{ scale: selected ? 1.1 : 1.04, y: selected ? '-2%' : '-1%' }}
-            transition={{ type: 'spring', stiffness: 120, damping: 18 }}
-            style={{ position: 'absolute', inset: 0 }}
+        <div
+          ref={mapViewportRef}
+          style={{ flex: 1, position: 'relative', overflow: 'hidden' }}
+          onTouchStart={(e) => {
+            if (e.touches.length === 1) {
+              const t = e.touches[0]
+              gestureRef.current = { ...gestureRef.current, mode: 'pan', lastX: t.clientX, lastY: t.clientY }
+            } else if (e.touches.length >= 2) {
+              const a = e.touches[0]
+              const b = e.touches[1]
+              const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY)
+              gestureRef.current = { ...gestureRef.current, mode: 'pinch', startDist: dist, startZoom: mapZoom }
+            }
+          }}
+          onTouchMove={(e) => {
+            if (!mapViewportRef.current) return
+            if (gestureRef.current.mode === 'pinch' && e.touches.length >= 2) {
+              e.preventDefault()
+              const a = e.touches[0]
+              const b = e.touches[1]
+              const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY)
+              const nextZoom = clampZoom(gestureRef.current.startZoom * (dist / Math.max(1, gestureRef.current.startDist)))
+              setMapZoom(nextZoom)
+              return
+            }
+            if (gestureRef.current.mode === 'pan' && e.touches.length === 1) {
+              e.preventDefault()
+              const t = e.touches[0]
+              const dx = t.clientX - gestureRef.current.lastX
+              const dy = t.clientY - gestureRef.current.lastY
+              gestureRef.current.lastX = t.clientX
+              gestureRef.current.lastY = t.clientY
+              const rect = mapViewportRef.current.getBoundingClientRect()
+              const panDx = (dx / Math.max(1, rect.width)) * 100
+              const panDy = (dy / Math.max(1, rect.height)) * 100
+              setUserPan((p) => clampPanByZoom({ x: p.x + panDx, y: p.y + panDy }, mapZoom))
+            }
+          }}
+          onTouchEnd={() => {
+            gestureRef.current.mode = 'none'
+          }}
+          onWheel={(e) => {
+            e.preventDefault()
+            const delta = e.deltaY > 0 ? -0.06 : 0.06
+            setMapZoom(z => clampZoom(z + delta))
+          }}
+        >
+          <svg
+            viewBox="0 0 100 100"
+            preserveAspectRatio="xMidYMid slice"
+            style={{ width: '100%', height: '100%', position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none' }}
           >
+            {BG_STARS.map((star) => (
+              <motion.circle
+                key={`bg-${star.id}`}
+                cx={star.x}
+                cy={star.y}
+                r={star.r}
+                fill="white"
+                animate={{
+                  opacity: [star.o, Math.min(1, star.o + 0.2), star.o],
+                  cx: [star.x, star.x + star.driftX, star.x],
+                  cy: [star.y, star.y + star.driftY, star.y],
+                }}
+                transition={{ duration: star.dur, delay: star.delay, repeat: Infinity, ease: 'easeInOut' }}
+              />
+            ))}
+          </svg>
+
+          <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 26, display: 'flex', gap: 6 }}>
+            <button
+              onClick={(e) => { e.stopPropagation(); zoomOut() }}
+              style={{ background: 'rgba(0,0,0,0.55)', border: '1px solid rgba(255,255,255,0.2)', color: '#c7d2fe', borderRadius: 6, width: 28, height: 28, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700 }}
+              aria-label="Zoom out"
+              title="Zoom out"
+            >
+              −
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); zoomIn() }}
+              style={{ background: 'rgba(0,0,0,0.55)', border: '1px solid rgba(255,255,255,0.2)', color: '#c7d2fe', borderRadius: 6, width: 28, height: 28, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700 }}
+              aria-label="Zoom in"
+              title="Zoom in"
+            >
+              +
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); resetZoom() }}
+              style={{ background: 'rgba(0,0,0,0.55)', border: '1px solid rgba(255,255,255,0.2)', color: '#9ca3af', borderRadius: 6, padding: '0 8px', height: 28, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.62rem', letterSpacing: '0.08em' }}
+              aria-label="Reset zoom"
+              title="Reset zoom"
+            >
+              RESET
+            </button>
+            {!!unclearedBosses.length && (
+              <button
+                onClick={(e) => { e.stopPropagation(); pickRandomUncleared() }}
+                style={{ background: 'rgba(20,12,36,0.8)', border: '1px solid rgba(168,85,247,0.45)', color: '#c4b5fd', borderRadius: 6, padding: '0 8px', height: 28, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.62rem', letterSpacing: '0.08em' }}
+                aria-label="Random uncleared zodiac"
+                title="Random uncleared zodiac"
+              >
+                RANDOM
+              </button>
+            )}
+          </div>
+
+          <motion.div
+            animate={{
+              scale: mapZoom,
+              x: `${clamp(cameraShiftX + userPan.x, -40, 40)}%`,
+              y: `${clamp(cameraShiftY + userPan.y, -45, 45)}%`,
+            }}
+            transition={{ type: 'spring', stiffness: 120, damping: 20 }}
+            style={{ position: 'absolute', inset: 0, transformOrigin: '50% 50%', touchAction: 'none', zIndex: 1 }}
+          >
+          {/* ── SVG star-wheel ── */}
           <svg
             viewBox="0 0 100 100"
             preserveAspectRatio="xMidYMid meet"
-            style={{ width: '100%', height: '126%', position: 'absolute', inset: '-13% 0' }}
+            style={{ width: '100%', height: '100%', position: 'absolute', inset: 0 }}
           >
             {/* Starfield */}
             {STARS.map(star => (
@@ -231,14 +444,18 @@ export default function ZodiacMapPage() {
                 key={star.id}
                 cx={star.x} cy={star.y} r={star.r}
                 fill="white"
-                animate={{ opacity: [star.o, Math.min(1, star.o + 0.25), star.o] }}
+                animate={{
+                  opacity: [star.o, Math.min(1, star.o + 0.25), star.o],
+                  cx: [star.x, star.x + star.driftX * star.amp, star.x],
+                  cy: [star.y, star.y + star.driftY * star.amp, star.y],
+                }}
                 transition={{ duration: star.dur, delay: star.delay, repeat: Infinity, ease: 'easeInOut' }}
               />
             ))}
 
             {/* Outer ring */}
             <circle
-              cx="50" cy="50" r="34"
+              cx="50" cy="50" r="39"
               fill="none"
               stroke="rgba(255,255,255,0.05)"
               strokeWidth="0.4"
@@ -253,6 +470,7 @@ export default function ZodiacMapPage() {
               const p   = positions[i]
               const done = !!progress[`zodiac_${boss.id}_completed`]
               const isSel = selected === boss.id
+              const isCameraTarget = !selected && cameraTargetId === boss.id
               return (
                 <motion.g
                   key={boss.id}
@@ -266,8 +484,8 @@ export default function ZodiacMapPage() {
                   <motion.circle
                     cx={p.x} cy={p.y} r={done ? 4.8 : 3.8}
                     fill={boss.color}
-                    opacity={done ? 0.18 : 0.08}
-                    animate={{ r: [done ? 4.8 : 3.8, done ? 6 : 5, done ? 4.8 : 3.8] }}
+                    opacity={isCameraTarget ? 0.24 : (done ? 0.18 : 0.08)}
+                    animate={{ r: [done ? 4.8 : 3.8, isCameraTarget ? 6.6 : (done ? 6 : 5), done ? 4.8 : 3.8] }}
                     transition={{ duration: 2.4 + (i % 5) * 0.4, repeat: Infinity, ease: 'easeInOut' }}
                   />
                   {/* Node circle */}
