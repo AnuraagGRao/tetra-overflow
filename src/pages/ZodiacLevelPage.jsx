@@ -802,6 +802,7 @@ export default function ZodiacLevelPage() {
     colorShift,
     constrictionCols,
     poisonSet,
+    speedBoostActive,
     abilityActive,
     abilityLabel,
     abilityToast,
