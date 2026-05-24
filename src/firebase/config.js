@@ -1,6 +1,11 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
-import { initializeFirestore, setLogLevel } from 'firebase/firestore'
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  setLogLevel,
+} from 'firebase/firestore'
 
 const firebaseConfig = {
   apiKey: 'AIzaSyDYiN707IZOis3CZWTltrZog45RZpN2FiY',
@@ -15,9 +20,13 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig)
 export const auth = getAuth(app)
 
-// Firestore: use auto long-polling detection to avoid WebChannel/extension blocks
-// and reduce console spam to errors only.
+// Firestore: persistent IndexedDB cache so the app works offline after first login.
+// Reads are served from cache immediately; writes are queued and synced when
+// the connection is restored. Multi-tab manager prevents conflicts between tabs.
 export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager(),
+  }),
   experimentalAutoDetectLongPolling: true,
   useFetchStreams: false,
 })

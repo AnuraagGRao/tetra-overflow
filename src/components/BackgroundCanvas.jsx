@@ -259,50 +259,8 @@ function drawAmbient(ctx, bgType, w, h, t, beat = 0) {
       }
       break
     }
-    case 'cyberpunk': {
-      // Fast neon sparks drifting diagonally
-      const fast = Math.random() < 0.35
-      return {
-        x, y: init ? Math.random()*h : h + 10,
-        vx: (fast ? 0.6 : 0.3) + Math.random()*0.4,
-        vy: -((fast ? 1.4 : 0.8) + Math.random()*0.8),
-        r: fast ? 1.2 + Math.random()*1.6 : 0.8 + Math.random()*1.2,
-        hue: Math.random() < 0.6 ? 330 + Math.random()*20 : 190 + Math.random()*30,
-        life: 1,
-        decay: 0.002 + Math.random()*0.003,
-        glow: true,
-      }
-    }
-    case 'twilight': {
-      // Slow drifting motes
-      return {
-        x, y,
-        vx:(Math.random()-0.5)*0.06,
-        vy:-(0.03+Math.random()*0.06),
-        r:0.8+Math.random()*2.0,
-        hue: 26 + Math.random()*20,
-        life:1,
-        decay:0.0008+Math.random()*0.001,
-        glow:true,
-        a: 0.25 + Math.random()*0.2,
-      }
-    }
-    case 'quantum': {
-      // Pulsing quantum dots
-      const mag = Math.random() < 0.4
-      return {
-        x, y: Math.random()*h,
-        vx:(Math.random()-0.5)*0.05,
-        vy:(Math.random()-0.5)*0.05,
-        r: 0.7 + Math.random()*1.6,
-        hue: mag ? (280 + Math.random()*40) : (170 + Math.random()*40),
-        life: 1,
-        decay: 0.0009 + Math.random()*0.001,
-        glow: true,
-        twinkle: Math.random()*Math.PI*2,
-        twinkleSpeed: 0.02 + Math.random()*0.03,
-      }
-    }
+    // Note: particle spawn logic for 'cyberpunk', 'twilight', 'quantum'
+    // is handled in makeParticle(); ambient pass only draws background.
     case 'clouds': {
       const g = ctx.createLinearGradient(0,0,0,h)
       g.addColorStop(0,'rgba(5,10,25,1)'); g.addColorStop(0.5,'rgba(10,16,32,1)'); g.addColorStop(1,'rgba(2,4,12,1)')
@@ -676,6 +634,50 @@ function makeParticle(bgType, w, h, init=false) {
         decay: 0.0008 + Math.random()*0.0008,
         glow: true,
         a: 0.25 + Math.random()*0.2,
+      }
+    }
+    case 'cyberpunk': {
+      // Fast neon sparks drifting diagonally
+      const fast = Math.random() < 0.35
+      return {
+        x, y: init ? Math.random()*h : h + 10,
+        vx: (fast ? 0.6 : 0.3) + Math.random()*0.4,
+        vy: -((fast ? 1.4 : 0.8) + Math.random()*0.8),
+        r: fast ? 1.2 + Math.random()*1.6 : 0.8 + Math.random()*1.2,
+        hue: Math.random() < 0.6 ? 330 + Math.random()*20 : 190 + Math.random()*30,
+        life: 1,
+        decay: 0.002 + Math.random()*0.003,
+        glow: true,
+      }
+    }
+    case 'twilight': {
+      // Slow drifting motes
+      return {
+        x, y,
+        vx:(Math.random()-0.5)*0.06,
+        vy:-(0.03+Math.random()*0.06),
+        r:0.8+Math.random()*2.0,
+        hue: 26 + Math.random()*20,
+        life:1,
+        decay:0.0008+Math.random()*0.001,
+        glow:true,
+        a: 0.25 + Math.random()*0.2,
+      }
+    }
+    case 'quantum': {
+      // Pulsing quantum dots
+      const mag = Math.random() < 0.4
+      return {
+        x, y: Math.random()*h,
+        vx:(Math.random()-0.5)*0.05,
+        vy:(Math.random()-0.5)*0.05,
+        r: 0.7 + Math.random()*1.6,
+        hue: mag ? (280 + Math.random()*40) : (170 + Math.random()*40),
+        life: 1,
+        decay: 0.0009 + Math.random()*0.001,
+        glow: true,
+        twinkle: Math.random()*Math.PI*2,
+        twinkleSpeed: 0.02 + Math.random()*0.03,
       }
     }
     case 'storm':  return { x, y, vx:1.2+Math.random()*1.6, vy:6+Math.random()*6, r:0.7+Math.random()*0.4, hue:208+Math.random()*16, life:1, decay:0, glow:false }

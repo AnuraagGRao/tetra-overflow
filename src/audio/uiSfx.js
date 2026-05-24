@@ -59,3 +59,22 @@ export function playZoomOut() {
   noise(3200, 0.16, 0.05)
   note(440, 0.09, 0.05, 'sine', 0.015)
 }
+
+export function playTypeClick() {
+  // Single digital keypress — very short square-wave tick
+  note(2200, 0.055, 0.018, 'square')
+  noise(4800, 0.04, 0.012, 0, 0.005)
+}
+
+export function playGlitchBurst() {
+  // CRT-static + chaotic multi-click burst for title glitch events
+  const ac = getCtx(); if (!ac) return
+  // Wide-band noise hit
+  noise(6000, 0.22, 0.08)
+  // Fast descending clicks
+  note(3200, 0.09, 0.025, 'square', 0.01)
+  note(1800, 0.07, 0.02,  'square', 0.03)
+  note(800,  0.05, 0.03,  'sawtooth', 0.055)
+  // Sub-thump for weight
+  note(90,   0.12, 0.07,  'sine', 0.02)
+}

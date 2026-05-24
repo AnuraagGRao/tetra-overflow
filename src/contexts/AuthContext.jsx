@@ -17,9 +17,15 @@ export function AuthProvider({ children }) {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser)
       if (firebaseUser) {
-        const rawProfile = await getUserProfile(firebaseUser.uid)
-        const profile = await ensureUserProfileIdentity(firebaseUser.uid, rawProfile, firebaseUser.displayName)
-        setUserProfile(profile)
+        try {
+          const rawProfile = await getUserProfile(firebaseUser.uid)
+          const profile = await ensureUserProfileIdentity(firebaseUser.uid, rawProfile, firebaseUser.displayName)
+          setUserProfile(profile)
+        } catch {
+          // Offline or Firestore error — user is still authenticated; profile will
+          // load from Firestore's IndexedDB cache or once connectivity returns.
+          setUserProfile(null)
+        }
       } else {
         setUserProfile(null)
       }

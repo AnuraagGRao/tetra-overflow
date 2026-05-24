@@ -2,7 +2,7 @@ export { resetStoryProgress } from './resetStoryProgress'
 import {
   doc, getDoc, setDoc, updateDoc, collection,
   query, where, orderBy, limit, getDocs, increment,
-  serverTimestamp, addDoc, onSnapshot, runTransaction,
+  serverTimestamp, addDoc, onSnapshot, runTransaction, deleteDoc,
 } from 'firebase/firestore'
 import { db } from './config'
 import { calculateCoinsEarned, applyDailyGameRewards } from '../logic/economy'
@@ -418,7 +418,7 @@ export const archiveLobby = async (code, extra = {}) => {
   await setDoc(doc(db, 'lobbies_archive', code), archived)
   await updateDoc(ref, { status: 'archived' }).catch(() => {})
   // Best-effort delete; you may tighten rules to host-only
-  try { await (await import('firebase/firestore')).deleteDoc(ref) } catch {}
+  try { await deleteDoc(ref) } catch {}
 }
 
 // ─── Artwork voting ───────────────────────────────────────────────────────────
@@ -661,6 +661,5 @@ export const getLobbyInvites = async (uid) => {
 
 /** Delete a lobby invite (dismiss). */
 export const dismissLobbyInvite = async (uid, inviteId) => {
-  const { deleteDoc } = await import('firebase/firestore')
   await deleteDoc(doc(db, 'users', uid, 'lobby_invites', inviteId))
 }

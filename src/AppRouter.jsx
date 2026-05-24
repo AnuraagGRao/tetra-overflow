@@ -16,6 +16,8 @@ import InfoPage from './pages/InfoPage'
 import StoryLorePage from './pages/StoryLorePage'
 import ZodiacMapPage from './pages/ZodiacMapPage'
 import ZodiacLevelPage from './pages/ZodiacLevelPage'
+import Season3MapPage from './pages/Season3MapPage'
+import Season3LevelPage from './pages/Season3LevelPage'
 
 function NowPlayingToast() {
   const [toast, setToast] = useState(null)
@@ -88,10 +90,59 @@ function AuthRoute({ children }) {
   return children
 }
 
+function OfflineBanner() {
+  const [offline, setOffline] = useState(false)
+  const [justCameBack, setJustCameBack] = useState(false)
+  const timerRef = useRef(null)
+
+  useEffect(() => {
+    const onOffline = () => { setOffline(true); setJustCameBack(false) }
+    const onOnline  = () => {
+      setOffline(false)
+      setJustCameBack(true)
+      clearTimeout(timerRef.current)
+      timerRef.current = setTimeout(() => setJustCameBack(false), 3000)
+    }
+    window.addEventListener('offline', onOffline)
+    window.addEventListener('online',  onOnline)
+    // Set initial state in case the page loaded offline
+    if (!navigator.onLine) setOffline(true)
+    return () => {
+      window.removeEventListener('offline', onOffline)
+      window.removeEventListener('online',  onOnline)
+      clearTimeout(timerRef.current)
+    }
+  }, [])
+
+  if (!offline && !justCameBack) return null
+  return (
+    <div style={{
+      position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 9998,
+      padding: '8px 16px',
+      background: offline ? 'rgba(30,10,10,0.94)' : 'rgba(10,28,10,0.94)',
+      borderTop: `1px solid ${offline ? '#7f1d1d' : '#14532d'}`,
+      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+      fontFamily: '"Courier New", monospace',
+      fontSize: '0.65rem', letterSpacing: '0.14em',
+      color: offline ? '#fca5a5' : '#86efac',
+      backdropFilter: 'blur(8px)',
+      pointerEvents: 'none',
+    }}>
+      <span>{offline ? '📡' : '✅'}</span>
+      <span>
+        {offline
+          ? 'OFFLINE — game continues; progress saves when you reconnect'
+          : 'BACK ONLINE — syncing…'}
+      </span>
+    </div>
+  )
+}
+
 export default function AppRouter() {
   return (
     <BrowserRouter basename={import.meta.env.BASE_URL}>
       <NowPlayingToast />
+      <OfflineBanner />
       <Routes>
         <Route path="/" element={<MainMenuPage />} />
         <Route path="/auth" element={<AuthPage />} />
@@ -105,6 +156,8 @@ export default function AppRouter() {
         <Route path="/lore" element={<AuthRoute><StoryLorePage /></AuthRoute>} />
         <Route path="/zodiac" element={<AuthRoute><ZodiacMapPage /></AuthRoute>} />
         <Route path="/zodiac/:bossId" element={<AuthRoute><ZodiacLevelPage /></AuthRoute>} />
+        <Route path="/s3" element={<AuthRoute><Season3MapPage /></AuthRoute>} />
+        <Route path="/s3/:epochId/:levelId" element={<AuthRoute><Season3LevelPage /></AuthRoute>} />
         <Route path="/artwork" element={<ArtworkPage />} />
         <Route path="/info" element={<InfoPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />

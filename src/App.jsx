@@ -1226,18 +1226,26 @@ export default function App() {
   })
   const illusionShiftRef = useRef(0)
   const illusionRafRef   = useRef(null)
-  const [illusionShift,  setIllusionShift]  = useState(0)
+  // Drive hue via CSS custom property — bypasses React batching so the filter
+  // stays smooth even when many game-state updates fire simultaneously.
   useEffect(() => {
-    if (!hasIllusion) { cancelAnimationFrame(illusionRafRef.current); return }
+    if (!hasIllusion) {
+      cancelAnimationFrame(illusionRafRef.current)
+      document.documentElement.style.removeProperty('--illusion-hue')
+      return
+    }
     let prev = performance.now()
     const tick = (now) => {
       const dt = now - prev; prev = now
       illusionShiftRef.current = (illusionShiftRef.current + dt * 0.12) % 360
-      setIllusionShift(illusionShiftRef.current)
+      document.documentElement.style.setProperty('--illusion-hue', `${Math.round(illusionShiftRef.current)}deg`)
       illusionRafRef.current = requestAnimationFrame(tick)
     }
     illusionRafRef.current = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(illusionRafRef.current)
+    return () => {
+      cancelAnimationFrame(illusionRafRef.current)
+      document.documentElement.style.removeProperty('--illusion-hue')
+    }
   }, [hasIllusion])
   useEffect(() => {
     const el = new Audio(catMusicUrl)
@@ -1594,12 +1602,14 @@ export default function App() {
       }
 
       // ─── Randomized jumpscare trigger (not tied to garbage; independent check every frame)
-      if (isUltimate && !state.gameOver) {
+      // Use ns.mode / ns.gameOver (from engine.getState()) — not the stale render-closure
+      // values of isUltimate / state.gameOver which are captured once and never updated.
+      if (ns.mode === GAME_MODE.ULTIMATE && !ns.gameOver) {
         const jsNow = performance.now()
         if (
           jsNow >= (jumpscareAllowedAfterRef.current || 0) &&
           jsNow - (lastJumpscareRef.current || 0) > (jumpscareCooldownRef.current || 0) &&
-          Math.random() < (ns.towerFloor >= 15 ? 0.5 : 0.25)
+          Math.random() < (ns.towerFloor >= 15 ? 0.008 : 0.004)
         ) {
           const imgs = [horror1Url, horror2Url, horror3Url]
           const src = imgs[Math.floor(Math.random() * imgs.length)]
@@ -2106,7 +2116,7 @@ export default function App() {
   const isVersus   = state.mode === GAME_MODE.VERSUS
   const showZone   = state.mode === GAME_MODE.NORMAL || state.mode === GAME_MODE.ULTIMATE
   const illusionFilterStyle = hasIllusion
-    ? { filter: `hue-rotate(${Math.round(illusionShift)}deg)` } : {}
+    ? { filter: 'hue-rotate(var(--illusion-hue, 0deg))' } : {}
 
   // Glitch effect: active in Ultimate when stack reaches row 10 from top
   const glitchActive = isUltimate && (() => {

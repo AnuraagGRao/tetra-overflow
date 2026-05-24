@@ -31,14 +31,16 @@ const TRACK_DEFS = [
   // sagittarius (16-17)
   { file: 'Centaur_s_Aim_sagittarius',            gain: 0.88 },
   { file: "The_Archer's_Aim_sagittarius",         gain: 0.88 },
-  // capricorn (18)
+  // capricorn (18-19)
   { file: 'Zero_Margin_capricorn',                gain: 0.88 },
-  // aquarius (19-20)
+  { file: 'Iron_Geometry_capricorn',              gain: 0.88 },
+  // aquarius (20-21)
   { file: 'Slipping_Like_Mercury_aquarius',       gain: 0.88 },
   { file: 'The_Waterbearer_aquarius',             gain: 0.88 },
-  // pisces (21) — note: filename typo "pieces" is intentional (file as-is)
+  // pisces (22-23) — note: filenames use "pieces" spelling (files as-is)
   { file: 'Time_Is_A_Liquid_pieces',              gain: 0.88 },
-  // ophiuchus (22-23)
+  { file: 'Submerged_Geometry_pieces',            gain: 0.88 },
+  // ophiuchus (24-25)
   { file: 'Thirteenth_Ascent_ophiuchus',          gain: 0.88 },
   { file: 'Thirteenth_Constellation_ophiuchus',   gain: 0.88 },
 ]
@@ -53,10 +55,10 @@ const BOSS_POOLS = {
   libra:       [12, 13],
   scorpio:     [14, 15],
   sagittarius: [16, 17],
-  capricorn:   [18],
-  aquarius:    [19, 20],
-  pisces:      [21],
-  ophiuchus:   [22, 23],
+  capricorn:   [18, 19],
+  aquarius:    [20, 21],
+  pisces:      [22, 23],
+  ophiuchus:   [24, 25],
 }
 
 // Build URLs at module parse time so Vite can bundle the assets
@@ -232,10 +234,20 @@ export class Season2MusicManager {
     this._currentIdx = idx
     const buf = this._buffers[idx]
     if (!buf) {
+      // Track failed to load (buffer is null but _loaded is true) or is still loading.
+      // Avoid an infinite spin when the buffer failed: only retry while buffer is still
+      // pending (not yet marked loaded). If already loaded but null (fetch error), skip
+      // to the next track after a brief pause so we don't get stuck.
+      if (this._loaded[idx] && !this._buffers[idx]) {
+        // Buffer definitively failed — advance to next track
+        this._advance(false)
+        return
+      }
       const poll = setInterval(() => {
         if (!this._playing) { clearInterval(poll); return }
         if (this._loaded[idx]) {
           clearInterval(poll)
+          if (!this._buffers[idx]) { this._advance(false); return }
           if (this._playing && this._currentIdx === idx) this._playCurrent()
         }
       }, 100)

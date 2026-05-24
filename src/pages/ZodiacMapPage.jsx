@@ -622,6 +622,38 @@ export default function ZodiacMapPage() {
               </div>
             )}
           </div>
+
+          {/* ── Season 3 entry — only after Ophiuchus beaten ── */}
+          {ophiuchus13 && (
+            <div style={{ padding: '18px 16px 8px', borderTop: '1px solid rgba(0,255,255,0.12)', marginTop: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+              <div style={{ fontSize: '0.46rem', color: '#00ffff88', letterSpacing: '0.28em', textAlign: 'center' }}>
+                THE ZODIAC CYCLE IS COMPLETE
+              </div>
+              <motion.button
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => navigate('/s3')}
+                style={{
+                  background: 'rgba(0,255,255,0.08)',
+                  border: '1px solid rgba(0,255,255,0.6)',
+                  color: '#00ffff',
+                  borderRadius: 10,
+                  padding: '10px 22px',
+                  cursor: 'pointer',
+                  fontSize: '0.78rem',
+                  fontWeight: 900,
+                  letterSpacing: '0.22em',
+                  fontFamily: 'inherit',
+                  textTransform: 'uppercase',
+                  boxShadow: '0 0 20px rgba(0,255,255,0.25)',
+                  width: '100%',
+                  maxWidth: 320,
+                }}
+              >
+                ⚡ TEMPORAL FRACTURE — SEASON 3
+              </motion.button>
+            </div>
+          )}
         </div>
       )}
     </div>

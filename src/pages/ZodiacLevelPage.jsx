@@ -323,10 +323,14 @@ function useBossAbility({ bossId, engine, state, linesThisLevel, isActive }) {
         setSpeedBoostActive(true)
         setAbilityActive(true)
         setAbilityLabel('VENOM RUSH')
-        // Apply max gravity via level override
+        // Save both level and storyLevelOffset so the engine doesn't recalculate
+        // back to the story level on the next update() tick
         const prevLevel = engine.level
+        const prevLevelOffset = engine.storyLevelOffset
+        engine.storyLevelOffset = 0
         engine.level = 20
         speedTimerRef.current = setTimeout(() => {
+          engine.storyLevelOffset = prevLevelOffset
           engine.level = prevLevel
           setSpeedBoostActive(false)
           setAbilityActive(false)
@@ -392,20 +396,29 @@ function useBossAbility({ bossId, engine, state, linesThisLevel, isActive }) {
   }, [bossId, isActive, engine])
 
   // ── Ability: illusion — cycle hue rotation (Pisces) ──────────────────────
+  // Update via CSS custom property directly in the RAF to avoid React batching
+  // delays that cause the animation to pause when many game-state updates fire
+  // simultaneously (e.g. on piece lock / hard-drop).
   useEffect(() => {
     if (bossId !== 'pisces' || !isActive) {
       cancelAnimationFrame(colorRafRef.current)
+      document.documentElement.style.removeProperty('--pisces-hue')
       return
     }
     let prev = performance.now()
     const tick = (now) => {
       const dt = now - prev; prev = now
       colorShiftRef.current = (colorShiftRef.current + dt * 0.12) % 360
+      // Drive hue via CSS custom property — frame-accurate, bypasses React batching
+      document.documentElement.style.setProperty('--pisces-hue', `${Math.round(colorShiftRef.current)}deg`)
       setColorShift(colorShiftRef.current)
       colorRafRef.current = requestAnimationFrame(tick)
     }
     colorRafRef.current = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(colorRafRef.current)
+    return () => {
+      cancelAnimationFrame(colorRafRef.current)
+      document.documentElement.style.removeProperty('--pisces-hue')
+    }
   }, [bossId, isActive])
 
   // ── Ability: constriction — narrow board every 10 lines (Ophiuchus) ───────
@@ -907,10 +920,12 @@ export default function ZodiacLevelPage() {
   const beatEnergy = beatRef.current
   const boardAlpha = phase === PHASE.GAME ? Math.max(0.28, 0.46 - beatEnergy * 0.18) : undefined
 
-  // Pisces illusion: apply CSS hue rotation to the canvas wrapper
+  // Pisces illusion: apply CSS hue rotation to the canvas wrapper.
+  // Use var(--pisces-hue) which is updated every RAF frame directly on the root
+  // element — this is frame-accurate and immune to React's batching delays.
   const illusion = bossId === 'pisces' && phase === PHASE.GAME
   const illusionStyle = illusion
-    ? { filter: `hue-rotate(${Math.round(colorShift)}deg)` }
+    ? { filter: 'hue-rotate(var(--pisces-hue, 0deg))' }
     : {}
 
   if (!boss) {
