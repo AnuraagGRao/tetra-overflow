@@ -625,14 +625,18 @@ export default function ZodiacMapPage() {
 
           {/* ── Season 3 entry — only after Ophiuchus beaten ── */}
           {ophiuchus13 && (
-            <div style={{ padding: '18px 16px 8px', borderTop: '1px solid rgba(0,255,255,0.12)', marginTop: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+            <div style={{ padding: '18px 16px 8px', borderTop: '1px solid rgba(0,255,255,0.12)', marginTop: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, position: 'relative', zIndex: 6 }}>
               <div style={{ fontSize: '0.46rem', color: '#00ffff88', letterSpacing: '0.28em', textAlign: 'center' }}>
                 THE ZODIAC CYCLE IS COMPLETE
               </div>
               <motion.button
                 whileHover={{ scale: 1.04 }}
                 whileTap={{ scale: 0.97 }}
-                onClick={() => navigate('/s3')}
+                onClick={(e) => { e.stopPropagation(); navigate('/s3') }}
+                onMouseDown={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
+                onTouchMove={(e) => e.stopPropagation()}
+                onTouchEnd={(e) => e.stopPropagation()}
                 style={{
                   background: 'rgba(0,255,255,0.08)',
                   border: '1px solid rgba(0,255,255,0.6)',

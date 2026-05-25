@@ -275,6 +275,7 @@ export default function Season3MapPage() {
   const [loading,  setLoading]    = useState(true)
   const [selected, setSelected]   = useState(null)   // epoch id
   const [mapZoom,  setMapZoom]    = useState(1.02)
+  // Pan in percentage units (like S2) so it’s resolution-independent
   const [userPan,  setUserPan]    = useState({ x: 0, y: 0 })
   const { display: titleDisplay, phase: titlePhase } = useAnimatedTitle('TEMPORAL FRACTURE')
 
@@ -289,6 +290,21 @@ export default function Season3MapPage() {
   const handleSelectLevel = (epochId, levelId) => {
     navigate(`/s3/${epochId}/${levelId}`)
   }
+
+  // ── Zoom/pan helpers (match S2 behavior) ─────────────────────────────────
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v))
+  const clampZoom = (z) => Math.max(0.9, Math.min(2.2, z))
+  const clampPanByZoom = (pan, zoom) => {
+    const maxX = Math.max(0, (zoom - 1) * 45)
+    const maxY = Math.max(0, (zoom - 1) * 55)
+    return { x: clamp(pan.x, -maxX, maxX), y: clamp(pan.y, -maxY, maxY) }
+  }
+  const zoomIn  = () => setMapZoom(z => clampZoom(z + 0.1))
+  const zoomOut = () => setMapZoom(z => clampZoom(z - 0.1))
+  const resetZoom = () => { setSelected(null); setMapZoom(1.02); setUserPan({ x: 0, y: 0 }) }
+
+  // Re-clamp pan when zoom changes
+  useEffect(() => { setUserPan(p => clampPanByZoom(p, mapZoom)) }, [mapZoom])
 
   // ── Gesture handlers (pan / pinch-zoom on the map) ─────────────────────────
   useEffect(() => {
@@ -317,11 +333,14 @@ export default function Season3MapPage() {
         const dx = e.clientX - g.lastX
         const dy = e.clientY - g.lastY
         g.lastX = e.clientX; g.lastY = e.clientY
-        setUserPan(p => ({ x: p.x + dx, y: p.y + dy }))
+        const rect = el.getBoundingClientRect()
+        const panDx = (dx / Math.max(1, rect.width)) * 100
+        const panDy = (dy / Math.max(1, rect.height)) * 100
+        setUserPan(p => clampPanByZoom({ x: p.x + panDx, y: p.y + panDy }, mapZoom))
       } else if (g.mode === 'pinch' && touches.size === 2) {
         const pts = [...touches.values()]
         const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y)
-        const newZoom = Math.max(0.7, Math.min(2.5, g.startZoom * (dist / g.startDist)))
+        const newZoom = clampZoom(g.startZoom * (dist / Math.max(1, g.startDist)))
         setMapZoom(newZoom)
       }
     }
@@ -344,6 +363,12 @@ export default function Season3MapPage() {
       el.removeEventListener('pointercancel', onPointerUp)
     }
   }, [mapZoom])
+
+  const handleWheel = (e) => {
+    e.preventDefault()
+    const delta = e.deltaY > 0 ? -0.06 : 0.06
+    setMapZoom(z => clampZoom(z + delta))
+  }
 
   if (loading) {
     return (
@@ -494,17 +519,43 @@ export default function Season3MapPage() {
         ref={mapViewportRef}
         style={{ position: 'absolute', inset: 0, top: 'calc(max(12px, env(safe-area-inset-top, 12px)) + 49px)', overflow: 'hidden', cursor: 'grab', touchAction: 'none' }}
         onClick={() => setSelected(null)}
+        onWheel={handleWheel}
       >
-        <motion.svg
-          viewBox="0 0 100 100"
-          preserveAspectRatio="xMidYMid meet"
-          style={{
-            width: '100%', height: '100%',
-            transform: `translate(${userPan.x}px, ${userPan.y}px) scale(${mapZoom})`,
-            transformOrigin: 'center center',
-            userSelect: 'none',
-          }}
+        {/* Zoom controls (top-right) */}
+        <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 26, display: 'flex', gap: 6 }}>
+          <button
+            onClick={(e) => { e.stopPropagation(); zoomOut() }}
+            onTouchStart={(e) => e.stopPropagation()}
+            style={{ background: 'rgba(0,0,0,0.55)', border: '1px solid rgba(255,255,255,0.2)', color: '#c7d2fe', borderRadius: 6, width: 28, height: 28, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700 }}
+            aria-label="Zoom out"
+            title="Zoom out"
+          >−</button>
+          <button
+            onClick={(e) => { e.stopPropagation(); zoomIn() }}
+            onTouchStart={(e) => e.stopPropagation()}
+            style={{ background: 'rgba(0,0,0,0.55)', border: '1px solid rgba(255,255,255,0.2)', color: '#c7d2fe', borderRadius: 6, width: 28, height: 28, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700 }}
+            aria-label="Zoom in"
+            title="Zoom in"
+          >+</button>
+          <button
+            onClick={(e) => { e.stopPropagation(); resetZoom() }}
+            onTouchStart={(e) => e.stopPropagation()}
+            style={{ background: 'rgba(0,0,0,0.55)', border: '1px solid rgba(255,255,255,0.2)', color: '#9ca3af', borderRadius: 6, padding: '0 8px', height: 28, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.62rem', letterSpacing: '0.08em' }}
+            aria-label="Reset zoom"
+            title="Reset zoom"
+          >RESET</button>
+        </div>
+
+        <motion.div
+          animate={{ scale: mapZoom, x: `${userPan.x}%`, y: `${userPan.y}%` }}
+          transition={{ type: 'spring', stiffness: 120, damping: 20 }}
+          style={{ position: 'absolute', inset: 0, transformOrigin: '50% 50%', touchAction: 'none', userSelect: 'none' }}
         >
+          <svg
+            viewBox="0 0 100 100"
+            preserveAspectRatio="xMidYMid meet"
+            style={{ width: '100%', height: '100%' }}
+          >
           <FractureLines epochs={SEASON3_EPOCHS} />
 
           {SEASON3_EPOCHS.map((epoch, epIdx) => {
@@ -578,7 +629,8 @@ export default function Season3MapPage() {
               </g>
             )
           })}
-        </motion.svg>
+          </svg>
+        </motion.div>
       </div>
 
       {/* Epoch panel overlay */}
