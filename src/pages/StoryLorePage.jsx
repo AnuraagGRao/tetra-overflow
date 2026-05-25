@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import BackgroundCanvas from '../components/BackgroundCanvas'
 import { STORY_CHAPTERS } from '../logic/storyData'
 import { ZODIAC_BOSSES, OPHIUCHUS, allZodiacBeaten, ophiuchusBeaten } from '../logic/storyData_s2'
+import { SEASON3_EPOCHS } from '../logic/storyData_s3'
 import { useAuth } from '../contexts/AuthContext'
 import { getStoryProgress } from '../firebase/db'
 import homeIconUrl from '../icons/home-button.png'
@@ -90,6 +91,44 @@ export default function StoryLorePage() {
         })
       }
     }
+
+    // Append Season 3 — Temporal Fracture: one page per epoch, only beaten levels
+    const anyS3Beaten = SEASON3_EPOCHS.some(epoch =>
+      epoch.levels.some(l => !!progress[`s3_${epoch.id}_${l.id}_completed`])
+    )
+    if (anyS3Beaten) {
+      SEASON3_EPOCHS.forEach((epoch, epIdx) => {
+        const completedLevels = epoch.levels
+          .filter(l => !!progress[`s3_${epoch.id}_${l.id}_completed`])
+          .map(l => ({
+            id: l.id,
+            title: l.title,
+            subtitle: l.subtitle,
+            bgType: l.bgType,
+            bpm: l.bpm,
+            gravityMult: l.gravityMult,
+            targetLines: l.targetLines,
+            easyTargetLines: l.easyTargetLines,
+            isBoss: l.isBoss,
+            abilityLabel: l.abilityLabel,
+            abilityDesc: l.abilityDesc,
+            storyBefore: l.storyBefore,
+            storyAfter: l.storyAfter,
+          }))
+        if (completedLevels.length === 0) return
+        const epochDone = epoch.levels.every(l => !!progress[`s3_${epoch.id}_${l.id}_completed`])
+        visible.push({
+          id: `s3_${epoch.id}`,
+          title: epoch.title,
+          subtitle: epochDone ? `${epoch.subtitle} — Complete` : epoch.subtitle,
+          color: epoch.color,
+          glowColor: epoch.glowColor,
+          sectionLabel: `S3 · EPOCH ${epIdx + 1}`,
+          levels: completedLevels,
+        })
+      })
+    }
+
     return visible
   }, [progress])
 
@@ -175,7 +214,7 @@ export default function StoryLorePage() {
             <section key={ch.id} ref={secRefs.current[ci]} data-i={ci} style={{ position: 'relative', minWidth: '100%', scrollSnapAlign: 'start', scrollSnapStop: 'always', padding: '1.1rem', height: '100%', overflowY: 'auto', overscrollBehaviorY: 'contain', touchAction: 'pan-x pan-y' }}>
               <motion.div initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.35 }}
                 style={{ marginBottom: 10, display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                <div style={{ fontSize: '0.58rem', letterSpacing: '0.32em', color: '#888' }}>{`CHAPTER ${ci+1}`}</div>
+                <div style={{ fontSize: '0.58rem', letterSpacing: '0.32em', color: '#888' }}>{ch.sectionLabel || `CHAPTER ${ci+1}`}</div>
                 <div style={{ fontSize: '0.9rem', fontWeight: 900, letterSpacing: '0.14em', color: ch.color }}>{ch.title}</div>
                 <div style={{ fontSize: '0.62rem', color: '#555', letterSpacing: '0.08em' }}>— {ch.subtitle}</div>
               </motion.div>
@@ -198,6 +237,12 @@ export default function StoryLorePage() {
                     <div style={{ fontSize: '0.65rem', color: '#ddd', lineHeight: 1.6, letterSpacing: '0.02em' }}>{lv.storyBefore}</div>
                     <div style={{ height: 1, background: 'rgba(255,255,255,0.07)', margin: '0.4rem 0' }} />
                     <div style={{ fontSize: '0.65rem', color: '#9ab', lineHeight: 1.6, letterSpacing: '0.02em' }}>{lv.storyAfter}</div>
+                    {lv.abilityLabel && (
+                      <div style={{ marginTop: 4, padding: '5px 8px', background: 'rgba(255,255,255,0.04)', borderRadius: 6, borderLeft: `2px solid ${ch.color}` }}>
+                        <div style={{ fontSize: '0.58rem', color: ch.color, letterSpacing: '0.14em', fontWeight: 700 }}>{lv.abilityLabel}</div>
+                        <div style={{ fontSize: '0.62rem', color: '#aaa', marginTop: 2, lineHeight: 1.5 }}>{lv.abilityDesc}</div>
+                      </div>
+                    )}
                   </motion.div>
                 ))}
               </div>

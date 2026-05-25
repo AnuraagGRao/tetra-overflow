@@ -701,10 +701,22 @@ export default function Season3LevelPage() {
   const stickyDelayRef     = useRef(0)
 
   const [progress, setProgress] = useState({})
+  const [progressLoading, setProgressLoading] = useState(true)
   useEffect(() => {
-    if (!user?.uid) { setProgress({}); return }
-    getStoryProgress(user.uid).then(p => setProgress(p || {})).catch(() => setProgress({}))
+    if (!user?.uid) {
+      setProgress({})
+      setProgressLoading(false)
+      return
+    }
+    setProgressLoading(true)
+    getStoryProgress(user.uid)
+      .then(p => setProgress(p || {}))
+      .catch(() => setProgress({}))
+      .finally(() => setProgressLoading(false))
   }, [user])
+
+  const s3Unlocked = useMemo(() => isS3Unlocked(progress), [progress])
+  const levelUnlocked = useMemo(() => isS3LevelUnlocked(epochId, levelId, progress), [epochId, levelId, progress])
 
   const CONFIG_KEY = 'tetris-config'
   const DEFAULT_CONFIG = { sfxEnabled: true, hapticEnabled: true, musicVolume: 1.0, sfxVolume: 2.0, das: 110, arr: 25, showOnScreenControls: false }
@@ -959,6 +971,42 @@ export default function Season3LevelPage() {
     )
   }
 
+  if (progressLoading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100dvh', background: '#06000a', color: '#ff3355', fontFamily: 'monospace', fontSize: '0.9rem', letterSpacing: '0.18em' }}>
+        SYNCING STORY DATA…
+      </div>
+    )
+  }
+
+  if (!s3Unlocked) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100dvh', background: '#06000a', color: '#ff3355', fontFamily: 'monospace', gap: 12, textAlign: 'center', padding: '1.5rem' }}>
+        <div style={{ fontSize: '1.1rem', letterSpacing: '0.16em', fontWeight: 900 }}>SEASON 3 LOCKED</div>
+        <div style={{ fontSize: '0.68rem', color: '#8b8b8b', maxWidth: 360, lineHeight: 1.5 }}>
+          Beat Ophiuchus in the Zodiac arc to open Temporal Fracture.
+        </div>
+        <button onClick={() => navigate('/zodiac', { replace: true })} style={{ background: 'none', border: '1px solid rgba(255,70,90,0.4)', color: '#ff6677', borderRadius: 8, padding: '8px 16px', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.7rem', letterSpacing: '0.12em' }}>
+          ← Zodiac Map
+        </button>
+      </div>
+    )
+  }
+
+  if (!levelUnlocked) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100dvh', background: '#06000a', color: '#ff3355', fontFamily: 'monospace', gap: 12, textAlign: 'center', padding: '1.5rem' }}>
+        <div style={{ fontSize: '1.1rem', letterSpacing: '0.16em', fontWeight: 900 }}>LEVEL LOCKED</div>
+        <div style={{ fontSize: '0.68rem', color: '#8b8b8b', maxWidth: 360, lineHeight: 1.5 }}>
+          Complete earlier levels in this epoch to unlock this mission.
+        </div>
+        <button onClick={() => navigate('/s3', { replace: true })} style={{ background: 'none', border: '1px solid rgba(255,70,90,0.4)', color: '#ff6677', borderRadius: 8, padding: '8px 16px', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.7rem', letterSpacing: '0.12em' }}>
+          ← Season 3 Map
+        </button>
+      </div>
+    )
+  }
+
   // ──────────────────────────────────────────────────────────────────────────
   return (
     <div style={{ position: 'fixed', inset: 0, overflow: 'hidden', fontFamily: '"Courier New", monospace' }}>
@@ -1187,35 +1235,31 @@ export default function Season3LevelPage() {
               className="mobile-canvas-wrap"
               style={{ background: 'transparent', flex: 1, minWidth: 0, paddingBottom: focus && showOnScreenControls ? 'calc(4.5rem + env(safe-area-inset-bottom, 0px))' : 0 }}
             >
-              {(() => {
-                const gc = (
+              {isMobile ? (
+                <GameCanvas
+                  state={{ ...state, queue: hideQueue && !state.zoneActive ? [] : state.queue }}
+                  onTap={() => { if (config?.sfxEnabled && !paused) try { playRotateSFX(pieceTheme || 'classic') } catch {}; emitSynesthesia(SYNESTHESIA_EVENT.ROTATE, { intensity: 1.0, source: 's3-tap' }); triggerAction('rotateCW'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
+                  onTwoFingerTap={() => { if (config?.sfxEnabled && !paused) try { playZoneActivateSFX(pieceTheme || 'classic') } catch {}; triggerAction('activateZone'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
+                  onDragBegin={handleDragBegin}
+                  onDragEnd={handleDragEnd}
+                  onHardDrop={handleHardDrop}
+                  themeOverride={pieceTheme}
+                  boardAlpha={boardAlpha}
+                />
+              ) : (
+                <div style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}>
                   <GameCanvas
                     state={{ ...state, queue: hideQueue && !state.zoneActive ? [] : state.queue }}
-                    onTap={() => {
-                      if (config?.sfxEnabled && !paused) try { playRotateSFX(pieceTheme || 'classic') } catch {}
-                      emitSynesthesia(SYNESTHESIA_EVENT.ROTATE, { intensity: 1.0, source: 's3-tap' })
-                      triggerAction('rotateCW')
-                    }}
-                    onTwoFingerTap={() => {
-                      if (config?.sfxEnabled && !paused) try { playZoneActivateSFX(pieceTheme || 'classic') } catch {}
-                      triggerAction('activateZone')
-                    }}
+                    onTap={() => { if (config?.sfxEnabled && !paused) try { playRotateSFX(pieceTheme || 'classic') } catch {}; emitSynesthesia(SYNESTHESIA_EVENT.ROTATE, { intensity: 1.0, source: 's3-tap' }); triggerAction('rotateCW'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
+                    onTwoFingerTap={() => { if (config?.sfxEnabled && !paused) try { playZoneActivateSFX(pieceTheme || 'classic') } catch {}; triggerAction('activateZone'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
                     onDragBegin={handleDragBegin}
                     onDragEnd={handleDragEnd}
                     onHardDrop={handleHardDrop}
                     themeOverride={pieceTheme}
                     boardAlpha={boardAlpha}
                   />
-                )
-                if (!isMobile) {
-                  return (
-                    <div style={{ height: '100%', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', transform: `scale(${zoom})`, transformOrigin: 'center center' }}>
-                      {gc}
-                    </div>
-                  )
-                }
-                return gc
-              })()}
+                </div>
+              )}
 
               {/* ── Time-Dilation Row overlays ─────────────────────────────── */}
               {hasDilation && dilationRows.map(dr => (
@@ -1491,14 +1535,24 @@ export default function Season3LevelPage() {
               )}
             </SynesthesiaMotionLayer>
 
-            {/* Touch controls */}
-            {(isMobile || showOnScreenControls) && !focus && (
+            {showOnScreenControls && !focus && (
               <TouchControls
                 onPress={handlePress}
                 onRelease={handleRelease}
                 onHardDrop={handleHardDrop}
                 haptic={config.hapticEnabled}
               />
+            )}
+
+            {showOnScreenControls && focus && (
+              <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 60, pointerEvents: 'auto' }}>
+                <TouchControls
+                  onPress={handlePress}
+                  onRelease={handleRelease}
+                  onHardDrop={handleHardDrop}
+                  haptic={config.hapticEnabled}
+                />
+              </div>
             )}
           </div>
         </div>

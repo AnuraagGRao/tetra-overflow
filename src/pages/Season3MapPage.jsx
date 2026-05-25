@@ -274,6 +274,7 @@ export default function Season3MapPage() {
   const [progress, setProgress]   = useState({})
   const [loading,  setLoading]    = useState(true)
   const [selected, setSelected]   = useState(null)   // epoch id
+  const autoSelectedRef = useRef(false)
   const [mapZoom,  setMapZoom]    = useState(1.02)
   // Pan in percentage units (like S2) so it’s resolution-independent
   const [userPan,  setUserPan]    = useState({ x: 0, y: 0 })
@@ -286,6 +287,26 @@ export default function Season3MapPage() {
 
   const s3Unlocked = useMemo(() => isS3Unlocked(progress), [progress])
   const s3Complete = useMemo(() => isS3Complete(progress), [progress])
+
+  const firstUnlockedLevel = useMemo(() => {
+    for (const epoch of SEASON3_EPOCHS) {
+      if (!isEpochUnlocked(epoch.id, progress)) continue
+      for (const level of epoch.levels) {
+        if (isS3LevelUnlocked(epoch.id, level.id, progress) && !progress[`s3_${epoch.id}_${level.id}_completed`]) {
+          return { epochId: epoch.id, levelId: level.id }
+        }
+      }
+    }
+    // If everything is complete, fall back to the very first level.
+    const fallbackEpoch = SEASON3_EPOCHS[0]
+    return fallbackEpoch ? { epochId: fallbackEpoch.id, levelId: fallbackEpoch.levels[0]?.id } : null
+  }, [progress])
+
+  useEffect(() => {
+    if (!s3Unlocked || autoSelectedRef.current) return
+    const firstEpoch = SEASON3_EPOCHS.find(e => isEpochUnlocked(e.id, progress))
+    if (firstEpoch) { autoSelectedRef.current = true; setSelected(firstEpoch.id) }
+  }, [s3Unlocked, progress])
 
   const handleSelectLevel = (epochId, levelId) => {
     navigate(`/s3/${epochId}/${levelId}`)
@@ -486,6 +507,30 @@ export default function Season3MapPage() {
           </motion.div>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          {firstUnlockedLevel && (
+            <motion.button
+              whileHover={{ scale: 1.06 }} whileTap={{ scale: 0.95 }}
+              onClick={() => {
+                playTap()
+                navigate(`/s3/${firstUnlockedLevel.epochId}/${firstUnlockedLevel.levelId}`)
+              }}
+              style={{
+                background: 'rgba(255,0,80,0.12)',
+                border: '1px solid rgba(255,0,80,0.45)',
+                color: '#ff6b9b',
+                borderRadius: 8,
+                padding: '6px 10px',
+                cursor: 'pointer',
+                fontSize: '0.56rem',
+                letterSpacing: '0.14em',
+                textTransform: 'uppercase',
+                fontFamily: 'inherit',
+                fontWeight: 800,
+              }}
+            >
+              {s3Complete ? 'Replay' : 'Continue'}
+            </motion.button>
+          )}
           {s3Complete && (
             <span style={{ fontSize: '0.5rem', color: '#ff0000', letterSpacing: '0.2em', border: '1px solid #ff000066', borderRadius: 4, padding: '2px 8px' }}>COMPLETE ✦</span>
           )}
