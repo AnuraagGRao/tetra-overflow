@@ -40,9 +40,11 @@ const EPOCH_POOLS = {
   e4: [12, 13, 14, 15, 16, 17, 18],
 }
 
-// Build URL list using plain string paths (not Vite new URL() so missing files
-// don't cause build errors — fetches will just 404 and be caught silently).
-const BASE = import.meta.url.slice(0, import.meta.url.lastIndexOf('/audio/')) + '/audio/story_season_3/'
+// Build URL list the same way as season2MusicManager — Vite resolves these correctly
+// in both dev and prod builds and handles asset hashing automatically.
+const TRACK_URLS = EPOCH_TRACK_DEFS.map(({ file }) =>
+  new URL(`./story_season_3/${file}.mp3`, import.meta.url).href
+)
 
 export class Season3MusicManager {
   constructor(audioCtx) {
@@ -86,8 +88,8 @@ export class Season3MusicManager {
   }
 
   _loadAll() {
-    EPOCH_TRACK_DEFS.forEach(({ file, gain }, i) => {
-      const url = BASE + file + '.mp3'
+    EPOCH_TRACK_DEFS.forEach(({ gain }, i) => {
+      const url = TRACK_URLS[i]
       fetch(url)
         .then(r => { if (!r.ok) throw new Error('not found'); return r.arrayBuffer() })
         .then(ab => this.ctx.decodeAudioData(ab))

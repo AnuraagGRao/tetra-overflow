@@ -1262,6 +1262,12 @@ export default function App() {
     return () => { els.forEach(a => { try { a.pause(); a.src = '' } catch {} }) }
   }, [])
 
+  // Preload horror images so they're cached before the first jumpscare triggers
+  useEffect(() => {
+    const imgUrls = [horror1Url, horror2Url, horror3Url].filter(Boolean)
+    imgUrls.forEach(src => { const img = new Image(); img.src = src })
+  }, [])
+
   const stopEerie = useCallback(() => {
     try {
       if (eerieFadeTimerRef.current) { clearInterval(eerieFadeTimerRef.current); eerieFadeTimerRef.current = null }

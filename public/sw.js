@@ -1,5 +1,5 @@
 // Bump CACHE_NAME to push updates to clients
-const CACHE_NAME = 'tetra-overflow-v0.7.852'
+const CACHE_NAME = 'tetra-overflow-v0.7.945'
 // Build absolute paths relative to the SW scope so it works under any base URL
 const BASE = self.registration.scope
 const APP_SHELL = ['', 'index.html', 'manifest.json'].map(p => new URL(p, BASE).href)
@@ -49,7 +49,10 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy))
           return response
         })
-        .catch(() => caches.match(new URL('index.html', BASE).href))
+        // Do NOT fall back to index.html for asset requests — returning HTML for JS/CSS
+        // causes the app to silently fail. If a required asset is missing from cache
+        // and we're offline, let the network error surface naturally.
+        .catch(() => Response.error())
     }),
   )
 })

@@ -553,7 +553,7 @@ function drawAmbient(ctx, bgType, w, h, t, beat = 0) {
           const cat = drawAmbient.oiiaCats[i];
           if (!cat) continue;
           // Increment cat.angle each frame for rotation, and keep angle bounded
-          cat.angle += 0.03; if (cat.angle > Math.PI * 2) cat.angle -= Math.PI * 2;
+          cat.angle += 0.006; if (cat.angle > Math.PI * 2) cat.angle -= Math.PI * 2;
           ctx.save();
           ctx.translate(cat.x, cat.y);
           ctx.rotate(cat.angle);

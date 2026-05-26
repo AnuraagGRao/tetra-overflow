@@ -1,13 +1,14 @@
 {
   "name": "tetra-overflow-ultra",
   "private": true,
-  "version": "0.7.852",
+  "version": "0.7.945",
   "type": "module",
   "scripts": {
     "predev": "node scripts/write-version-json.js",
     "prebuild": "node scripts/write-version-json.js",
     "dev": "vite",
     "build": "vite build",
+    "postbuild": "node scripts/inject-precache.js",
     "lint": "eslint .",
     "preview": "vite preview"
   },

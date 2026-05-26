@@ -640,9 +640,11 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
     const themeBg = (colorMode === 'light' ? CANVAS_BG_LIGHT : CANVAS_BG_DARK)[theme]
     const isUltimateMode = state.mode === GAME_MODE.ULTIMATE
     if (boardAlpha !== undefined) {
-      // External background active: keep matrix fully clear, no dark fill
-      // Grid opacity is handled below via boardAlpha; cells draw normally.
-      // Intentionally do not paint a background here so world effects show through.
+      // Semi-transparent board so the world background shows through but the board is still visible
+      ctx.globalAlpha = boardAlpha
+      ctx.fillStyle = '#04060e'
+      ctx.fillRect(-20, -20, cW + 40, cH + 40)
+      ctx.globalAlpha = 1
     } else if (bgTheme) {
       // Semi-transparent board when a world background is active
       ctx.globalAlpha = 0.48

@@ -559,7 +559,8 @@ export class TetrisEngine {
         // Story mode: level rises gently from the story-defined base; only lines this level count
         this.level = this.storyLevelOffset + Math.floor(Math.max(0, this.lines - this.storyLinesOffset) / 10)
       } else {
-        this.level = Math.floor(this.lines / 10) + 1
+        // Cap at 20: gravity is already maxed at level ~19, so going beyond is just confusing
+        this.level = Math.min(20, Math.floor(this.lines / 10) + 1)
       }
 
       // Tower Climb: track floor progress (also when merged into Ultimate)
@@ -888,10 +889,10 @@ export class TetrisEngine {
       const early = 0.52 * Math.pow(1.14, Math.max(0, this.level - 1))
       const midBoost = 1 + Math.max(0, floor - 35) * 0.02
       const lateBoost = 1 + Math.max(0, floor - 60) * 0.035
-      return Math.min(20, early * midBoost * lateBoost)
+      return Math.min(18, early * midBoost * lateBoost)
     }
-    if (this.mode === GAME_MODE.EASY) return Math.min(20, base * 0.45)  // ~half speed
-    return Math.min(20, base)
+    if (this.mode === GAME_MODE.EASY) return Math.min(18, base * 0.45)  // ~half speed
+    return Math.min(18, base)
   }
 
   updateHorizontal(dt, held) {
