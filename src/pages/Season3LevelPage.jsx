@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { saveStoryProgress, saveGameResult, markEasyModePlayed, setActiveBadge, getStoryProgress } from '../firebase/db'
@@ -606,7 +606,10 @@ function useS3GameLoop(engine, targetLines, levelStartLinesRef, levelKey, onComp
       const b = KEY_BINDINGS[ev.code]; if (!b) return
       ev.preventDefault(); if (ev.repeat) return
       if (b.action === 'pause') { togglePause(); return }
-      if (b.action === 'rewind') { actionRef.current['rewind'] = true; return }
+      if (b.action === 'rewind') {
+        try { window.dispatchEvent(new CustomEvent('s3-rewind', { detail: { action: 'rewind', source: 'keyboard' } })) } catch {}
+        return
+      }
       if (b.held) {
         const delay = stickyDelayRef.current
         const dispatch = () => {
@@ -669,6 +672,7 @@ function useS3GameLoop(engine, targetLines, levelStartLinesRef, levelKey, onComp
 export default function Season3LevelPage() {
   const { epochId, levelId } = useParams()
   const navigate   = useNavigate()
+  const location   = useLocation()
   const { user }   = useAuth()
 
   const levelData = useMemo(() => findS3Level(epochId, levelId), [epochId, levelId])
@@ -717,6 +721,7 @@ export default function Season3LevelPage() {
 
   const s3Unlocked = useMemo(() => isS3Unlocked(progress), [progress])
   const levelUnlocked = useMemo(() => isS3LevelUnlocked(epochId, levelId, progress), [epochId, levelId, progress])
+  const bypassUnlock = !!(location.state && location.state.fromS3Complete)
 
   const CONFIG_KEY = 'tetris-config'
   const DEFAULT_CONFIG = { sfxEnabled: true, hapticEnabled: true, musicVolume: 1.0, sfxVolume: 2.0, das: 110, arr: 25, showOnScreenControls: false }
@@ -993,7 +998,7 @@ export default function Season3LevelPage() {
     )
   }
 
-  if (!levelUnlocked) {
+  if (!levelUnlocked && !bypassUnlock) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100dvh', background: '#06000a', color: '#ff3355', fontFamily: 'monospace', gap: 12, textAlign: 'center', padding: '1.5rem' }}>
         <div style={{ fontSize: '1.1rem', letterSpacing: '0.16em', fontWeight: 900 }}>LEVEL LOCKED</div>
@@ -1080,8 +1085,8 @@ export default function Season3LevelPage() {
                   time_dilation_zones:  'Multiple Dilation Rows active. Manage your timing carefully.',
                   phantom_blocks_intro: 'Phantom Blocks haunt the board. They solidify in 10 seconds — plan around them.',
                   phantom_blocks_heavy: 'Phantoms spawn frequently. Do not build over their predicted locations.',
-                  rewind_intro:         'The Rewind Gauge charges as you clear lines. When full, press R or tap ⏪ to undo your last piece placement.',
-                  rewind_heavy:         'The drops are relentless. Rewind is your lifeline — use it.',
+                  rewind_intro:         'The Rewind Gauge charges as you clear lines. When full, press R or two-finger swipe ← (or tap ⏪) to undo your last piece placement.',
+                  rewind_heavy:         'The drops are relentless. Rewind is your lifeline — use it. Gesture: two-finger swipe ←.',
                   all_mechanics_mixed:  'All temporal anomalies active simultaneously. Time-Dilation Rows, Phantom Blocks, and Rewind.',
                   shrinking_board:      'The ceiling is falling. Massive combos push it back. Survive.',
                 }
@@ -1243,6 +1248,7 @@ export default function Season3LevelPage() {
                   onDragBegin={handleDragBegin}
                   onDragEnd={handleDragEnd}
                   onHardDrop={handleHardDrop}
+                  onRewindGesture={activateRewind}
                   themeOverride={pieceTheme}
                   boardAlpha={boardAlpha}
                 />
@@ -1255,6 +1261,7 @@ export default function Season3LevelPage() {
                     onDragBegin={handleDragBegin}
                     onDragEnd={handleDragEnd}
                     onHardDrop={handleHardDrop}
+                    onRewindGesture={activateRewind}
                     themeOverride={pieceTheme}
                     boardAlpha={boardAlpha}
                   />
@@ -1598,7 +1605,7 @@ export default function Season3LevelPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {nextLevel && (
                   <motion.button whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
-                    onClick={() => navigate(`/s3/${nextLevel.epochId}/${nextLevel.levelId}`, { replace: true })}
+                    onClick={() => navigate(`/s3/${nextLevel.epochId}/${nextLevel.levelId}`, { replace: true, state: { fromS3Complete: true } })}
                     style={{ background: epochColor, border: 'none', color: '#000', borderRadius: 8, padding: '11px 0', fontSize: '0.82rem', fontWeight: 900, letterSpacing: '0.18em', cursor: 'pointer', fontFamily: 'inherit', textTransform: 'uppercase' }}>
                     NEXT LEVEL →
                   </motion.button>

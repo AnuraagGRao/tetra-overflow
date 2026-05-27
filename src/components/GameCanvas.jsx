@@ -95,7 +95,7 @@ const HARD_DROP_VEL_PX_MS = 0.45 // px/ms threshold for hard-drop vs soft-drop
 
 // drawCell is defined per-frame inside the useEffect as a theme-aware closure
 
-export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, onDragEnd, onHardDrop, themeOverride, boardAlpha, renderQuality = 'balanced', activePieceEffect = null }) {
+export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, onDragEnd, onHardDrop, themeOverride, boardAlpha, renderQuality = 'balanced', activePieceEffect = null, onRewindGesture }) {
   const { theme: contextTheme, colorMode, bgTheme } = useTheme()
   // Solo/Casual: allow mixing — use explicit theme unless an override is passed
   const theme = themeOverride ?? contextTheme
@@ -105,6 +105,7 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
   const tapCountRef = useRef(0) // eslint-disable-line no-unused-vars
   const tapTimerRef = useRef(null) // eslint-disable-line no-unused-vars
   const activePointersRef = useRef(new Map())
+  const twoFingerRef = useRef(null)
   const TAP_MULTI_WINDOW_MS = 420
   const selectedEffectRef = useRef([])
   const trailsRef = useRef([])
@@ -1194,6 +1195,14 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
           if (Math.abs(times[0] - times[1]) < TAP_MULTI_WINDOW_MS) {
             setTimeout(() => onTwoFingerTap?.(), 0)
           }
+          // Initialize two-finger swipe tracker (use current touch as start center)
+          twoFingerRef.current = {
+            startX: event.clientX,
+            startY: event.clientY,
+            lastX: event.clientX,
+            lastY: event.clientY,
+            triggered: false,
+          }
         }
         // Cancel any in-progress single-finger drag to prevent ghost left/hard-drop inputs
         const prev = touchRef.current
@@ -1211,6 +1220,19 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
   }
 
   const handlePointerMove = (event) => {
+    // Two-finger swipe-left detection for rewind
+    if (activePointersRef.current.size >= 2 && twoFingerRef.current && !twoFingerRef.current.triggered) {
+      const tf = twoFingerRef.current
+      const dx = event.clientX - tf.startX
+      const dy = event.clientY - tf.startY
+      const absX = Math.abs(dx)
+      const absY = Math.abs(dy)
+      if (absX > 48 && absX > absY && dx < 0) {
+        tf.triggered = true
+        try { onRewindGesture?.() } catch {}
+      }
+      tf.lastX = event.clientX; tf.lastY = event.clientY
+    }
     const start = touchRef.current
     if (!start || start.dir !== null) return   // not tracking, or already committed
     const dx = event.clientX - start.x
@@ -1225,6 +1247,7 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
 
   const handlePointerUp = (event) => {
     activePointersRef.current.delete(event.pointerId)
+    if (activePointersRef.current.size < 2) twoFingerRef.current = null
     const start = touchRef.current
     touchRef.current = null
     if (!start) return
@@ -1258,6 +1281,7 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
 
   const handlePointerCancel = (event) => {
     activePointersRef.current.delete(event.pointerId)
+    if (activePointersRef.current.size < 2) twoFingerRef.current = null
     const start = touchRef.current
     touchRef.current = null
     if (!start || start.dir === null || start.dir === 'up') return
