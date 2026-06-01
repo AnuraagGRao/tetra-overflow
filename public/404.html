@@ -9,8 +9,8 @@
       (function () {
         var l = window.location;
         // Derive base from the first path segment so this works if the repo is renamed
-        var base = '/' + l.pathname.split('/')[1] + '/';
-        var path = l.pathname.slice(base.length); // e.g. "play" from "/tetra-overflow/play"
+        var base = '/';
+        var path = l.pathname.slice(base.length); // e.g. "play" from "/play"
         var dest = l.protocol + '//' + l.hostname +
           (l.port ? ':' + l.port : '') +
           base + '?redirect=' + encodeURIComponent(path + l.search) + l.hash;

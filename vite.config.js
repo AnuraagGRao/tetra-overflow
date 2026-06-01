@@ -6,7 +6,8 @@ const pkg = JSON.parse(readFileSync('./package.json', 'utf-8'))
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: '/tetra-overflow/',
+  // Allow overriding the base path at build time: BASE_URL='/tetra-overflow/' npm run build
+  base: process.env.BASE_URL || '/',
   plugins: [react()],
   server: {
     hmr: {

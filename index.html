@@ -20,8 +20,7 @@
         var search = window.location.search;
         var key = '?redirect=';
         if (search.indexOf(key) === 0) {
-          // Derive base dynamically so this works if the repo is ever renamed
-          var base = '/' + window.location.pathname.split('/')[1] + '/';
+          var base = '/';
           var path = decodeURIComponent(search.slice(key.length));
           window.history.replaceState(null, null, base + path);
         }

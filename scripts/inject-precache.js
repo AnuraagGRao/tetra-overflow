@@ -7,6 +7,10 @@ import { join } from 'path'
 const DIST = 'dist'
 const SW_PATH = join(DIST, 'sw.js')
 const ASSETS_DIR = join(DIST, 'assets')
+// Respect BASE_URL and default to the repo base
+const RAW_BASE = process.env.BASE_URL || '/tetra-overflow/'
+// Normalize to have leading and trailing slashes
+const BASE = ('/' + RAW_BASE.replace(/^\/+|\/+$/g, '') + '/').replace(/^\/\//, '/')
 
 if (!existsSync(SW_PATH)) {
   console.warn('[inject-precache] dist/sw.js not found — skipping')
@@ -22,14 +26,14 @@ if (existsSync(ASSETS_DIR)) {
       const ext = f.slice(f.lastIndexOf('.'))
       return ASSET_EXTENSIONS.has(ext)
     })
-    .map(f => `/tetra-overflow/assets/${f}`)
+    .map(f => `${BASE}assets/${f}`)
 }
 
 // Also precache the app shell root + manifest
 const precacheList = [
-  '/tetra-overflow/',
-  '/tetra-overflow/index.html',
-  '/tetra-overflow/manifest.json',
+  `${BASE}`,
+  `${BASE}index.html`,
+  `${BASE}manifest.json`,
   ...assetFiles,
 ]
 
@@ -40,7 +44,7 @@ const precacheJson = JSON.stringify(precacheList, null, 2)
   .split('\n')
   .join('\n  ')
 
-const updated = swSrc.replace(
+let updated = swSrc.replace(
   /const APP_SHELL = \[.*?\]\.map\(p => new URL\(p, BASE\)\.href\)/s,
   `const APP_SHELL = ${precacheJson}`
 )
@@ -51,4 +55,34 @@ if (updated === swSrc) {
 } else {
   writeFileSync(SW_PATH, updated, 'utf-8')
   console.log(`[inject-precache] Precached ${precacheList.length} assets in dist/sw.js`)
+}
+
+// Patch dist/manifest.json to reflect the actual BASE at deploy time
+try {
+  const MANIFEST_PATH = join(DIST, 'manifest.json')
+  if (existsSync(MANIFEST_PATH)) {
+    const manifestSrc = readFileSync(MANIFEST_PATH, 'utf-8')
+    const manifest = JSON.parse(manifestSrc)
+    const stripOldBase = (p) => String(p).replace(/^\/+/, '').replace(/^tetra-overflow\//, '')
+    const applyBase = (p) => {
+      if (!p) return p
+      if (typeof p === 'string' && p.startsWith(BASE)) return p
+      const rel = stripOldBase(p)
+      return `${BASE}${rel}`
+    }
+    // Force start_url/scope/id to the actual base
+    manifest.start_url = BASE
+    manifest.scope = BASE
+    manifest.id = BASE
+    if (Array.isArray(manifest.icons)) {
+      manifest.icons = manifest.icons.map(icon => ({
+        ...icon,
+        src: applyBase(icon.src)
+      }))
+    }
+    writeFileSync(MANIFEST_PATH, JSON.stringify(manifest, null, 2), 'utf-8')
+    console.log(`[inject-precache] Updated manifest.json for base ${BASE}`)
+  }
+} catch (e) {
+  console.warn('[inject-precache] Skipped manifest base patch:', e?.message || e)
 }
