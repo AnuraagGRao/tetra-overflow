@@ -228,6 +228,7 @@ export class TetrisEngine {
     this.mode = GAME_MODE.NORMAL
     this._topOutHandler = null
     this.touchMultiplier = DEFAULT_TOUCH_MULTIPLIER
+    this.infiniteZoneUnlocked = false  // Set to true after S3 completion
     this.reset()
   }
 
@@ -1049,8 +1050,11 @@ export class TetrisEngine {
     this.updateHorizontal(dt, held)
 
     if (this.zoneActive) {
-      this.zoneTimer -= dt
-      if (this.zoneTimer <= 0) this.deactivateZone()
+      // Infinite Zone: if unlocked, don't deplete the timer
+      if (!this.infiniteZoneUnlocked) {
+        this.zoneTimer -= dt
+        if (this.zoneTimer <= 0) this.deactivateZone()
+      }
     }
 
     // 20G mode: piece instantly falls to lowest possible row

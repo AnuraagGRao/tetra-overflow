@@ -1169,6 +1169,7 @@ export default function App() {
   const [zenResetting, setZenResetting] = useState(false)
   const [zoom, setZoom] = useState(() => Number(localStorage.getItem('tetris-zoom') || 1))
   const [isUiHidden, setIsUiHidden] = useState(false)
+  const [dayNightPhase, setDayNightPhase] = useState(0) // 0-1 for day/night cycle
   const cycleZoom = () => setZoom(z => {
     const next = z >= 1.5 ? 1 : z >= 1.25 ? 1.5 : 1.25
     localStorage.setItem('tetris-zoom', next)
@@ -1478,6 +1479,23 @@ export default function App() {
     getAudioCtx()
     setGameMode(mode); gameModeRef.current = mode
     engine.reset(mode, 'easy')
+    
+    // Check if S3 is complete and enable infinite zone if it is
+    if (user) {
+      import('../firebase/db').then(({ getUserProfile }) => {
+        getUserProfile(user.uid).then(profile => {
+          if (profile) {
+            // Check S3 completion using the function from storyData_s3
+            import('../logic/storyData_s3').then(({ isS3Complete }) => {
+              if (isS3Complete(profile)) {
+                engine.infiniteZoneUnlocked = true
+              }
+            }).catch(() => {})
+          }
+        }).catch(() => {})
+      }).catch(() => {})
+    }
+    
     setState(engine.getState())
     setCoinDelta(0)
     prevGameOverRef.current = false
@@ -1581,6 +1599,12 @@ export default function App() {
       }
 
       const ns  = engine.getState()
+
+      // Day/night cycle for story modes (120s full cycle)
+      if (!ns.gameOver && bgTheme) {
+        const phase = (ns.elapsedTime % 120000) / 120000
+        setDayNightPhase(Math.sin(phase * Math.PI * 2) * 0.5 + 0.5)
+      }
 
       const cfg = configRef.current
       const sfxOn = cfg.sfxEnabled
@@ -2458,6 +2482,17 @@ export default function App() {
         {leftFlank}
 
         <div className="game-area">
+            {/* Day/night cycle overlay for story modes with backgrounds */}
+            {bgTheme && !state.gameOver && (
+              <div style={{ 
+                position: 'absolute', 
+                inset: 0, 
+                pointerEvents: 'none', 
+                zIndex: 1,
+                background: `linear-gradient(180deg, rgba(${Math.round(20 + dayNightPhase * 40)}, ${Math.round(30 + dayNightPhase * 60)}, ${Math.round(80 - dayNightPhase * 40)}, ${0.08 - dayNightPhase * 0.04}) 0%, transparent 50%, rgba(${Math.round(40 - dayNightPhase * 20)}, ${Math.round(20 + dayNightPhase * 30)}, ${Math.round(60 - dayNightPhase * 20)}, ${0.06 - dayNightPhase * 0.03}) 100%)`,
+                transition: 'background 3s ease-in-out'
+              }} />
+            )}
             {state.combo > 1 && (
               <div className="combo-display">
                 <div className="combo-number">{state.combo}</div>
@@ -2502,7 +2537,7 @@ export default function App() {
                         alt=""
                         initial={{ scale: 1.2, opacity: 0.06 }}
                         animate={{ rotate: [0, 360], opacity: [0.08, 0.12, 0.08], scale: [1.2, 1.0] }}
-                        transition={{ duration: 3.0, ease: 'linear' }}
+                        transition={{ duration: 8.0, ease: 'linear' }}
                         style={{ position: 'absolute', width: '140%', height: '140%', objectFit: 'cover', filter: 'contrast(110%) saturate(108%)' }}
                       />
                     )}
@@ -2561,10 +2596,10 @@ export default function App() {
                 {showZone && zoneReady && !state.zoneActive && (
                   <button type="button" onClick={handleZoneActivate}
                     style={{ background: 'rgba(0,229,255,0.15)', border: '1px solid var(--c-accent)', color: 'var(--c-accent)', borderRadius: '6px', padding: '0.2rem 0.6rem', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', animation: 'zone-ready-pulse 0.5s infinite alternate' }}>
-                    ⚡ Zone
+                    ⚡ Zone{engine.infiniteZoneUnlocked ? ' ∞' : ''}
                   </button>
                 )}
-                {state.zoneActive && <span style={{ color: 'var(--c-zone)', fontWeight: 700 }}>⚡ ZONE {Math.ceil(state.zoneTimer / 1000)}s</span>}
+                {state.zoneActive && <span style={{ color: 'var(--c-zone)', fontWeight: 700 }}>⚡ ZONE {engine.infiniteZoneUnlocked ? '∞' : Math.ceil(state.zoneTimer / 1000) + 's'}</span>}
               </span>
               <span style={{ display: 'flex', justifyContent: 'flex-end' }}>
                 {isUltimate && !state.gameOver && (
@@ -2680,11 +2715,34 @@ export default function App() {
               onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop}
               boardAlpha={bgTheme ? 0.32 : undefined} renderQuality={config.renderQuality} />
           )}
+          <GlitchOverlay active={glitchActive} />
           {isUltimate && !state.gameOver && (
             <div style={{ position: 'absolute', left: '50%', top: '46%', transform: 'translate(-50%, -50%)', zIndex: 5, pointerEvents: 'none', fontSize: 'clamp(2.4rem, 8vw, 4.6rem)', fontWeight: 900, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.08)', textShadow: '0 0 16px rgba(168,85,247,0.2)' }}>
               FLOOR {state.towerFloor || 1}
             </div>
           )}
+          {/* Jumpscare overlay — must be above all other overlays */}
+          <AnimatePresence>
+            {jumpscare && (
+              <motion.div
+                key="jumpscare-landscape"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.22 }}
+                style={{ position: 'absolute', inset: 0, background: '#000', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <motion.img
+                  src={jumpscare.src}
+                  alt=""
+                  initial={{ scale: 1.02 }}
+                  animate={{ scale: 1, rotate: [-1.5, 1.5, -1.0] }}
+                  transition={{ duration: 1.4, ease: 'easeInOut' }}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'contrast(115%) saturate(108%)' }}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
           {renderOverlay(state, false)}
           {renderPauseOverlay(state)}
           {renderZoneEnd(state)}
@@ -2846,6 +2904,28 @@ export default function App() {
             {String(state.towerFloor || 1).padStart(2, '0')}
           </div>
         )}
+        {/* Jumpscare overlay — must be above all other overlays */}
+        <AnimatePresence>
+          {jumpscare && (
+            <motion.div
+              key="jumpscare-mobile"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.22 }}
+              style={{ position: 'absolute', inset: 0, background: '#000', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <motion.img
+                src={jumpscare.src}
+                alt=""
+                initial={{ scale: 1.02 }}
+                animate={{ scale: 1, rotate: [-1.5, 1.5, -1.0] }}
+                transition={{ duration: 1.4, ease: 'easeInOut' }}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'contrast(115%) saturate(108%)' }}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
         {renderOverlay(state, false)}
         {renderPauseOverlay(state)}
         {renderZoneEnd(state)}
