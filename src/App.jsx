@@ -1482,11 +1482,11 @@ export default function App() {
     
     // Check if S3 is complete and enable infinite zone if it is
     if (user) {
-      import('../firebase/db').then(({ getUserProfile }) => {
+      import('./firebase/db').then(({ getUserProfile }) => {
         getUserProfile(user.uid).then(profile => {
           if (profile) {
             // Check S3 completion using the function from storyData_s3
-            import('../logic/storyData_s3').then(({ isS3Complete }) => {
+            import('./logic/storyData_s3').then(({ isS3Complete }) => {
               if (isS3Complete(profile)) {
                 engine.infiniteZoneUnlocked = true
               }
