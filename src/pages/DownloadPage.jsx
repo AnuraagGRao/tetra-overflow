@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import '../styles/DownloadPage.css';
 
 const SERVER_URL = import.meta.env.VITE_BUILD_SERVER_URL || 'http://localhost:3001';
@@ -23,83 +24,7 @@ const PREBUILD_APKS = [
 ];
 
 export default function DownloadPage() {
-  const [apks, setApks] = useState([]);
-  const [buildStatus, setBuildStatus] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [building, setBuilding] = useState(false);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    fetchApks();
-    const interval = setInterval(() => {
-      if (building) {
-        fetchBuildStatus();
-      }
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [building]);
-
-  const fetchApks = async () => {
-    try {
-      const response = await fetch(`${SERVER_URL}/api/apks`);
-      const data = await response.json();
-      setApks(data.apks || []);
-      setLoading(false);
-    } catch (err) {
-      setError('Failed to load APKs. Is the build server running?');
-      setLoading(false);
-    }
-  };
-
-  const fetchBuildStatus = async () => {
-    try {
-      const response = await fetch(`${SERVER_URL}/api/build-status`);
-      const data = await response.json();
-      setBuildStatus(data);
-      
-      if (data.inProgress) {
-        setBuilding(true);
-      } else if (building && !data.inProgress) {
-        setBuilding(false);
-        fetchApks(); // Refresh APK list
-      }
-    } catch (err) {
-      console.error('Failed to fetch build status:', err);
-    }
-  };
-
-  const triggerBuild = async (buildType) => {
-    setBuilding(true);
-    setError(null);
-
-    try {
-      const response = await fetch(`${SERVER_URL}/api/build-apk`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          buildType,
-          apiKey: import.meta.env.VITE_BUILD_API_KEY 
-        })
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Build failed');
-      }
-
-      const data = await response.json();
-      setBuildStatus({ inProgress: true, type: buildType, log: [data.message] });
-      
-    } catch (err) {
-      setError(err.message);
-      setBuilding(false);
-    }
-  };
-
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleString();
-  };
-
+  const navigate = useNavigate();
   const isAndroid = /Android/i.test(navigator.userAgent);
 
   return (
@@ -118,8 +43,8 @@ export default function DownloadPage() {
 
         {/* Pre-built Release APKs */}
         <div className="prebuilt-apks">
-          <h2>📥 Quick Download</h2>
-          <p className="section-note">Pre-built APKs ready to install immediately</p>
+          <h2>📥 Download APK</h2>
+          <p className="section-note">Choose your preferred version</p>
           <div className="apk-list">
             {PREBUILD_APKS.map((apk) => (
               <div key={apk.filename} className="apk-card prebuilt">
@@ -140,87 +65,6 @@ export default function DownloadPage() {
               </div>
             ))}
           </div>
-        </div>
-
-        {/* Available APKs */}
-        {loading ? (
-          <div className="loading">Loading available downloads...</div>
-        ) : apks.length > 0 ? (
-          <div className="apk-list">
-            <h2>Available Downloads</h2>
-            {apks.map((apk) => (
-              <div key={apk.filename} className="apk-card">
-                <div className="apk-info">
-                  <div className="apk-icon">📦</div>
-                  <div className="apk-details">
-                    <h3>{apk.buildType === 'release' ? 'Production Release' : 'Debug Build'}</h3>
-                    <p className="apk-meta">
-                      Size: {apk.size} · Updated: {formatDate(apk.modified)}
-                    </p>
-                  </div>
-                </div>
-                <a 
-                  href={`${SERVER_URL}${apk.downloadUrl}`}
-                  download
-                  className="download-button"
-                >
-                  Download APK
-                </a>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="no-apks">
-            <p>No APKs available yet. Build one below!</p>
-          </div>
-        )}
-
-        {/* Build Controls */}
-        <div className="build-section">
-          <h2>Build New APK</h2>
-          <p className="build-note">
-            Builds typically take 2-5 minutes depending on server resources.
-          </p>
-          
-          <div className="build-buttons">
-            <button
-              onClick={() => triggerBuild('debug')}
-              disabled={building}
-              className="build-button debug"
-            >
-              {building && buildStatus?.type === 'debug' ? '⏳ Building...' : '🔧 Build Debug'}
-            </button>
-            <button
-              onClick={() => triggerBuild('release')}
-              disabled={building}
-              className="build-button release"
-            >
-              {building && buildStatus?.type === 'release' ? '⏳ Building...' : '🚀 Build Release'}
-            </button>
-          </div>
-
-          {building && buildStatus && (
-            <div className="build-status">
-              <h3>Build Status: {buildStatus.type}</h3>
-              <div className="build-log">
-                {buildStatus.log && buildStatus.log.map((line, i) => (
-                  <div key={i} className="log-line">{line}</div>
-                ))}
-              </div>
-              {buildStatus.inProgress && (
-                <div className="build-progress">
-                  <div className="spinner"></div>
-                  <span>Building in progress...</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {error && (
-            <div className="error-message">
-              ⚠️ {error}
-            </div>
-          )}
         </div>
 
         {/* Installation Instructions */}
@@ -258,7 +102,12 @@ export default function DownloadPage() {
         </details>
 
         <div className="back-link">
-          <a href="/tetra-overflow/">← Back to Game</a>
+          <button 
+            onClick={() => navigate('/')}
+            style={{ background: 'none', border: 'none', color: '#667eea', cursor: 'pointer', fontSize: '1rem', fontFamily: 'inherit', textDecoration: 'none' }}
+          >
+            ← Back to Menu
+          </button>
         </div>
       </div>
     </div>

@@ -155,33 +155,37 @@ export default function SettingsPage({ config, onConfig, onClose, onClearCache }
         <div className="settings-section">
           <div className="settings-section-title">Graphics</div>
           <div className="settings-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
-            <span className="settings-label" style={{ fontSize: '0.68rem', color: '#888' }}>Render Quality — higher looks sharper on HiDPI screens but uses more GPU</span>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <span className="settings-label" style={{ fontSize: '0.68rem', color: '#888' }}>
+              Render Quality — affects resolution, shadows, and smoothing
+            </span>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', fontSize: '0.62rem' }}>
               {[
-                { key: 'performance', label: 'Performance', desc: '1× — best for older devices' },
-                { key: 'balanced',    label: 'Balanced',    desc: 'up to 1.5×' },
-                { key: 'quality',     label: 'Quality',     desc: 'up to 2× (HiDPI)' },
-                { key: 'ultra',       label: 'Ultra',       desc: 'up to 3× (4K)' },
+                { key: 'performance', label: 'Performance', desc: '1× res · no shadows · low smoothing' },
+                { key: 'balanced',    label: 'Balanced',    desc: '1.5× res · light shadows · medium smoothing' },
+                { key: 'quality',     label: 'Quality',     desc: '2× res (HiDPI) · shadows · high smoothing' },
+                { key: 'ultra',       label: 'Ultra',       desc: '3× res (4K) · strong shadows · best smoothing' },
               ].map(({ key, label, desc }) => (
-                <button
-                  key={key}
-                  type="button"
-                  title={desc}
-                  onClick={() => set('renderQuality', key)}
-                  style={{
-                    padding: '5px 11px',
-                    borderRadius: 7,
-                    border: `1px solid ${config.renderQuality === key ? '#00d4ff' : 'rgba(255,255,255,0.12)'}`,
-                    background: config.renderQuality === key ? 'rgba(0,212,255,0.12)' : 'rgba(255,255,255,0.04)',
-                    color: config.renderQuality === key ? '#00d4ff' : '#888',
-                    fontSize: '0.65rem',
-                    letterSpacing: '0.12em',
-                    textTransform: 'uppercase',
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                    transition: 'all 0.15s',
-                  }}
-                >{label}</button>
+                <div key={key} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <button
+                    type="button"
+                    title={desc}
+                    onClick={() => set('renderQuality', key)}
+                    style={{
+                      padding: '5px 11px',
+                      borderRadius: 7,
+                      border: `1px solid ${config.renderQuality === key ? '#00d4ff' : 'rgba(255,255,255,0.12)'}`,
+                      background: config.renderQuality === key ? 'rgba(0,212,255,0.12)' : 'rgba(255,255,255,0.04)',
+                      color: config.renderQuality === key ? '#00d4ff' : '#888',
+                      fontSize: '0.65rem',
+                      letterSpacing: '0.12em',
+                      textTransform: 'uppercase',
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                      transition: 'all 0.15s',
+                    }}
+                  >{label}</button>
+                  <span style={{ fontSize: '0.55rem', color: '#666', textAlign: 'center', maxWidth: '80px' }}>{desc}</span>
+                </div>
               ))}
             </div>
           </div>

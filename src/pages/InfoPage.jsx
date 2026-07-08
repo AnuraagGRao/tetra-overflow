@@ -191,6 +191,29 @@ export default function InfoPage() {
           )}
         </Section>
 
+        {/* Download Android APK */}
+        <Section title="Download Android APK" accent="#06b6d4">
+          <p style={{ margin: '0 0 12px', fontSize: '0.68rem', color: '#94a3b8', lineHeight: 1.6, letterSpacing: '0.04em' }}>
+            Get the native Android app (APK) for the best fullscreen experience. Install directly 
+            without using Google Play Store.
+          </p>
+          <button
+            onClick={() => navigate('/download')}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+              padding: '12px 20px',
+              background: 'linear-gradient(135deg,#06b6d4,#0891b2)',
+              border: 'none', borderRadius: 8, color: '#fff',
+              fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.12em',
+              cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.2s'
+            }}
+            onMouseEnter={(e) => e.target.style.opacity = '0.9'}
+            onMouseLeave={(e) => e.target.style.opacity = '1'}
+          >
+            ⬇️ Download APKs
+          </button>
+        </Section>
+
         {/* ── Support the Dev ────────────────────────────────────────────────── */}
         <Section title="Support the Dev ❤️" accent="#ec4899">
           <p style={{ margin: '0 0 12px', fontSize: '0.68rem', color: '#94a3b8', lineHeight: 1.6, letterSpacing: '0.04em' }}>

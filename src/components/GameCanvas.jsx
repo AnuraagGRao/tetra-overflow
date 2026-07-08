@@ -143,6 +143,13 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
               : renderQuality === 'quality'  ? Math.min(nativeDpr, 2)
               : renderQuality === 'balanced' ? Math.min(nativeDpr, 1.5)
               : 1 // 'performance' — current behaviour, no scaling
+    
+    // Graphics quality multiplier for visual effects
+    const qualityMultiplier = renderQuality === 'ultra'    ? 1.0
+                            : renderQuality === 'quality'  ? 0.8
+                            : renderQuality === 'balanced' ? 0.6
+                            : 0.4 // 'performance'
+    
     const cW = BOARD_WIDTH  * CELL_SIZE   // logical board width  (CSS px)
     const cH = BOARD_HEIGHT * CELL_SIZE   // logical board height (CSS px)
     const physW = Math.round(cW * dpr)
@@ -156,6 +163,10 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
     }
     // Every frame: apply scale so all drawing coords stay in logical (CSS-px) space
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    
+    // Apply image smoothing based on quality
+    ctx.imageSmoothingEnabled = renderQuality !== 'performance'
+    ctx.imageSmoothingQuality = renderQuality === 'ultra' ? 'high' : 'medium'
 
     // Cat texture for meme blocks
     const catImg = new Image()
@@ -172,6 +183,7 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
 
     const drawCell = (ctx, x, y, rawColor, alpha = 1, blur = 12, pieceKey = null) => {
       const color = (isCustomTheme && pieceKey) ? (colorMap[pieceKey] ?? rawColor) : rawColor
+      const effectiveBlur = blur * qualityMultiplier  // Scale shadow blur based on quality
       ctx.save()
       ctx.globalAlpha = alpha
       switch (theme) {
@@ -184,7 +196,7 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
           // Cross-hatch fill clipped to cell
           ctx.save()
           ctx.beginPath(); ctx.rect(x + 1, y + 1, CELL_SIZE - 2, CELL_SIZE - 2); ctx.clip()
-          ctx.strokeStyle = 'rgba(255,255,255,0.14)'; ctx.lineWidth = 0.5
+          ctx.strokeStyle = 'rgba(255,255,255,0.14)'; ctx.lineWidth = 0.5 + (0.5 * qualityMultiplier)
           for (let i = -CELL_SIZE; i < CELL_SIZE * 2; i += 5) {
             ctx.beginPath(); ctx.moveTo(x + i, y + 1); ctx.lineTo(x + i + CELL_SIZE, y + CELL_SIZE - 1); ctx.stroke()
             ctx.beginPath(); ctx.moveTo(x + i + CELL_SIZE, y + 1); ctx.lineTo(x + i, y + CELL_SIZE - 1); ctx.stroke()
@@ -264,7 +276,7 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
           // Glossy black fill with glowing edge and inner reflection
           ctx.fillStyle = '#070008'
           ctx.fillRect(x + 1, y + 1, CELL_SIZE - 2, CELL_SIZE - 2)
-          ctx.shadowColor = color; ctx.shadowBlur = 14
+          ctx.shadowColor = color; ctx.shadowBlur = 14 * qualityMultiplier
           ctx.strokeStyle = color; ctx.lineWidth = 1.5
           ctx.strokeRect(x + 1.5, y + 1.5, CELL_SIZE - 3, CELL_SIZE - 3)
           ctx.shadowBlur = 0
@@ -282,7 +294,7 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
           ctx.fillStyle = adjustHex(color, -70)
           ctx.fillRect(x + 1, y + 1, CELL_SIZE - 2, CELL_SIZE - 2)
           ctx.globalAlpha = alpha
-          ctx.shadowColor = color; ctx.shadowBlur = 12
+          ctx.shadowColor = color; ctx.shadowBlur = 12 * qualityMultiplier
           ctx.strokeStyle = color; ctx.lineWidth = 1
           ctx.strokeRect(x + 1.5, y + 1.5, CELL_SIZE - 3, CELL_SIZE - 3)
           ctx.shadowBlur = 0
@@ -340,7 +352,7 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
           ag.addColorStop(0, adjustHex(color, 35)); ag.addColorStop(0.5, color); ag.addColorStop(1, adjustHex(color, -30))
           ctx.fillStyle = ag
           ctx.fillRect(x + 1, y + 1, CELL_SIZE - 2, CELL_SIZE - 2)
-          ctx.shadowColor = color; ctx.shadowBlur = 8
+          ctx.shadowColor = color; ctx.shadowBlur = 8 * qualityMultiplier
           ctx.strokeStyle = adjustHex(color, 18); ctx.lineWidth = 1
           ctx.strokeRect(x + 1.5, y + 1.5, CELL_SIZE - 3, CELL_SIZE - 3)
           ctx.shadowBlur = 0
@@ -376,7 +388,7 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
           vg.addColorStop(0, 'rgba(255,255,255,0.72)'); vg.addColorStop(0.4, color); vg.addColorStop(1, adjustHex(color, -20))
           ctx.fillStyle = vg
           ctx.fillRect(x + 1, y + 1, CELL_SIZE - 2, CELL_SIZE - 2)
-          ctx.shadowColor = color; ctx.shadowBlur = 10
+          ctx.shadowColor = color; ctx.shadowBlur = 10 * qualityMultiplier
           ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 1
           ctx.strokeRect(x + 1.5, y + 1.5, CELL_SIZE - 3, CELL_SIZE - 3)
           ctx.shadowBlur = 0
@@ -420,7 +432,7 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
           // Dark fill + centered monospace letter
           ctx.fillStyle = 'rgba(0,8,0,0.88)'
           ctx.fillRect(x + 1, y + 1, CELL_SIZE - 2, CELL_SIZE - 2)
-          ctx.shadowColor = color; ctx.shadowBlur = 8
+          ctx.shadowColor = color; ctx.shadowBlur = 8 * qualityMultiplier
           ctx.strokeStyle = color; ctx.lineWidth = 1
           ctx.strokeRect(x + 1.5, y + 1.5, CELL_SIZE - 3, CELL_SIZE - 3)
           ctx.shadowBlur = 0
@@ -430,7 +442,7 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
           // Dark PCB fill with gold trace lines and corner pads
           ctx.fillStyle = 'rgba(4,16,4,0.92)'
           ctx.fillRect(x + 1, y + 1, CELL_SIZE - 2, CELL_SIZE - 2)
-          ctx.shadowColor = color; ctx.shadowBlur = 6
+          ctx.shadowColor = color; ctx.shadowBlur = 6 * qualityMultiplier
           ctx.strokeStyle = color; ctx.lineWidth = 1
           ctx.strokeRect(x + 2, y + 2, CELL_SIZE - 4, CELL_SIZE - 4)
           ctx.shadowBlur = 0
@@ -489,7 +501,7 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
         }
         default: {
           // Bloom fill
-          ctx.fillStyle = color; ctx.shadowColor = color; ctx.shadowBlur = blur * 1.6
+          ctx.fillStyle = color; ctx.shadowColor = color; ctx.shadowBlur = (blur * 1.6) * qualityMultiplier
           ctx.fillRect(x + 1, y + 1, CELL_SIZE - 2, CELL_SIZE - 2)
           // Top-left highlight bevel
           ctx.shadowBlur = 0; ctx.globalAlpha = alpha * 0.40
@@ -582,7 +594,7 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
           ctx.globalAlpha = 0.28
           ctx.fillStyle = color; ctx.fillRect(x + 1, y + 1, CELL_SIZE - 2, CELL_SIZE - 2)
           ctx.globalAlpha = 0.70
-          ctx.shadowColor = color; ctx.shadowBlur = 8
+          ctx.shadowColor = color; ctx.shadowBlur = 8 * qualityMultiplier
           ctx.strokeStyle = color; ctx.lineWidth = 1.5
           ctx.strokeRect(x + 1.75, y + 1.75, CELL_SIZE - 3.5, CELL_SIZE - 3.5)
           break
@@ -620,7 +632,7 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
           ctx.strokeStyle = color
           ctx.lineWidth = 1.5
           ctx.shadowColor = color
-          ctx.shadowBlur = 8
+          ctx.shadowBlur = 8 * qualityMultiplier
           ctx.strokeRect(x + 1.75, y + 1.75, CELL_SIZE - 3.5, CELL_SIZE - 3.5)
       }
       ctx.restore()
@@ -891,7 +903,7 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
       ctx.globalAlpha = 0.85
       ctx.fillStyle = '#f87171'
       ctx.shadowColor = '#f87171'
-      ctx.shadowBlur = 12
+      ctx.shadowBlur = Math.round(12 * qualityMultiplier)
       // Left edge
       ctx.fillRect(0, startY, barW, h)
       // Right edge
@@ -911,7 +923,7 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
       ctx.strokeStyle = ZONE_COLOR
       ctx.lineWidth = 2
       ctx.shadowColor = ZONE_COLOR
-      ctx.shadowBlur = 12
+      ctx.shadowBlur = Math.round(12 * qualityMultiplier)
       ctx.globalAlpha = 0.75 + 0.25 * Math.sin(Date.now() / 150)
       ctx.beginPath()
       ctx.moveTo(0, divY)
@@ -974,7 +986,7 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
             ctx.globalAlpha = 0.80 + 0.20 * pulse
             ctx.strokeStyle = '#44ff88'
             ctx.lineWidth = 1.2
-            ctx.shadowColor = '#44ff88'; ctx.shadowBlur = 6
+            ctx.shadowColor = '#44ff88'; ctx.shadowBlur = 6 * qualityMultiplier
             ctx.strokeRect(bx + 1, by + 1, CELL_SIZE - 2, CELL_SIZE - 2)
           } else {
             // rotlock: purple vine tendrils
@@ -985,7 +997,7 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
             ctx.globalAlpha = 0.85
             ctx.strokeStyle = '#55ff44'
             ctx.lineWidth = 1.5
-            ctx.shadowColor = '#55ff44'; ctx.shadowBlur = 5
+            ctx.shadowColor = '#55ff44'; ctx.shadowBlur = 5 * qualityMultiplier
             const mid = CELL_SIZE / 2
             ctx.beginPath()
             ctx.moveTo(bx + 2, by + mid); ctx.lineTo(bx + CELL_SIZE - 2, by + mid)
@@ -993,7 +1005,7 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
             ctx.stroke()
             // Corner spirals (simple arcs)
             ctx.globalAlpha = 0.65 + 0.20 * pulse
-            ctx.strokeStyle = '#88ff66'; ctx.lineWidth = 1; ctx.shadowBlur = 4
+            ctx.strokeStyle = '#88ff66'; ctx.lineWidth = 1; ctx.shadowBlur = 4 * qualityMultiplier
             ctx.beginPath()
             ctx.arc(bx + 4, by + 4, 3.5, 0, Math.PI * 1.5); ctx.stroke()
             ctx.beginPath()
@@ -1135,7 +1147,7 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
       ctx.save()
       ctx.globalAlpha = alpha
       ctx.fillStyle = p.color ?? '#ffffff'
-      if (!isCustomTheme) { ctx.shadowColor = p.color ?? '#ffffff'; ctx.shadowBlur = 10 }
+      if (!isCustomTheme) { ctx.shadowColor = p.color ?? '#ffffff'; ctx.shadowBlur = 10 * qualityMultiplier }
       ctx.beginPath()
       ctx.arc(px, py, Math.max(0.5, radius), 0, Math.PI * 2)
       ctx.fill()
@@ -1161,7 +1173,7 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
             ctx.fillStyle = isB2B ? '#8B6200' : isTetris ? '#006880' : isTSpin ? '#6030A0' : '#2A2A2A'
           } else {
             ctx.fillStyle  = isB2B ? '#ffd700' : isTetris ? '#00e5ff' : isTSpin ? '#cc88ff' : '#ffffff'
-            ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = ft.huge ? 36 : 24
+            ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = (ft.huge ? 36 : 24) * qualityMultiplier
           }
           const tw = ctx.measureText(ft.text).width
           ctx.fillText(ft.text, (canvas.width - tw) / 2, Math.max(18, fy))
@@ -1170,7 +1182,7 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
           if (isLightTheme) {
             ctx.fillStyle = '#2A2A2A'
           } else {
-            ctx.fillStyle = '#ffffff'; ctx.shadowColor = '#aa66ff'; ctx.shadowBlur = 18
+            ctx.fillStyle = '#ffffff'; ctx.shadowColor = '#aa66ff'; ctx.shadowBlur = 18 * qualityMultiplier
           }
           const fx = ft.x * CELL_SIZE
           ctx.fillText(ft.text, Math.max(2, Math.min(fx, cW - 130)), Math.max(12, fy))
