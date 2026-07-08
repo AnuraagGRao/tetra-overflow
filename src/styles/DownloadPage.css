@@ -100,6 +100,54 @@
   background: #5a67d8;
 }
 
+.download-button.release {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.download-button.release:hover {
+  opacity: 0.9;
+  transform: translateY(-2px);
+}
+
+.download-button.debug {
+  background: #48bb78;
+}
+
+.download-button.debug:hover {
+  background: #38a169;
+}
+
+/* Pre-built APKs Section */
+.prebuilt-apks {
+  margin-bottom: 3rem;
+  padding-bottom: 2rem;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.prebuilt-apks h2 {
+  color: #2d3748;
+  margin-bottom: 0.5rem;
+  font-size: 1.5rem;
+}
+
+.section-note {
+  color: #718096;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+.apk-card.prebuilt {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+  border: 2px solid #667eea;
+}
+
+.apk-description {
+  margin: 0.25rem 0 0 0;
+  color: #4a5568;
+  font-size: 0.9rem;
+}
+}
+
 /* Build Section */
 .build-section {
   margin: 2rem 0;

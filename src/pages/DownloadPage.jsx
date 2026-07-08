@@ -2,6 +2,25 @@ import { useState, useEffect } from 'react';
 import '../styles/DownloadPage.css';
 
 const SERVER_URL = import.meta.env.VITE_BUILD_SERVER_URL || 'http://localhost:3001';
+const BASE_URL = import.meta.env.BASE_URL || '/';
+
+// Pre-built APKs available in public/downloads
+const PREBUILD_APKS = [
+  {
+    buildType: 'release',
+    name: 'Production Release (Recommended)',
+    description: 'Full-screen TWA with Digital Asset Links verification. Best experience.',
+    filename: 'tetra-overflow-ultra-release.apk',
+    icon: '🚀'
+  },
+  {
+    buildType: 'debug',
+    name: 'Debug Build',
+    description: 'For testing and development. Shows browser UI.',
+    filename: 'tetra-overflow-ultra-debug.apk',
+    icon: '🔧'
+  }
+];
 
 export default function DownloadPage() {
   const [apks, setApks] = useState([]);
@@ -95,6 +114,32 @@ export default function DownloadPage() {
               ✅ Android device detected! You can install the APK directly.
             </div>
           )}
+        </div>
+
+        {/* Pre-built Release APKs */}
+        <div className="prebuilt-apks">
+          <h2>📥 Quick Download</h2>
+          <p className="section-note">Pre-built APKs ready to install immediately</p>
+          <div className="apk-list">
+            {PREBUILD_APKS.map((apk) => (
+              <div key={apk.filename} className="apk-card prebuilt">
+                <div className="apk-info">
+                  <div className="apk-icon">{apk.icon}</div>
+                  <div className="apk-details">
+                    <h3>{apk.name}</h3>
+                    <p className="apk-description">{apk.description}</p>
+                  </div>
+                </div>
+                <a 
+                  href={`${BASE_URL}downloads/${apk.filename}`}
+                  download={apk.filename}
+                  className={`download-button ${apk.buildType}`}
+                >
+                  ⬇️ Download
+                </a>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Available APKs */}
