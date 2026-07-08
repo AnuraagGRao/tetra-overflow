@@ -24,3 +24,19 @@ dist-ssr
 *.sw?
 skills
 
+# Android / APK Build
+android/*.keystore
+android/keystore.properties
+android/local.properties
+android/.gradle
+android/build
+android/app/build
+android/.idea
+public/downloads/*.apk
+public/downloads/*.aab
+
+# Environment files with secrets
+.env
+server/.env
+server/node_modules
+

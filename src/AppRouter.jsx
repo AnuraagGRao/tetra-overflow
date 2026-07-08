@@ -18,6 +18,7 @@ import ZodiacMapPage from './pages/ZodiacMapPage'
 import ZodiacLevelPage from './pages/ZodiacLevelPage'
 import Season3MapPage from './pages/Season3MapPage'
 import Season3LevelPage from './pages/Season3LevelPage'
+import DownloadPage from './pages/DownloadPage'
 
 function NowPlayingToast() {
   const [toast, setToast] = useState(null)
@@ -160,6 +161,7 @@ export default function AppRouter() {
         <Route path="/s3/:epochId/:levelId" element={<AuthRoute><Season3LevelPage /></AuthRoute>} />
         <Route path="/artwork" element={<ArtworkPage />} />
         <Route path="/info" element={<InfoPage />} />
+        <Route path="/download" element={<DownloadPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

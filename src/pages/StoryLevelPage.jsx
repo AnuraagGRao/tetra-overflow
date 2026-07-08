@@ -283,6 +283,10 @@ export default function StoryLevelPage() {
   const [focus, setFocus] = useState(() => { try { return localStorage.getItem('focus-mode') === '1' } catch { return false } })
   const [easyMode, setEasyMode] = useState(() => { try { return localStorage.getItem('story-easy') === '1' } catch { return false } })
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768)
+  const [isLandscape, setIsLandscape] = useState(() => {
+    const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0
+    return window.innerWidth > window.innerHeight && hasTouch
+  })
   const [zoom, setZoom] = useState(() => {
     const saved = Number(localStorage.getItem('tetris-zoom') || 1)
     return saved >= 1 && saved <= 1.5 ? saved : 1
@@ -353,7 +357,11 @@ export default function StoryLevelPage() {
   }, [])
 
   useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth < 768)
+    const onResize = () => {
+      setIsMobile(window.innerWidth < 768)
+      const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0
+      setIsLandscape(window.innerWidth > window.innerHeight && hasTouch)
+    }
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])

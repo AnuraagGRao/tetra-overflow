@@ -1162,14 +1162,15 @@ export default function App() {
   const [floatPopups, setFloatPopups] = useState([]) // [{ id, text, color }]
   const floatPopupCounterRef = useRef(0)
   const checkMobile = () => window.innerWidth < 768 || (window.innerHeight < 600 && ('ontouchstart' in window || navigator.maxTouchPoints > 0))
-  const checkLandscape = () => window.innerHeight < 600 && window.innerWidth > window.innerHeight && ('ontouchstart' in window || navigator.maxTouchPoints > 0)
+  const checkLandscape = () => window.innerWidth > window.innerHeight && ('ontouchstart' in window || navigator.maxTouchPoints > 0)
   const [isMobile, setIsMobile]       = useState(checkMobile)
   const [isLandscape, setIsLandscape] = useState(checkLandscape)
   const [_showMobileModes, setShowMobileModes] = useState(false)
   const [zenResetting, setZenResetting] = useState(false)
   const [zoom, setZoom] = useState(() => Number(localStorage.getItem('tetris-zoom') || 1))
-  const [isUiHidden, setIsUiHidden] = useState(false)
+  const [isUiHidden, setIsUiHidden] = useState(() => localStorage.getItem('tetris-ui-hidden') === 'true')
   const [dayNightPhase, setDayNightPhase] = useState(0) // 0-1 for day/night cycle
+  const [hasGamepad, setHasGamepad] = useState(false) // gamepad connection indicator
   const cycleZoom = () => setZoom(z => {
     const next = z >= 1.5 ? 1 : z >= 1.25 ? 1.5 : 1.25
     localStorage.setItem('tetris-zoom', next)
@@ -1188,7 +1189,7 @@ export default function App() {
   const countdownActiveRef = useRef(false)
   const gameModeRef = useRef(GAME_MODE.NORMAL)
   const botDiffRef    = useRef('medium')
-  const isMobileRef   = useRef(window.innerWidth < 768 || (window.innerHeight < 600 && ('ontouchstart' in window || navigator.maxTouchPoints > 0)))
+  const isMobileRef   = useRef(window.innerWidth < 768 || (window.innerHeight < 600 && ('ontouchstart' in window || navigator.maxTouchPoints > 0)) || (window.innerWidth > window.innerHeight && ('ontouchstart' in window || navigator.maxTouchPoints > 0)))
   const zenResettingRef = useRef(false)
   const prevBlitzSecRef  = useRef(null)
   const prevPurifySecRef = useRef(null)
@@ -1335,6 +1336,9 @@ export default function App() {
   // Persist config changes
   useEffect(() => { localStorage.setItem(CONFIG_KEY, JSON.stringify(config)) }, [config])
 
+  // Persist UI visibility state
+  useEffect(() => { localStorage.setItem('tetris-ui-hidden', String(isUiHidden)) }, [isUiHidden])
+
   // Sync engine DAS/ARR from config
   useEffect(() => { engine.setSettings({ das: config.das, arr: config.arr }) },  [engine, config.das, config.arr])
 
@@ -1358,8 +1362,8 @@ export default function App() {
   // Resize → isMobile
   useEffect(() => {
     const handler = () => {
-      const m = window.innerWidth < 768 || (window.innerHeight < 600 && ('ontouchstart' in window || navigator.maxTouchPoints > 0))
-      const ls = window.innerHeight < 600 && window.innerWidth > window.innerHeight && ('ontouchstart' in window || navigator.maxTouchPoints > 0)
+      const m = window.innerWidth < 768 || (window.innerHeight < 600 && ('ontouchstart' in window || navigator.maxTouchPoints > 0)) || (window.innerWidth > window.innerHeight && ('ontouchstart' in window || navigator.maxTouchPoints > 0))
+      const ls = window.innerWidth > window.innerHeight && ('ontouchstart' in window || navigator.maxTouchPoints > 0)
       isMobileRef.current = m
       setIsMobile(m)
       setIsLandscape(ls)
@@ -1977,6 +1981,19 @@ export default function App() {
     }
     const prevButtons = {} // gamepad index → { buttonIndex: wasPressed }
     let rafId
+
+    // Gamepad connection listeners
+    const handleGamepadConnected = () => {
+      setHasGamepad(true)
+    }
+    const handleGamepadDisconnected = () => {
+      // Check if any gamepads still connected
+      const gps = navigator.getGamepads?.()
+      const anyConnected = gps && Array.from(gps).some(g => g !== null)
+      setHasGamepad(!!anyConnected)
+    }
+    window.addEventListener('gamepadconnected', handleGamepadConnected)
+    window.addEventListener('gamepaddisconnected', handleGamepadDisconnected)
     const poll = () => {
       const gamepads = navigator.getGamepads?.()
       if (gamepads) {
@@ -2042,7 +2059,11 @@ export default function App() {
       rafId = requestAnimationFrame(poll)
     }
     rafId = requestAnimationFrame(poll)
-    return () => cancelAnimationFrame(rafId)
+    return () => {
+      cancelAnimationFrame(rafId)
+      window.removeEventListener('gamepadconnected', handleGamepadConnected)
+      window.removeEventListener('gamepaddisconnected', handleGamepadDisconnected)
+    }
   }, [engine]) // eslint-disable-line
 
   const handlePauseToggle = () => {
@@ -2634,55 +2655,76 @@ export default function App() {
         {isUiHidden ? '▲' : '▼'}
       </button>
 
-      {/* Left context panel: Purify info only */}
-      {isPurify && (
-        <div className="ls-left">
-          <div className="ls-diff-title">Purify</div>
-          <div style={{ fontSize: '0.72rem', color: 'var(--c-muted)' }}>Clear the infection!</div>
-        </div>
-      )}
-
-      {/* Centre: HUD bar + zone bar + canvas */}
-      <div className="ls-centre">
-        {/* stat bar */}
-        <div className="ls-hud">
-          <div className="ls-stat">
-            <span className="l">HOLD</span>
-            <PiecePreview type={state.hold} small />
+      {/* ═══ LEFT PANEL: HOLD + Stats ═══ */}
+      <div className="ls-left">
+        {/* HOLD piece display — always visible */}
+        <div className="ls-hold-container">
+          <div className="ls-hold-label">HOLD</div>
+          <div className="ls-hold-preview">
+            <PiecePreview type={state.hold} small={false} />
           </div>
+        </div>
+
+        {/* ── STATS SECTION ── */}
+        <div className="ls-stats-section">
           <div className="ls-stat">
             <span className="l">Score</span>
             <span className="v">{state.score.toLocaleString()}</span>
           </div>
           <div className="ls-stat">
-            <span className="l">Lv</span>
+            <span className="l">Level</span>
             <span className="v">{state.level}</span>
           </div>
           <div className="ls-stat">
             <span className="l">Lines</span>
-            <span className="v">{state.lines}{state.mode === GAME_MODE.SPRINT ? `/${SPRINT_LINES}` : state.mode === GAME_MODE.EASY ? `/${EASY_SPRINT_LINES}` : ''}</span>
+            <span className="v">
+              {state.lines}
+              {state.mode === GAME_MODE.SPRINT ? `/${SPRINT_LINES}` : state.mode === GAME_MODE.EASY ? `/${EASY_SPRINT_LINES}` : ''}
+            </span>
           </div>
+          
+          {/* Time display for timed modes */}
           {state.mode === GAME_MODE.BLITZ && (
             <div className="ls-stat">
               <span className="l">Time</span>
-              <span className="v" style={{ color: state.blitzTimer < 15000 ? '#f87171' : '#facc15' }}>{fmt(state.blitzTimer)}</span>
+              <span className="v" style={{ color: state.blitzTimer < 15000 ? '#f87171' : '#facc15' }}>
+                {fmt(state.blitzTimer)}
+              </span>
             </div>
           )}
           {state.mode === GAME_MODE.PURIFY && (
             <div className="ls-stat">
-              <span className="l">Left</span>
-              <span className="v" style={{ color: state.purifyTimer < 30000 ? '#f87171' : '#a78bfa' }}>{fmt(state.purifyTimer)}</span>
+              <span className="l">Time Left</span>
+              <span className="v" style={{ color: state.purifyTimer < 30000 ? '#f87171' : '#a78bfa' }}>
+                {fmt(state.purifyTimer)}
+              </span>
             </div>
           )}
-          <div className="ls-stat">
-            <span className="l">Next</span>
-            <div style={{ display: 'flex', gap: '0.15rem' }}>
-              {state.queue.slice(0, 2).map((t, i) => <PiecePreview key={`${t}-${i}`} type={t} small />)}
-            </div>
-          </div>
         </div>
 
-        {/* zone bar */}
+        {/* Context info for special modes */}
+        {isPurify && (
+          <>
+            <div className="ls-diff-title">Purify</div>
+            <div style={{ fontSize: 'clamp(0.6rem, 2vh, 0.85rem)', color: 'var(--c-muted)', textAlign: 'center' }}>
+              Clear the infection!
+            </div>
+          </>
+        )}
+        
+        {hasGamepad && (
+          <div className="ls-gamepad-indicator">
+            <span style={{ fontSize: 'clamp(1rem, 3vh, 1.5rem)' }}>🎮</span>
+            <span style={{ fontSize: 'clamp(0.5rem, 1.8vh, 0.75rem)', color: '#4ade80', fontWeight: 700 }}>
+              Controller
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* ═══ CENTER: Matrix (no top HUD) ═══ */}
+      <div className="ls-centre">
+        {/* Zone bar at top */}
         {showZone && (
           <div className="mobile-zone-bar">
             <div className={`mobile-zone-fill${state.zoneActive ? ' zone-active' : ''}${zoneReady && !state.zoneActive ? ' zone-ready' : ''}`}
@@ -2690,17 +2732,19 @@ export default function App() {
           </div>
         )}
 
+        {/* Infection timer (Purify mode only) */}
         {isPurify && !state.gameOver && (
-          <div title="Next infection wave" style={{ marginTop: 6, width: '100%', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: '0.66rem', color: '#a78bfa', letterSpacing: '0.08em' }}>INF</span>
-            <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.08)', borderRadius: 3, overflow: 'hidden' }}>
-              <div style={{ width: `${Math.round(Math.max(0, Math.min(1, 1 - ((state.infectionTimer || 0) / (state.infectionPeriod || 1)))) * 100)}%`, height: '100%', background: 'linear-gradient(90deg,#8b5cf6,#ec4899)' }} />
+          <div className="ls-infection-timer">
+            <span className="ls-infection-label">INF</span>
+            <div className="ls-infection-bar">
+              <div className="ls-infection-fill"
+                style={{ width: `${Math.round(Math.max(0, Math.min(1, 1 - ((state.infectionTimer || 0) / (state.infectionPeriod || 1)))) * 100)}%` }} />
             </div>
-            <span style={{ fontSize: '0.68rem', color: '#a78bfa', width: 28, textAlign: 'right' }}>{Math.ceil((state.infectionTimer || 0) / 1000)}s</span>
+            <span className="ls-infection-time">{Math.ceil((state.infectionTimer || 0) / 1000)}s</span>
           </div>
         )}
 
-        {/* board */}
+        {/* Game board — centered and aspect-locked */}
         <SynesthesiaMotionLayer className={`ls-canvas-wrap${zenResetting ? ' zen-clearing' : ''}`} style={{ background: 'transparent' }}>
           {hasIllusion ? (
             <div style={illusionFilterStyle}>
@@ -2721,7 +2765,7 @@ export default function App() {
               FLOOR {state.towerFloor || 1}
             </div>
           )}
-          {/* Jumpscare overlay — must be above all other overlays */}
+          {/* Jumpscare overlay */}
           <AnimatePresence>
             {jumpscare && (
               <motion.div
@@ -2749,7 +2793,7 @@ export default function App() {
           {renderCountdown()}
           {renderFloatPopups()}
 
-          {/* Focus/fullscreen controls in landscape when UI is hidden */}
+          {/* Fullscreen controls when UI hidden */}
           {isUiHidden && config.showOnScreenControls && (
             <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 22, pointerEvents: 'auto' }}>
               <TouchControls onPress={_handlePress} onRelease={_handleRelease} />
@@ -2758,36 +2802,59 @@ export default function App() {
         </SynesthesiaMotionLayer>
       </div>
 
-      {/* ── Right: actions + controls ── */}
+      {/* ═══ RIGHT PANEL: Next + Controls + Modes ═══ */}
       <div className="ls-right">
-        {/* primary action buttons */}
+        {/* ── NEXT PREVIEW ── */}
+        <div className="ls-next-section">
+          <span className="ls-next-label">Next</span>
+          <div className="ls-next-preview">
+            {state.queue.slice(0, 3).map((t, i) => (
+              <PiecePreview key={`${t}-${i}`} type={t} small />
+            ))}
+          </div>
+        </div>
+
+        {/* ── ACTION BUTTONS ── */}
         <button type="button" className="ls-action-btn ls-pause-btn" onClick={handlePauseToggle}>
-          <span className="ls-btn-icon"><img src={state.paused ? playIconUrl : pauseIconUrl} alt="" style={{ width: 18, height: 18, objectFit: 'contain' }} /></span>
+          <span className="ls-btn-icon">
+            <img src={state.paused ? playIconUrl : pauseIconUrl} alt="" 
+              style={{ width: 'clamp(1rem, 3vh, 1.6rem)', height: 'clamp(1rem, 3vh, 1.6rem)', objectFit: 'contain' }} />
+          </span>
           <span className="ls-btn-label">{state.paused ? 'Resume' : 'Pause'}</span>
         </button>
 
-        {/* zone button — prominent when ready */}
+        {/* ── ZONE BUTTON (Prominent) ── */}
         {showZone && (
           <button type="button"
             className={`ls-zone-btn${state.zoneActive ? ' active' : ''}${zoneReady && !state.zoneActive ? ' ready' : ''}`}
             disabled={!zoneReady && !state.zoneActive}
             onClick={handleZoneActivate}>
-            <span>⚡</span>
-            <span className="ls-btn-label">{state.zoneActive ? 'ZONE ON' : zoneReady ? 'ZONE!' : `Zone ${state.zoneMeter}%`}</span>
+            <span style={{ fontSize: 'clamp(1.2rem, 4vh, 2rem)' }}>⚡</span>
+            <span>{state.zoneActive ? 'ZONE ON' : zoneReady ? 'ZONE!' : `Zone ${state.zoneMeter}%`}</span>
           </button>
         )}
 
-        {/* utility row */}
+        {/* ── UTILITY BUTTONS ── */}
         <div className="ls-util ls-util-3">
-          <button type="button" className={`ls-util-btn${musicOn ? ' active' : ''}`} onClick={toggleMusic}><img src={soundIconUrl} alt="Music" style={{ width: 18, height: 18, objectFit: 'contain' }} /></button>
-          <button type="button" className="ls-util-btn" onClick={() => startGame(gameMode)}><img src={restartIconUrl} alt="Restart" style={{ width: 18, height: 18, objectFit: 'contain' }} /></button>
+          <button type="button" className={`ls-util-btn${musicOn ? ' active' : ''}`} onClick={toggleMusic}>
+            <img src={soundIconUrl} alt="Music" 
+              style={{ width: 'clamp(1rem, 3vh, 1.4rem)', height: 'clamp(1rem, 3vh, 1.4rem)', objectFit: 'contain' }} />
+          </button>
+          <button type="button" className="ls-util-btn" onClick={() => startGame(gameMode)}>
+            <img src={restartIconUrl} alt="Restart" 
+              style={{ width: 'clamp(1rem, 3vh, 1.4rem)', height: 'clamp(1rem, 3vh, 1.4rem)', objectFit: 'contain' }} />
+          </button>
           <button type="button" className="ls-util-btn" onClick={() => setShowAbout(true)}>ℹ</button>
         </div>
-        <div className="ls-util ls-util-3">
-          <button type="button" className="ls-util-btn" onClick={() => setShowSettings(true)}><img src={settingsIconUrl} alt="Settings" style={{ width: 18, height: 18, objectFit: 'contain' }} /></button>
-        </div>
+        <button type="button" className="ls-action-btn" onClick={() => setShowSettings(true)}>
+          <span className="ls-btn-icon">
+            <img src={settingsIconUrl} alt="Settings" 
+              style={{ width: 'clamp(1rem, 3vh, 1.6rem)', height: 'clamp(1rem, 3vh, 1.6rem)', objectFit: 'contain' }} />
+          </span>
+          <span className="ls-btn-label">Settings</span>
+        </button>
 
-        {/* mode selector */}
+        {/* ── MODE SELECTOR ── */}
         <div className="ls-modes">
           {[ 
             { mode: GAME_MODE.EASY,    label: '🟢 Easy'   },
@@ -2796,6 +2863,7 @@ export default function App() {
             { mode: GAME_MODE.BLITZ,   label: 'Blitz'   },
             { mode: GAME_MODE.ZEN,     label: 'Zen'     },
             { mode: GAME_MODE.PURIFY,  label: 'Purify'  },
+            { mode: GAME_MODE.VERSUS,  label: '⚡ Versus' },
             { mode: GAME_MODE.ULTIMATE, label: '⚡ Ultimate' },
           ].map(({ mode, label }) => (
             <button key={mode} type="button"
@@ -2803,7 +2871,16 @@ export default function App() {
               onClick={() => startGame(mode)}>
               <span>{label}</span>
               {mode === GAME_MODE.ULTIMATE && (
-                <span style={{ marginLeft: 6, fontSize: '0.5rem', color: '#eab308', border: '1px solid rgba(234,179,8,0.45)', borderRadius: 8, padding: '0 5px', background: 'rgba(234,179,8,0.08)', textTransform: 'uppercase' }}>2×</span>
+                <span style={{ 
+                  marginLeft: 'clamp(2px, 0.5vw, 6px)', 
+                  fontSize: 'clamp(0.45rem, 1.5vh, 0.65rem)', 
+                  color: '#eab308', 
+                  border: '1px solid rgba(234,179,8,0.45)', 
+                  borderRadius: 'clamp(4px, 1vh, 8px)', 
+                  padding: '0 clamp(3px, 1vw, 5px)', 
+                  background: 'rgba(234,179,8,0.08)', 
+                  textTransform: 'uppercase' 
+                }}>2×</span>
               )}
             </button>
           ))}

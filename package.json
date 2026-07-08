@@ -10,7 +10,11 @@
     "build": "vite build",
     "postbuild": "node scripts/inject-precache.js",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:apk": "node scripts/build-apk.js release",
+    "build:apk:debug": "node scripts/build-apk.js debug",
+    "server": "cd server && npm start",
+    "server:dev": "cd server && npm run dev"
   },
   "dependencies": {
     "firebase": "^12.12.1",
@@ -34,6 +38,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.5.0",
+    "sharp": "^0.35.2",
     "vite": "^6.4.2"
   }
 }

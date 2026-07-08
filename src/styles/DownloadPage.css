@@ -1,0 +1,344 @@
+.download-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 2rem 1rem;
+}
+
+.download-container {
+  max-width: 800px;
+  margin: 0 auto;
+  background: white;
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.download-container h1 {
+  text-align: center;
+  color: #2d3748;
+  margin-bottom: 1rem;
+  font-size: 2rem;
+}
+
+.download-intro {
+  text-align: center;
+  margin-bottom: 2rem;
+  color: #4a5568;
+}
+
+.android-notice {
+  background: #d4edda;
+  color: #155724;
+  padding: 0.75rem;
+  border-radius: 8px;
+  margin-top: 1rem;
+  font-weight: 500;
+}
+
+/* APK List */
+.apk-list {
+  margin-bottom: 2rem;
+}
+
+.apk-list h2 {
+  color: #2d3748;
+  margin-bottom: 1rem;
+  font-size: 1.5rem;
+}
+
+.apk-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  background: #f7fafc;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  margin-bottom: 1rem;
+  transition: all 0.3s ease;
+}
+
+.apk-card:hover {
+  border-color: #667eea;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+}
+
+.apk-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.apk-icon {
+  font-size: 3rem;
+}
+
+.apk-details h3 {
+  margin: 0 0 0.25rem 0;
+  color: #2d3748;
+  font-size: 1.25rem;
+}
+
+.apk-meta {
+  margin: 0;
+  color: #718096;
+  font-size: 0.875rem;
+}
+
+.download-button {
+  padding: 0.75rem 1.5rem;
+  background: #667eea;
+  color: white;
+  text-decoration: none;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: background 0.3s ease;
+  white-space: nowrap;
+}
+
+.download-button:hover {
+  background: #5a67d8;
+}
+
+/* Build Section */
+.build-section {
+  margin: 2rem 0;
+  padding: 1.5rem;
+  background: #f7fafc;
+  border-radius: 12px;
+}
+
+.build-section h2 {
+  color: #2d3748;
+  margin-bottom: 0.5rem;
+}
+
+.build-note {
+  color: #718096;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+.build-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.build-button {
+  padding: 1rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.build-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.build-button.debug {
+  background: #48bb78;
+  color: white;
+}
+
+.build-button.debug:hover:not(:disabled) {
+  background: #38a169;
+}
+
+.build-button.release {
+  background: #667eea;
+  color: white;
+}
+
+.build-button.release:hover:not(:disabled) {
+  background: #5a67d8;
+}
+
+/* Build Status */
+.build-status {
+  background: white;
+  padding: 1rem;
+  border-radius: 8px;
+  border: 2px solid #e2e8f0;
+  margin-top: 1rem;
+}
+
+.build-status h3 {
+  color: #2d3748;
+  margin-bottom: 0.5rem;
+  text-transform: capitalize;
+}
+
+.build-log {
+  background: #1a202c;
+  color: #a0aec0;
+  padding: 1rem;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.875rem;
+  max-height: 200px;
+  overflow-y: auto;
+  margin-bottom: 1rem;
+}
+
+.log-line {
+  margin-bottom: 0.25rem;
+}
+
+.build-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: #667eea;
+  font-weight: 600;
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #667eea;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Error Message */
+.error-message {
+  background: #fed7d7;
+  color: #742a2a;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-top: 1rem;
+  font-weight: 500;
+}
+
+/* Instructions */
+.instructions {
+  margin: 2rem 0;
+  padding: 1.5rem;
+  background: #edf2f7;
+  border-radius: 12px;
+}
+
+.instructions h2 {
+  color: #2d3748;
+  margin-bottom: 1rem;
+}
+
+.instructions ol {
+  padding-left: 1.5rem;
+  color: #4a5568;
+  line-height: 1.8;
+}
+
+.instructions li {
+  margin-bottom: 0.5rem;
+}
+
+.security-note {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #fef5e7;
+  border-left: 4px solid #f39c12;
+  border-radius: 4px;
+  color: #4a5568;
+  font-size: 0.875rem;
+}
+
+/* TWA Info */
+.twa-info {
+  margin: 2rem 0;
+  padding: 1rem;
+  background: #ebf8ff;
+  border-radius: 8px;
+  border: 1px solid #bee3f8;
+}
+
+.twa-info summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #2c5282;
+  padding: 0.5rem;
+}
+
+.twa-info summary:hover {
+  color: #2b6cb0;
+}
+
+.twa-info p, .twa-info ul {
+  color: #2d3748;
+  margin-top: 1rem;
+  line-height: 1.6;
+}
+
+.twa-info ul {
+  padding-left: 1.5rem;
+}
+
+.twa-info li {
+  margin-bottom: 0.5rem;
+}
+
+/* Loading & Empty States */
+.loading, .no-apks {
+  text-align: center;
+  padding: 2rem;
+  color: #718096;
+}
+
+/* Back Link */
+.back-link {
+  text-align: center;
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.back-link a {
+  color: #667eea;
+  text-decoration: none;
+  font-weight: 600;
+  transition: color 0.3s ease;
+}
+
+.back-link a:hover {
+  color: #5a67d8;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .download-container {
+    padding: 1.5rem;
+  }
+
+  .download-container h1 {
+    font-size: 1.5rem;
+  }
+
+  .apk-card {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .build-buttons {
+    grid-template-columns: 1fr;
+  }
+
+  .apk-info {
+    width: 100%;
+  }
+
+  .download-button {
+    width: 100%;
+    text-align: center;
+  }
+}
