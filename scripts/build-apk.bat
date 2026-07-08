@@ -25,30 +25,30 @@ REM Clean previous builds
 echo Cleaning previous builds...
 call gradlew.bat clean
 
-REM Build based on argument
+REM Build based on argument - RELEASE ONLY
 set BUILD_TYPE=%1
 if "%BUILD_TYPE%"=="" set BUILD_TYPE=release
 
-if "%BUILD_TYPE%"=="debug" (
-    echo Building DEBUG APK...
-    call gradlew.bat assembleDebug
-    set "APK_PATH=app\build\outputs\apk\debug\app-debug.apk"
+REM Only release builds are supported
+if not "%BUILD_TYPE%"=="release" (
+    echo Note: Only release builds are supported. Using 'release' instead.
+    set BUILD_TYPE=release
+)
+
+echo Building RELEASE APK...
+
+REM Check for keystore
+if not exist "keystore.properties" (
+    echo Warning: keystore.properties not found. Building unsigned APK.
+)
+
+call gradlew.bat assembleRelease
+
+REM Determine output path
+if exist "app\build\outputs\apk\release\app-release.apk" (
+    set "APK_PATH=app\build\outputs\apk\release\app-release.apk"
 ) else (
-    echo Building RELEASE APK...
-    
-    REM Check for keystore
-    if not exist "keystore.properties" (
-        echo Warning: keystore.properties not found. Building unsigned APK.
-    )
-    
-    call gradlew.bat assembleRelease
-    
-    REM Determine output path
-    if exist "app\build\outputs\apk\release\app-release.apk" (
-        set "APK_PATH=app\build\outputs\apk\release\app-release.apk"
-    ) else (
-        set "APK_PATH=app\build\outputs\apk\release\app-release-unsigned.apk"
-    )
+    set "APK_PATH=app\build\outputs\apk\release\app-release-unsigned.apk"
 )
 
 REM Check if build succeeded

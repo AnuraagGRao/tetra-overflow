@@ -7,11 +7,18 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const BUILD_TYPES = ['debug', 'release'];
+// Only release builds are supported
+const BUILD_TYPES = ['release'];
 
 function buildApk(buildType = 'release') {
+  // Enforce release-only builds
+  if (buildType !== 'release') {
+    console.warn(`⚠️  Only release builds are supported. Using 'release' instead of '${buildType}'.`);
+    buildType = 'release';
+  }
+
   if (!BUILD_TYPES.includes(buildType)) {
-    throw new Error(`Invalid build type: ${buildType}. Must be 'debug' or 'release'.`);
+    throw new Error(`Invalid build type: ${buildType}. Only 'release' is supported.`);
   }
 
   console.log(`🔨 Building ${buildType.toUpperCase()} APK...`);

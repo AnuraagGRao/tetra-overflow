@@ -1,5 +1,5 @@
 // Bump CACHE_NAME to push updates to clients
-const CACHE_NAME = 'tetra-overflow-v0.8.2'
+const CACHE_NAME = 'tetra-overflow-v0.8.5'
 // Build absolute paths relative to the SW scope so it works under any base URL
 const BASE = self.registration.scope
 const APP_SHELL = ['', 'index.html', 'manifest.json'].map(p => new URL(p, BASE).href)

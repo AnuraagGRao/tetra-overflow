@@ -149,6 +149,57 @@ function useStoryGameLoop(engine, targetLines, levelStartLinesRef, levelKey, onC
     return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up) }
   }, [engine, togglePause])
 
+  // Gamepad
+  useEffect(() => {
+    const AXIS_DEAD = 0.35
+    const GP_HELD_MAP = { 13: 'softDrop', 14: 'left', 15: 'right' }
+    const GP_ACTION_MAP = {
+      12: 'hardDrop', 0: 'rotateCCW', 1: 'rotateCW', 2: 'rotateCCW',
+      3: 'rotate180', 4: 'hold', 5: 'hold', 6: 'activateZone',
+      7: 'activateZone', 9: 'pause'
+    }
+    const prevButtons = {}
+    let gpHeldRef = { left: false, right: false, softDrop: false }
+    let rafId
+    const poll = () => {
+      const gamepads = navigator.getGamepads?.()
+      if (gamepads) {
+        for (const gp of gamepads) {
+          if (!gp) continue
+          for (const [btn, action] of Object.entries(GP_ACTION_MAP)) {
+            const pressed = gp.buttons[btn]?.pressed
+            const wasPressed = prevButtons[btn]
+            if (pressed && !wasPressed) {
+              if (action === 'pause') {
+                togglePause()
+              } else {
+                actionRef.current[action] = true
+              }
+              try { window.dispatchEvent(new Event('bg-beat')) } catch {}
+            }
+            prevButtons[btn] = pressed
+          }
+          for (const [btn, held] of Object.entries(GP_HELD_MAP)) {
+            const pressed = gp.buttons[btn]?.pressed
+            heldRef.current[held] = pressed
+          }
+          if (gp.axes.length >= 4) {
+            const hAxis = gp.axes[2], vAxis = gp.axes[3]
+            gpHeldRef.left = Math.abs(hAxis) > AXIS_DEAD && hAxis < 0
+            gpHeldRef.right = Math.abs(hAxis) > AXIS_DEAD && hAxis > 0
+            gpHeldRef.softDrop = Math.abs(vAxis) > AXIS_DEAD && vAxis > 0
+            heldRef.current.left = heldRef.current.left || gpHeldRef.left
+            heldRef.current.right = heldRef.current.right || gpHeldRef.right
+            heldRef.current.softDrop = heldRef.current.softDrop || gpHeldRef.softDrop
+          }
+        }
+      }
+      rafId = requestAnimationFrame(poll)
+    }
+    rafId = requestAnimationFrame(poll)
+    return () => cancelAnimationFrame(rafId)
+  }, [togglePause])
+
   // rAF loop — levelKey in deps resets prevGameOverRef for each new level
   useEffect(() => {
     prevGameOverRef.current = false // reset completion guard for this level/attempt
@@ -827,13 +878,13 @@ export default function StoryLevelPage() {
         <div style={{ position: 'absolute', inset: 0, zIndex: 10, display: 'flex', flexDirection: 'column', pointerEvents: phase === PHASE.TRANSITION ? 'none' : 'auto' }}>
           {/* HUD bar */}
           {!focus && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 14px', background: 'rgba(0,0,0,0.55)', color: '#fff', fontSize: '0.72rem', letterSpacing: '0.1em', flexShrink: 0, backdropFilter: 'blur(6px)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: '0.5rem', letterSpacing: '0.14em', color: chapter.color, fontWeight: 700 }}>{chapter.title}</span>
-                <span style={{ color: '#333' }}>›</span>
-                <span style={{ color: '#ccc' }}>{level.title}</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: isLandscape ? '4px 10px' : '6px 14px', background: 'rgba(0,0,0,0.55)', color: '#fff', fontSize: isLandscape ? '0.58rem' : '0.72rem', letterSpacing: '0.1em', flexShrink: 0, backdropFilter: 'blur(6px)', gap: isLandscape ? 4 : 8, flexWrap: isLandscape ? 'wrap' : 'nowrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
+                <span style={{ fontSize: isLandscape ? '0.45rem' : '0.5rem', letterSpacing: '0.14em', color: chapter.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{chapter.title}</span>
+                {!isLandscape && <span style={{ color: '#333' }}>›</span>}
+                {!isLandscape && <span style={{ color: '#ccc' }}>{level.title}</span>}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: isLandscape ? 4 : 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                 <button
                   onClick={() => triggerAction('activateZone')}
                   disabled={state.zoneMeter < ZONE_MIN_METER || state.zoneActive}
@@ -843,34 +894,34 @@ export default function StoryLevelPage() {
                     border: `1px solid ${state.zoneActive ? '#00e5ff' : state.zoneMeter >= ZONE_MIN_METER ? '#22d3ee' : 'rgba(255,255,255,0.1)'}`,
                     color: state.zoneActive ? '#00e5ff' : state.zoneMeter >= ZONE_MIN_METER ? '#80eaff' : '#555',
                     cursor: state.zoneMeter >= ZONE_MIN_METER && !state.zoneActive ? 'pointer' : 'default',
-                    fontSize: '0.62rem', padding: '2px 8px', borderRadius: 6, fontFamily: 'inherit'
+                    fontSize: isLandscape ? '0.5rem' : '0.62rem', padding: isLandscape ? '1px 6px' : '2px 8px', borderRadius: 6, fontFamily: 'inherit', whiteSpace: 'nowrap'
                   }}
                 >
                   ⚡ {state.zoneActive ? `${Math.ceil(state.zoneTimer/1000)}s` : 'ZONE'}
                 </button>
                 {level.targetLines > 0 && (
-                  <span style={{ color: '#555', fontSize: '0.62rem' }}>
-                    {Math.min(linesThisLevel, effectiveTargetLines)} / {effectiveTargetLines} lines{isFinalConvergence && finalReadyToTopOut ? ' · SURVIVE' : ''}
+                  <span style={{ color: '#555', fontSize: isLandscape ? '0.5rem' : '0.62rem', whiteSpace: 'nowrap' }}>
+                    {Math.min(linesThisLevel, effectiveTargetLines)}/{effectiveTargetLines}{!isLandscape && 'lines'}{isFinalConvergence && finalReadyToTopOut ? ' SURVIVE' : ''}
                   </span>
                 )}
-                {state.combo > 1 && (
+                {state.combo > 1 && !isLandscape && (
                   <span style={{ color: '#f59e0b', fontSize: '0.62rem', fontWeight: 700 }}>
                     COMBO x{state.combo}
                   </span>
                 )}
-                {state.backToBack && (
+                {state.backToBack && !isLandscape && (
                   <span style={{ color: '#fbbf24', fontSize: '0.62rem', fontWeight: 700 }}>
                     B2B x{(state.b2bCount ?? 0) + 1}
                   </span>
                 )}
-                <span style={{ color: '#00d4ff', fontWeight: 700 }}>{state.score.toLocaleString()}</span>
+                <span style={{ color: '#00d4ff', fontWeight: 700, whiteSpace: 'nowrap' }}>{state.score.toLocaleString()}</span>
                 <button
                   onClick={togglePause}
-                  style={{ background: 'none', border: '1px solid rgba(255,255,255,0.2)', color: '#aaa', cursor: 'pointer', fontSize: '0.6rem', padding: '3px 8px', borderRadius: 4, fontFamily: 'inherit', letterSpacing: '0.1em' }}
+                  style={{ background: 'none', border: '1px solid rgba(255,255,255,0.2)', color: '#aaa', cursor: 'pointer', fontSize: isLandscape ? '0.5rem' : '0.6rem', padding: isLandscape ? '2px 6px' : '3px 8px', borderRadius: 4, fontFamily: 'inherit', letterSpacing: '0.1em' }}
                 >
                   {paused ? '▶' : '⏸'}
                 </button>
-                {!isMobile && (
+                {!isMobile && !isLandscape && (
                   <button
                     onClick={cycleZoom}
                     style={{ background: 'none', border: '1px solid rgba(255,255,255,0.2)', color: '#aaa', cursor: 'pointer', fontSize: '0.6rem', padding: '3px 8px', borderRadius: 4, fontFamily: 'inherit', letterSpacing: '0.1em' }}
@@ -909,7 +960,7 @@ export default function StoryLevelPage() {
                 flex: 1,
                 minWidth: 0,
                 paddingBottom: focus && showOnScreenControls
-                  ? 'calc(4.5rem + env(safe-area-inset-bottom, 0px))'
+                  ? isLandscape ? 'calc(3.5rem + env(safe-area-inset-bottom, 0px))' : 'calc(4.5rem + env(safe-area-inset-bottom, 0px))'
                   : 0,
               }}
             >

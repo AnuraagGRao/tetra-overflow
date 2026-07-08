@@ -13,13 +13,6 @@ const PREBUILD_APKS = [
     description: 'Full-screen TWA with Digital Asset Links verification. Best experience.',
     filename: 'tetra-overflow-ultra-release.apk',
     icon: '🚀'
-  },
-  {
-    buildType: 'debug',
-    name: 'Debug Build',
-    description: 'For testing and development. Shows browser UI.',
-    filename: 'tetra-overflow-ultra-debug.apk',
-    icon: '🔧'
   }
 ];
 

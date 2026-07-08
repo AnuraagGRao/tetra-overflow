@@ -2875,13 +2875,11 @@ export default function App() {
         {/* ── MODE SELECTOR ── */}
         <div className="ls-modes">
           {[ 
-            { mode: GAME_MODE.EASY,    label: '🟢 Easy'   },
             { mode: GAME_MODE.NORMAL,  label: 'Normal'  },
             { mode: GAME_MODE.SPRINT,  label: 'Sprint'  },
             { mode: GAME_MODE.BLITZ,   label: 'Blitz'   },
             { mode: GAME_MODE.ZEN,     label: 'Zen'     },
             { mode: GAME_MODE.PURIFY,  label: 'Purify'  },
-            { mode: GAME_MODE.VERSUS,  label: '⚡ Versus' },
             { mode: GAME_MODE.ULTIMATE, label: '⚡ Ultimate' },
           ].map(({ mode, label }) => (
             <button key={mode} type="button"

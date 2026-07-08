@@ -28,24 +28,28 @@ function ChapterPanel({ chapter, chIdx, progress, onSelectLevel }) {
   const levels = chapter.levels
   const chapterScore = Number(progress?.[`${chapter.id}_chapter_score`] || 0)
   const chapterLines = Number(progress?.[`${chapter.id}_chapter_lines`] || 0)
+  const isLandscape = window.innerWidth > window.innerHeight
+  const panelMaxWidth = isLandscape ? '280px' : '340px'
+  const panelMaxHeight = isLandscape ? '85vh' : 'auto'
+  
   return (
     <motion.div
       initial={{ opacity: 0, y: 18, scale: 0.92 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 12, scale: 0.94 }}
       onClick={e => e.stopPropagation()}
-      style={{ background: '#10101c', border: `1px solid ${chapter.color}66`, boxShadow: `0 24px 80px ${chapter.color}44`, borderRadius: 14, padding: '1.4rem', display: 'flex', flexDirection: 'column', gap: 12, minWidth: 260, maxWidth: 340, width: 'min(92vw, 340px)' }}
+      style={{ background: '#10101c', border: `1px solid ${chapter.color}66`, boxShadow: `0 24px 80px ${chapter.color}44`, borderRadius: 14, padding: '1.4rem', display: 'flex', flexDirection: 'column', gap: 12, minWidth: 240, maxWidth: panelMaxWidth, width: 'min(92vw, ' + panelMaxWidth + ')', maxHeight: panelMaxHeight, overflowY: isLandscape ? 'auto' : 'visible' }}
     >
       <div>
-        <div style={{ fontSize: '0.55rem', color: chapter.color, letterSpacing: '0.26em', textTransform: 'uppercase', marginBottom: 4 }}>Chapter {chIdx + 1}</div>
-        <div style={{ fontSize: '1.1rem', fontWeight: 900, letterSpacing: '0.1em', color: '#fff' }}>{chapter.title}</div>
-        <div style={{ fontSize: '0.68rem', color: '#666', marginTop: 4, lineHeight: 1.4 }}>{chapter.subtitle}</div>
-        <div style={{ marginTop: 8, display: 'flex', gap: 10, alignItems: 'center', fontSize: '0.62rem', letterSpacing: '0.08em' }}>
+        <div style={{ fontSize: isLandscape ? '0.5rem' : '0.55rem', color: chapter.color, letterSpacing: '0.26em', textTransform: 'uppercase', marginBottom: 4 }}>Chapter {chIdx + 1}</div>
+        <div style={{ fontSize: isLandscape ? '0.95rem' : '1.1rem', fontWeight: 900, letterSpacing: '0.1em', color: '#fff' }}>{chapter.title}</div>
+        <div style={{ fontSize: isLandscape ? '0.6rem' : '0.68rem', color: '#666', marginTop: 4, lineHeight: 1.4 }}>{chapter.subtitle}</div>
+        <div style={{ marginTop: 8, display: 'flex', gap: 10, alignItems: 'center', fontSize: isLandscape ? '0.55rem' : '0.62rem', letterSpacing: '0.08em', flexWrap: 'wrap' }}>
           <span style={{ color: '#ddd' }}>Score: <strong style={{ color: chapter.color }}>{chapterScore.toLocaleString()}</strong></span>
           <span style={{ color: '#888' }}>Lines: {chapterLines.toLocaleString()}</span>
         </div>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: isLandscape ? 6 : 8 }}>
         {levels.map((lv, lvIdx) => {
           const unlocked = isLevelUnlocked(chIdx, lvIdx, progress)
           const completed = !!progress[`${chapter.id}_${lv.id}_completed`]
@@ -58,23 +62,23 @@ function ChapterPanel({ chapter, chIdx, progress, onSelectLevel }) {
               style={{
                 background: completed ? `${chapter.color}14` : unlocked ? 'rgba(255,255,255,0.04)' : 'transparent',
                 border: `1px solid ${completed ? chapter.color : unlocked ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.05)'}`,
-                borderRadius: 8, padding: '10px 12px', color: unlocked ? '#fff' : '#444',
+                borderRadius: 8, padding: isLandscape ? '8px 10px' : '10px 12px', color: unlocked ? '#fff' : '#444',
                 cursor: unlocked ? 'pointer' : 'not-allowed',
-                display: 'flex', alignItems: 'center', gap: 10,
+                display: 'flex', alignItems: 'center', gap: isLandscape ? 8 : 10,
                 fontFamily: 'inherit', textAlign: 'left', transition: 'all 0.15s',
               }}
             >
-              <span style={{ fontSize: '1rem', flexShrink: 0 }}>
+              <span style={{ fontSize: isLandscape ? '0.85rem' : '1rem', flexShrink: 0 }}>
                 {completed ? '✦' : unlocked ? (lv.isBoss ? '⚡' : '▶') : '🔒'}
               </span>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '0.78rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{lv.title}</div>
-                <div style={{ fontSize: '0.6rem', color: '#666', marginTop: 2 }}>{lv.subtitle}</div>
+                <div style={{ fontSize: isLandscape ? '0.7rem' : '0.78rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{lv.title}</div>
+                <div style={{ fontSize: isLandscape ? '0.55rem' : '0.6rem', color: '#666', marginTop: 2 }}>{lv.subtitle}</div>
                 {completed && bestLines > 0 && (
-                  <div style={{ fontSize: '0.6rem', color: chapter.color, marginTop: 2 }}>Best: {bestLines} lines</div>
+                  <div style={{ fontSize: isLandscape ? '0.55rem' : '0.6rem', color: chapter.color, marginTop: 2 }}>Best: {bestLines} lines</div>
                 )}
               </div>
-              {lv.isBoss && <span style={{ fontSize: '0.55rem', color: '#f97316', letterSpacing: '0.14em', border: '1px solid #f97316', borderRadius: 3, padding: '1px 5px' }}>BOSS</span>}
+              {lv.isBoss && <span style={{ fontSize: isLandscape ? '0.5rem' : '0.55rem', color: '#f97316', letterSpacing: '0.14em', border: '1px solid #f97316', borderRadius: 3, padding: '1px 5px', flexShrink: 0 }}>BOSS</span>}
             </button>
           )
         })}

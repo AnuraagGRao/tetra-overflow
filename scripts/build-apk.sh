@@ -27,29 +27,29 @@ chmod +x gradlew
 echo "🧹 Cleaning previous builds..."
 ./gradlew clean
 
-# Build based on argument
+# Build based on argument - RELEASE ONLY
 BUILD_TYPE="${1:-release}"
 
-if [ "$BUILD_TYPE" = "debug" ]; then
-    echo "🔧 Building DEBUG APK..."
-    ./gradlew assembleDebug
-    APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
+# Only release builds are supported
+if [ "$BUILD_TYPE" != "release" ]; then
+    echo "ℹ️  Note: Only release builds are supported. Using 'release' instead."
+    BUILD_TYPE="release"
+fi
+
+echo "🚀 Building RELEASE APK..."
+
+# Check for keystore
+if [ ! -f "keystore.properties" ]; then
+    echo "⚠️  Warning: keystore.properties not found. Building unsigned APK."
+fi
+
+./gradlew assembleRelease
+
+# Determine output path
+if [ -f "app/build/outputs/apk/release/app-release.apk" ]; then
+    APK_PATH="app/build/outputs/apk/release/app-release.apk"
 else
-    echo "🚀 Building RELEASE APK..."
-    
-    # Check for keystore
-    if [ ! -f "keystore.properties" ]; then
-        echo "⚠️  Warning: keystore.properties not found. Building unsigned APK."
-    fi
-    
-    ./gradlew assembleRelease
-    
-    # Determine output path
-    if [ -f "app/build/outputs/apk/release/app-release.apk" ]; then
-        APK_PATH="app/build/outputs/apk/release/app-release.apk"
-    else
-        APK_PATH="app/build/outputs/apk/release/app-release-unsigned.apk"
-    fi
+    APK_PATH="app/build/outputs/apk/release/app-release-unsigned.apk"
 fi
 
 # Check if build succeeded

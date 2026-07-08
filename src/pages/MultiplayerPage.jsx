@@ -523,6 +523,10 @@ export default function MultiplayerPage() {
   const [rejoinBusy, setRejoinBusy] = useState(false)
   const [rejoinError, setRejoinError] = useState('')
   const [focus, setFocus] = useState(() => { try { return localStorage.getItem('vs-focus-mode') === '1' } catch { return false } })
+  const [isLandscape, setIsLandscape] = useState(() => {
+    const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0
+    return window.innerWidth > window.innerHeight && hasTouch
+  })
 
   const engine = useMemo(() => new TetrisEngine(), [])
 
@@ -607,6 +611,17 @@ export default function MultiplayerPage() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
+
+  // Landscape detection
+  useEffect(() => {
+    const onResize = () => {
+      const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0
+      setIsLandscape(window.innerWidth > window.innerHeight && hasTouch)
+    }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
   // WS streaming disabled — Firestore-only path remains
 
   const showOnScreenControls = (() => {
@@ -999,6 +1014,73 @@ export default function MultiplayerPage() {
     return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up) }
   }, [screen, togglePause, toggleMute])
 
+  // ── Gamepad ────────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (screen !== SCREEN.GAME) return
+    const AXIS_DEAD = 0.35
+    const GP_HELD_MAP = { 13: 'softDrop', 14: 'left', 15: 'right' }
+    const GP_ACTION_MAP = {
+      12: 'hardDrop',     // D-pad up
+      0:  'rotateCCW',    // A / Cross
+      1:  'rotateCW',     // B / Circle
+      2:  'rotateCCW',    // X / Square
+      3:  'rotate180',    // Y / Triangle
+      4:  'hold',         // LB / L1
+      5:  'hold',         // RB / R1
+      6:  'activateZone', // LT / L2
+      7:  'activateZone', // RT / R2
+      9:  'pause',        // Start
+    }
+    const prevButtons = {}
+    let gpHeldRef = { left: false, right: false, softDrop: false }
+    let rafId
+
+    const poll = () => {
+      const gamepads = navigator.getGamepads?.()
+      if (gamepads) {
+        let gpLeft = false, gpRight = false, gpSoftDrop = false
+        for (const gp of gamepads) {
+          if (!gp) continue
+          if (!prevButtons[gp.index]) prevButtons[gp.index] = {}
+          const prev = prevButtons[gp.index]
+          // Held: D-pad
+          for (const [bi, key] of Object.entries(GP_HELD_MAP)) {
+            if (gp.buttons[bi]?.pressed) {
+              if (key === 'left')     gpLeft     = true
+              if (key === 'right')    gpRight    = true
+              if (key === 'softDrop') gpSoftDrop = true
+            }
+          }
+          // Held: left analog stick
+          const ax = gp.axes[0] ?? 0
+          const ay = gp.axes[1] ?? 0
+          if (ax < -AXIS_DEAD) gpLeft     = true
+          if (ax >  AXIS_DEAD) gpRight    = true
+          if (ay >  AXIS_DEAD) gpSoftDrop = true
+          // Actions: rising edge only
+          for (const [bi, action] of Object.entries(GP_ACTION_MAP)) {
+            const pressed = !!gp.buttons[bi]?.pressed
+            if (pressed && !prev[bi]) {
+              if (action === 'pause') {
+                toggleMute()
+              } else {
+                actionRef.current[action] = true
+              }
+            }
+            prev[bi] = pressed
+          }
+        }
+        gpHeldRef.left     = gpLeft
+        gpHeldRef.right    = gpRight
+        gpHeldRef.softDrop = gpSoftDrop
+        heldRef.current = { ...heldRef.current, ...gpHeldRef }
+      }
+      rafId = requestAnimationFrame(poll)
+    }
+    rafId = requestAnimationFrame(poll)
+    return () => cancelAnimationFrame(rafId)
+  }, [screen, toggleMute])
+
   // ── Input callbacks ───────────────────────────────────────────────────────────
   const triggerAction  = useCallback((a) => { actionRef.current[a] = true }, [])
   const handlePress    = useCallback((k, held) => { if (held) heldRef.current[k] = true; else triggerAction(k) }, [triggerAction])
@@ -1089,7 +1171,7 @@ export default function MultiplayerPage() {
   const bestOf       = lobby?.bestOf ?? 3
   const currentRound = lobby?.currentRound ?? 1
   const winsNeeded   = Math.ceil(bestOf / 2)
-  const leftWidth    = 88
+  const leftWidth    = isLandscape ? 72 : 88
   const opponentPages = useMemo(() => {
     const pages = []
     for (let i = 0; i < opponents.length; i += OPPONENTS_PER_PAGE) {
@@ -1339,35 +1421,35 @@ export default function MultiplayerPage() {
               style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
 
               {/* HUD bar */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 10px', background: 'rgba(0,0,0,0.7)', flexShrink: 0, backdropFilter: 'blur(6px)', gap: 6 }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 68 }}>
-                  <span style={{ fontSize: '0.46rem', color: '#666', letterSpacing: '0.1em' }}>RND {currentRound} of {bestOf}</span>
-                  <span style={{ fontSize: '0.42rem', color: '#444', letterSpacing: '0.08em' }}>
-                    P {Math.max(0, (lobby?.players || []).filter(p => !p.gameOver).length)} / {(lobby?.players || []).length}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: isLandscape ? '3px 8px' : '4px 10px', background: 'rgba(0,0,0,0.7)', flexShrink: 0, backdropFilter: 'blur(6px)', gap: isLandscape ? 4 : 6 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: isLandscape ? 0.5 : 1, minWidth: 68, fontSize: isLandscape ? '0.4rem' : '0.46rem' }}>
+                  <span style={{ color: '#666', letterSpacing: '0.1em', lineHeight: 1 }}>RND {currentRound}/{bestOf}</span>
+                  <span style={{ color: '#444', letterSpacing: '0.08em', lineHeight: 1 }}>
+                    P {Math.max(0, (lobby?.players || []).filter(p => !p.gameOver).length)}/{(lobby?.players || []).length}
                   </span>
-                  <span style={{ fontSize: '0.58rem', color: '#f97316', fontWeight: 700, letterSpacing: '0.06em' }}>
-                    {myWins}&nbsp;–&nbsp;{opponents.map(o => roundWins[o.uid] ?? 0).join('–')}
+                  <span style={{ color: '#f97316', fontWeight: 700, letterSpacing: '0.06em', lineHeight: 1 }}>
+                    {myWins}–{opponents.map(o => roundWins[o.uid] ?? 0).join('–')}
                   </span>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-                  <span style={{ color: '#00d4ff', fontWeight: 700, fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: isLandscape ? 0.5 : 1, fontSize: isLandscape ? '0.4rem' : undefined }}>
+                  <span style={{ color: '#00d4ff', fontWeight: 700, fontSize: isLandscape ? '0.56rem' : '0.72rem', display: 'flex', alignItems: 'center', gap: isLandscape ? 3 : 6, lineHeight: 1 }}>
                     {myState.score.toLocaleString()}
                     {userProfile?.selectedBadge && (
-                      <span style={{ fontSize: '0.55rem', color: '#c084fc', border: '1px solid #c084fc55', borderRadius: 3, padding: '0 4px', letterSpacing: '0.10em' }}>{String(userProfile.selectedBadge).replace('badge_', '').toUpperCase()}</span>
+                      <span style={{ fontSize: isLandscape ? '0.42rem' : '0.55rem', color: '#c084fc', border: '1px solid #c084fc55', borderRadius: 3, padding: '0 3px', letterSpacing: '0.10em' }}>{String(userProfile.selectedBadge).replace('badge_', '').toUpperCase()}</span>
                     )}
                   </span>
-                  <span style={{ fontSize: '0.44rem', color: '#555', letterSpacing: '0.08em' }}>LVL {myState.level}</span>
-                  {(myState.combo > 1 || myState.backToBack) && (
-                    <span style={{ fontSize: '0.44rem', color: '#fbbf24', letterSpacing: '0.08em', fontWeight: 700 }}>
-                      {myState.combo > 1 ? `COMBO x${myState.combo}` : ''}
+                  <span style={{ color: '#555', letterSpacing: '0.08em', lineHeight: 1 }}>LVL {myState.level}</span>
+                  {(myState.combo > 1 || myState.backToBack) && !isLandscape && (
+                    <span style={{ fontSize: '0.44rem', color: '#fbbf24', letterSpacing: '0.08em', fontWeight: 700, lineHeight: 1 }}>
+                      {myState.combo > 1 ? `CMB x${myState.combo}` : ''}
                       {myState.combo > 1 && myState.backToBack ? '  ·  ' : ''}
                       {myState.backToBack ? `B2B x${(myState.b2bCount ?? 0) + 1}` : ''}
                     </span>
                   )}
                 </div>
-                <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: isLandscape ? 2 : 4, alignItems: 'center' }}>
                   {/* Removed top focus toggle per request */}
-                  <button onClick={toggleMute} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.18)', color: muted ? '#444' : '#888', cursor: 'pointer', fontSize: '0.56rem', padding: '2px 6px', borderRadius: 4, fontFamily: 'inherit' }}>
+                  <button onClick={toggleMute} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.18)', color: muted ? '#444' : '#888', cursor: 'pointer', fontSize: isLandscape ? '0.48rem' : '0.56rem', padding: isLandscape ? '1px 4px' : '2px 6px', borderRadius: 4, fontFamily: 'inherit' }}>
                     {muted ? '🔇' : '🔊'}
                   </button>
                 </div>
@@ -1378,17 +1460,17 @@ export default function MultiplayerPage() {
 
                 {/* Left column: opponent boards (grid) */}
                 {!focus && (
-                <div style={{ width: leftWidth, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'stretch', padding: '8px 6px', gap: 6, background: 'rgba(0,0,0,0.5)', overflow: 'hidden' }}>
+                <div style={{ width: leftWidth, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'stretch', padding: isLandscape ? '4px 3px' : '8px 6px', gap: isLandscape ? 3 : 6, background: 'rgba(0,0,0,0.5)', overflow: 'hidden' }}>
 
                   {opponents.length === 0 && (
                     <div style={{ fontSize: '0.44rem', color: '#333', textAlign: 'center', letterSpacing: '0.08em', paddingTop: 6 }}>no opponent</div>
                   )}
                   {opponents.length > 0 && (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.46rem', color: '#666', letterSpacing: '0.08em' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: isLandscape ? '0.4rem' : '0.46rem', color: '#666', letterSpacing: '0.08em' }}>
                       <button
                         onClick={goPrevPreviewPage}
                         disabled={previewPage <= 0}
-                        style={{ background: 'none', border: '1px solid rgba(255,255,255,0.1)', color: previewPage <= 0 ? '#333' : '#888', borderRadius: 4, width: 18, height: 18, padding: 0, cursor: previewPage <= 0 ? 'default' : 'pointer', fontFamily: 'inherit' }}
+                        style={{ background: 'none', border: '1px solid rgba(255,255,255,0.1)', color: previewPage <= 0 ? '#333' : '#888', borderRadius: 4, width: 16, height: 16, padding: 0, cursor: previewPage <= 0 ? 'default' : 'pointer', fontFamily: 'inherit', fontSize: '0.4rem' }}
                       >
                         ‹
                       </button>
@@ -1396,7 +1478,7 @@ export default function MultiplayerPage() {
                       <button
                         onClick={goNextPreviewPage}
                         disabled={previewPage >= maxPreviewPage}
-                        style={{ background: 'none', border: '1px solid rgba(255,255,255,0.1)', color: previewPage >= maxPreviewPage ? '#333' : '#888', borderRadius: 4, width: 18, height: 18, padding: 0, cursor: previewPage >= maxPreviewPage ? 'default' : 'pointer', fontFamily: 'inherit' }}
+                        style={{ background: 'none', border: '1px solid rgba(255,255,255,0.1)', color: previewPage >= maxPreviewPage ? '#333' : '#888', borderRadius: 4, width: 16, height: 16, padding: 0, cursor: previewPage >= maxPreviewPage ? 'default' : 'pointer', fontFamily: 'inherit', fontSize: '0.4rem' }}
                       >
                         ›
                       </button>
@@ -1431,17 +1513,10 @@ export default function MultiplayerPage() {
                       </motion.div>
                     </AnimatePresence>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
-                    <div style={{ fontSize: '0.5rem', color: '#666', letterSpacing: '0.08em' }}>Tap to target</div>
-                    {opponents.length > OPPONENTS_PER_PAGE && (
-                      <div style={{ fontSize: '0.46rem', color: '#555', letterSpacing: '0.06em' }}>swipe</div>
-                    )}
-                  </div>
-
                   <div style={{ flex: 1 }} />
 
                   {myState.pendingGarbage > 0 && (
-                    <div style={{ fontSize: '0.58rem', color: '#f87171', fontWeight: 700, letterSpacing: '0.06em', textAlign: 'center' }}>
+                    <div style={{ fontSize: isLandscape ? '0.46rem' : '0.58rem', color: '#f87171', fontWeight: 700, letterSpacing: '0.06em', textAlign: 'center' }}>
                       ↑{myState.pendingGarbage}
                     </div>
                   )}
@@ -1449,7 +1524,7 @@ export default function MultiplayerPage() {
                 )}
 
                 {/* Canvas */}
-                <SynesthesiaMotionLayer className="mobile-canvas-wrap" style={{ background: 'transparent', flex: 1, minWidth: 0 }}>
+                <SynesthesiaMotionLayer className="mobile-canvas-wrap" style={{ background: 'transparent', flex: 1, minWidth: 0, paddingBottom: showOnScreenControls ? isLandscape ? '3.5rem' : '4.5rem' : 0 }}>
                     <GameCanvas
                       state={myState}
                       onTap={() => triggerAction('rotateCW')}
