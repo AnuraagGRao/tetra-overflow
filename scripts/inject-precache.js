@@ -7,8 +7,8 @@ import { join } from 'path'
 const DIST = 'dist'
 const SW_PATH = join(DIST, 'sw.js')
 const ASSETS_DIR = join(DIST, 'assets')
-// Respect BASE_URL and default to the repo base
-const RAW_BASE = process.env.BASE_URL || '/tetra-overflow/'
+// Respect BASE_URL from environment (matches vite.config.js default)
+const RAW_BASE = process.env.BASE_URL || '/'
 // Normalize to have leading and trailing slashes
 const BASE = ('/' + RAW_BASE.replace(/^\/+|\/+$/g, '') + '/').replace(/^\/\//, '/')
 
@@ -63,7 +63,7 @@ try {
   if (existsSync(MANIFEST_PATH)) {
     const manifestSrc = readFileSync(MANIFEST_PATH, 'utf-8')
     const manifest = JSON.parse(manifestSrc)
-    const stripOldBase = (p) => String(p).replace(/^\/+/, '').replace(/^tetra-overflow\//, '')
+    const stripOldBase = (p) => String(p).replace(/^\.?\/+/, '').replace(/^tetra-overflow\//, '')
     const applyBase = (p) => {
       if (!p) return p
       if (typeof p === 'string' && p.startsWith(BASE)) return p
