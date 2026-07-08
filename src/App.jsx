@@ -70,6 +70,8 @@ import catMusicUrl from './meme/YTDown_YouTube_OIIAOIIA-CAT-but-in-4K-Not-Actual
 import horror1Url from './meme/horror1.jpg'
 import horror2Url from './meme/horror2.jpg'
 import horror3Url from './meme/horror3.jpg'
+import horror4Url from './meme/horror4.jpg'
+import horror5Url from './meme/horror5.jpg'
 import eerie1Url from './meme/horror1.mp3'
 import eerie2Url from './meme/horror2.mp3'
 import eerie3Url from './meme/horror3.mp3'
@@ -1214,7 +1216,7 @@ export default function App() {
   const [jumpscare, setJumpscare] = useState(null) // { src, until }
   const lastJumpscareRef = useRef(0)
   const jumpscareAllowedAfterRef = useRef(0)
-  const jumpscareCooldownRef = useRef(60000)
+  const jumpscareCooldownRef = useRef(120000) // Increased to 2 minutes for less frequent jumpscares
   const sfxDuckTimerRef = useRef(null)
   const _chaosSfxLastRef = useRef(0)
   const _chaosSfxMutedUntilRef = useRef(0)
@@ -1257,11 +1259,23 @@ export default function App() {
     return () => { el.pause(); el.src = '' }
   }, [])
 
+  // Initialize horror sounds using Howler.js for better browser autoplay support
   useEffect(() => {
     const urls = [eerie1Url, eerie2Url, eerie3Url].filter(Boolean)
-    const els = urls.map(u => { const a = new Audio(u); a.loop = false; a.volume = 0.3; return a })
-    eerieAudiosRef.current = els
-    return () => { els.forEach(a => { try { a.pause(); a.src = '' } catch {} }) }
+    const howls = urls.map(u => {
+      return new Howl({
+        src: [u],
+        preload: true,
+        volume: 0.5,
+        loop: false,
+      })
+    })
+    eerieAudiosRef.current = howls
+    return () => {
+      howls.forEach(h => {
+        try { h.stop(); h.unload() } catch {}
+      })
+    }
   }, [])
 
   // Preload horror images so they're cached before the first jumpscare triggers
@@ -1274,7 +1288,8 @@ export default function App() {
     try {
       if (eerieFadeTimerRef.current) { clearInterval(eerieFadeTimerRef.current); eerieFadeTimerRef.current = null }
       const cur = eerieCurrentRef.current
-      if (cur) { cur.pause(); cur.currentTime = 0; eerieCurrentRef.current = null }
+      if (cur && typeof cur.stop === 'function') { cur.stop() }
+      eerieCurrentRef.current = null
     } catch {}
   }, [])
 
@@ -1285,13 +1300,15 @@ export default function App() {
       const steps = 10
       const stepDur = Math.max(16, Math.floor(ms / steps))
       let i = 0
+      const initialVol = audio.volume !== undefined ? audio.volume : 0.5
       eerieFadeTimerRef.current = setInterval(() => {
         i += 1
         const t = 1 - i / steps
-        audio.volume = Math.max(0, 0.3 * Math.max(0, t))
+        const newVol = Math.max(0, initialVol * Math.max(0, t))
+        if (typeof audio.volume === 'number') { audio.volume = newVol }
         if (i >= steps) {
           clearInterval(eerieFadeTimerRef.current); eerieFadeTimerRef.current = null
-          try { audio.pause(); audio.currentTime = 0 } catch {}
+          try { if (typeof audio.stop === 'function') audio.stop() } catch {}
           if (eerieCurrentRef.current === audio) eerieCurrentRef.current = null
         }
       }, stepDur)
@@ -1645,7 +1662,7 @@ export default function App() {
           jsNow - (lastJumpscareRef.current || 0) > (jumpscareCooldownRef.current || 0) &&
           Math.random() < (ns.towerFloor >= 15 ? 0.008 : 0.004)
         ) {
-          const imgs = [horror1Url, horror2Url, horror3Url]
+          const imgs = [horror1Url, horror2Url, horror3Url, horror4Url, horror5Url]
           const src = imgs[Math.floor(Math.random() * imgs.length)]
           lastJumpscareRef.current = jsNow
           setJumpscare({ src, until: jsNow + 1600 })
@@ -1654,9 +1671,10 @@ export default function App() {
             if (arr.length) {
               stopEerie()
               const a = arr[Math.floor(Math.random() * arr.length)]
-              a.currentTime = 0; a.volume = 0.28
+              // Howler.js Howl objects use .play() which returns sound ID, and .volume() to set volume
+              const soundId = a.play()
+              a.volume(0.5)
               eerieCurrentRef.current = a
-              a.play().catch(() => {})
               // Auto fade-out and stop towards the end of the visual flash
               setTimeout(() => fadeOutAndStopEerie(a, 600), 1000)
             }
