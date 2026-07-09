@@ -923,6 +923,15 @@ export default function StoryLevelPage() {
                 >
                   {paused ? '▶' : '⏸'}
                 </button>
+                {!isMobile && (
+                  <button
+                    onClick={cycleZoom}
+                    style={{ background: 'none', border: '1px solid rgba(255,255,255,0.2)', color: '#aaa', cursor: 'pointer', fontSize: isLandscape ? '0.5rem' : '0.6rem', padding: isLandscape ? '2px 6px' : '3px 8px', borderRadius: 4, fontFamily: 'inherit', letterSpacing: '0.1em' }}
+                    title="Cycle zoom"
+                  >
+                    🔍 {Math.round(zoom * 100)}%
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -957,16 +966,31 @@ export default function StoryLevelPage() {
                   : 0,
               }}
             >
-                <GameCanvas
-                  state={state}
-                  onTap={() => { if (config?.sfxEnabled && !paused) try { playRotateSFX(pieceTheme || 'classic') } catch {}; emitSynesthesia(SYNESTHESIA_EVENT.ROTATE, { intensity: 1.0, source: 'story-tap' }); triggerAction('rotateCW'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
-                  onTwoFingerTap={() => { if (config?.sfxEnabled && !paused) try { playZoneActivateSFX(pieceTheme || 'classic') } catch {}; triggerAction('activateZone'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
-                  onDragBegin={handleDragBegin}
-                  onDragEnd={handleDragEnd}
-                  onHardDrop={handleHardDrop}
-                  themeOverride={pieceTheme}
-                  boardAlpha={boardAlpha}
-                />
+                {!isMobile ? (
+                  <div style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}>
+                    <GameCanvas
+                      state={state}
+                      onTap={() => { if (config?.sfxEnabled && !paused) try { playRotateSFX(pieceTheme || 'classic') } catch {}; emitSynesthesia(SYNESTHESIA_EVENT.ROTATE, { intensity: 1.0, source: 'story-tap' }); triggerAction('rotateCW'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
+                      onTwoFingerTap={() => { if (config?.sfxEnabled && !paused) try { playZoneActivateSFX(pieceTheme || 'classic') } catch {}; triggerAction('activateZone'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
+                      onDragBegin={handleDragBegin}
+                      onDragEnd={handleDragEnd}
+                      onHardDrop={handleHardDrop}
+                      themeOverride={pieceTheme}
+                      boardAlpha={boardAlpha}
+                    />
+                  </div>
+                ) : (
+                  <GameCanvas
+                    state={state}
+                    onTap={() => { if (config?.sfxEnabled && !paused) try { playRotateSFX(pieceTheme || 'classic') } catch {}; emitSynesthesia(SYNESTHESIA_EVENT.ROTATE, { intensity: 1.0, source: 'story-tap' }); triggerAction('rotateCW'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
+                    onTwoFingerTap={() => { if (config?.sfxEnabled && !paused) try { playZoneActivateSFX(pieceTheme || 'classic') } catch {}; triggerAction('activateZone'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
+                    onDragBegin={handleDragBegin}
+                    onDragEnd={handleDragEnd}
+                    onHardDrop={handleHardDrop}
+                    themeOverride={pieceTheme}
+                    boardAlpha={boardAlpha}
+                  />
+                )}
                 {/* Focus toggle styled like Solo's UI tab */}
                 <button
                   onClick={() => setFocus(f => !f)}

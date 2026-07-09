@@ -1553,7 +1553,7 @@ export default function App() {
       jumpscareAllowedAfterRef.current = now + (minDelay + Math.random() * (maxDelay - minDelay))
       // Reset last and randomize an initial cooldown window (1–2 min)
       lastJumpscareRef.current = 0
-      jumpscareCooldownRef.current = 60_000 + Math.random() * 60_000
+      jumpscareCooldownRef.current = 180_000 + Math.random() * 120_000 // 3-5 minutes initial cooldown
       // Fully disable chaos/"infection" cue after ~9s to ensure it never feels like a loop
       chaosCueEndAtRef.current = now + 9_000
     } else {
@@ -1687,10 +1687,10 @@ export default function App() {
             if (sfxDuckTimerRef.current) clearTimeout(sfxDuckTimerRef.current)
             sfxDuckTimerRef.current = setTimeout(() => setSfxDuck(1.0), 1700)
           } catch {}
-          // After floor 10: make jumpscares more frequent (10–20s). Otherwise 1–2 min.
+          // After floor 10: reduced frequency (30-60s). Otherwise 3-5 min.
           jumpscareCooldownRef.current = (ns.towerFloor >= 10)
-            ? (12_000 + Math.random() * 8_000)
-            : (60_000 + Math.random() * 60_000)
+            ? (30_000 + Math.random() * 30_000)
+            : (180_000 + Math.random() * 120_000)
           setTimeout(() => setJumpscare(null), 1650)
         }
       }

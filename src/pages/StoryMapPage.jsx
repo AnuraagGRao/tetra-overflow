@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
@@ -93,6 +93,10 @@ export default function StoryMapPage() {
   const [progress, setProgress] = useState({})
   const [selected, setSelected] = useState(null) // chIdx
   const [loading, setLoading] = useState(true)
+  const [userPan, setUserPan] = useState({ x: 0, y: 0 })
+  const [mapZoom, setMapZoom] = useState(0.55) // Manual zoom level (0.5 - 1.3)
+  const gestureRef = useRef({ mode: 'none', lastX: 0, lastY: 0 })
+  const mapViewportRef = useRef(null)
 
   useEffect(() => {
     if (!user) return
@@ -113,14 +117,16 @@ export default function StoryMapPage() {
 
   const mapPoints = useMemo(() => {
     const N = visibleChapters.length || 1
-    const leftX = 34
-    const rightX = 66
-    const yTop = 7
-    const yBot = 93
-    const step = N > 1 ? (yBot - yTop) / (N - 1) : 0
+    // Diagonal arrangement from bottom-left to top-right - compressed vertically
+    const xStart = 15
+    const xEnd = 85
+    const yStart = 72 // Earth at bottom
+    const yEnd = 28  // Light at top
+    const stepX = N > 1 ? (xEnd - xStart) / (N - 1) : 0
+    const stepY = N > 1 ? (yEnd - yStart) / (N - 1) : 0
     return visibleChapters.map((_, i) => ({
-      x: i % 2 === 0 ? leftX : rightX,
-      y: yBot - i * step,
+      x: xStart + i * stepX,
+      y: yStart + i * stepY,
     }))
   }, [visibleChapters])
 
@@ -147,11 +153,19 @@ export default function StoryMapPage() {
   ), [])
 
   const selectedPoint = selected !== null ? mapPoints[selected] : null
-  // Slightly zoomed-out default view to reveal more of the map
-  const baseScale = 0.92
-  const zoomScale = selectedPoint ? baseScale * 1.18 : baseScale
-  const zoomX = selectedPoint ? (50 - selectedPoint.x) * 2.1 : 0
-  const zoomY = selectedPoint ? (50 - selectedPoint.y) * 2.4 : 0
+  const isPortrait = window.innerWidth < window.innerHeight
+  
+  // Combine manual zoom with responsive base scale
+  const zoomScale = selectedPoint ? mapZoom * 1.18 : mapZoom
+  // When chapter selected: auto-center it. Otherwise use manual pan.
+  const zoomX = selectedPoint ? (50 - selectedPoint.x) * 2.1 : userPan.x
+  const zoomY = selectedPoint ? (50 - selectedPoint.y) * 2.4 : userPan.y
+
+  // Zoom controls
+  const clampZoom = (z) => Math.max(0.5, Math.min(1.3, z))
+  const zoomIn = () => { playZoomIn(); setMapZoom(z => clampZoom(z + 0.1)) }
+  const zoomOut = () => { playZoomOut(); setMapZoom(z => clampZoom(z - 0.1)) }
+  const resetZoom = () => { setSelected(null); setMapZoom(0.55); setUserPan({ x: 0, y: 0 }) }
 
   // How many chapters unlocked
   const _unlockedChapters = STORY_CHAPTERS.filter((_, i) => isLevelUnlocked(i, 0, progress))
@@ -173,24 +187,85 @@ export default function StoryMapPage() {
       setResetMsg('Reset failed: '+(e && e.message));
     }
   }
+
+  // ── Drag / Pan gesture handlers ─────────────────────────────────────────────
+  useEffect(() => {
+    const el = mapViewportRef.current
+    if (!el) return
+
+    const onPointerDown = (e) => {
+      // Don't pan when a chapter panel is open
+      if (selected !== null) return
+      const touches = e.currentTarget._activePointers = e.currentTarget._activePointers || new Map()
+      touches.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      if (touches.size === 1) {
+        gestureRef.current = { mode: 'pan', lastX: e.clientX, lastY: e.clientY }
+      }
+      el.setPointerCapture(e.pointerId)
+    }
+
+    const onPointerMove = (e) => {
+      const touches = e.currentTarget._activePointers
+      if (!touches) return
+      touches.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      const g = gestureRef.current
+      if (g.mode === 'pan' && touches.size === 1) {
+        const dx = e.clientX - g.lastX
+        const dy = e.clientY - g.lastY
+        g.lastX = e.clientX
+        g.lastY = e.clientY
+        const rect = el.getBoundingClientRect()
+        // Convert pixel deltas to viewport percentage
+        const panDx = (dx / Math.max(1, rect.width)) * 100
+        const panDy = (dy / Math.max(1, rect.height)) * 100
+        setUserPan(p => ({
+          x: Math.max(-80, Math.min(80, p.x + panDx)),
+          y: Math.max(-80, Math.min(80, p.y + panDy))
+        }))
+      }
+    }
+
+    const onPointerUp = (e) => {
+      const touches = e.currentTarget._activePointers
+      if (touches) touches.delete(e.pointerId)
+      gestureRef.current.mode = 'none'
+      el.releasePointerCapture(e.pointerId)
+    }
+
+    el.addEventListener('pointerdown', onPointerDown)
+    el.addEventListener('pointermove', onPointerMove)
+    el.addEventListener('pointerup', onPointerUp)
+    el.addEventListener('pointercancel', onPointerUp)
+    return () => {
+      el.removeEventListener('pointerdown', onPointerDown)
+      el.removeEventListener('pointermove', onPointerMove)
+      el.removeEventListener('pointerup', onPointerUp)
+      el.removeEventListener('pointercancel', onPointerUp)
+    }
+  }, [selected])
+
+  // Mouse wheel zoom
+  const handleWheel = (e) => {
+    e.preventDefault()
+    const delta = e.deltaY > 0 ? -0.06 : 0.06
+    setMapZoom(z => clampZoom(z + delta))
+  }
+
   return (
     <div style={{ minHeight: '100dvh', background: '#0a0a14', display: 'flex', flexDirection: 'column', fontFamily: '"Courier New", monospace', color: '#fff', overflow: 'hidden' }}>
       {/* Header */}
-      <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.4rem', borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
+      <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'calc(env(safe-area-inset-top, 0px) + 1rem) 1.4rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
         <button onClick={() => { playBack(); navigate('/') }} style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: '0.72rem', letterSpacing: '0.14em', fontFamily: 'inherit', padding: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
           <img src={homeIconUrl} alt="" style={{ width: 18, height: 18, objectFit: 'contain' }} />
           <span>MENU</span>
         </button>
         <h1 style={{ margin: 0, fontSize: '1rem', fontWeight: 900, letterSpacing: '0.2em', color: '#a855f7' }}>STORY MODE</h1>
-        <div style={{ fontSize: '0.65rem', color: '#555', letterSpacing: '0.1em' }}>
-          {(() => {
-            const count = completedChapters.length;
-            if (count > 7) {
-              return `${count}!/7? CHAPTERS`;
-            }
-            else{return `${count}/7 CHAPTERS`;}
-            
-          })()}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', gap: '0.2rem', background: 'rgba(168,85,247,0.1)', borderRadius: 6, padding: '0.15rem', border: '1px solid rgba(168,85,247,0.2)' }}>
+            <button onClick={zoomOut} title="Zoom Out" style={{ fontSize: '0.9rem', background: 'rgba(168,85,247,0.15)', border: 'none', color: '#a855f7', borderRadius: 4, padding: '0.15rem 0.4rem', cursor: 'pointer', fontWeight: 700, lineHeight: 1 }}>−</button>
+            <button onClick={resetZoom} title="Reset View" style={{ fontSize: '0.65rem', background: 'rgba(168,85,247,0.08)', border: 'none', color: '#8844cc', borderRadius: 4, padding: '0.15rem 0.35rem', cursor: 'pointer', fontWeight: 600, lineHeight: 1 }}>{Math.round(mapZoom * 100)}%</button>
+            <button onClick={zoomIn} title="Zoom In" style={{ fontSize: '0.9rem', background: 'rgba(168,85,247,0.15)', border: 'none', color: '#a855f7', borderRadius: 4, padding: '0.15rem 0.4rem', cursor: 'pointer', fontWeight: 700, lineHeight: 1 }}>+</button>
+          </div>
         </div>
       </header>
 
@@ -198,16 +273,16 @@ export default function StoryMapPage() {
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555', fontSize: '0.8rem', letterSpacing: '0.2em' }}>LOADING…</div>
       ) : (
         <>
-          <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+          <div ref={mapViewportRef} onWheel={handleWheel} style={{ flex: 1, position: 'relative', overflow: 'hidden', cursor: selected === null ? 'grab' : 'default', touchAction: 'none' }}>
             <motion.div
               animate={{ scale: zoomScale, x: `${zoomX}%`, y: `${zoomY}%` }}
               transition={{ type: 'spring', stiffness: 120, damping: 20 }}
-              style={{ position: 'absolute', inset: 0, transformOrigin: '50% 50%' }}
+              style={{ position: 'absolute', inset: 0, transformOrigin: '50% 50%', width: '100%', height: '100%' }}
             >
               <svg
                 viewBox="0 0 100 100"
-                preserveAspectRatio="xMidYMid slice"
-                style={{ width: '100%', height: '100%', position: 'absolute', inset: 0 }}
+                preserveAspectRatio="xMidYMid meet"
+                style={{ width: '100%', height: '100%' }}
               >
                 {stars.map(star => (
                   <motion.circle
@@ -240,17 +315,19 @@ export default function StoryMapPage() {
                   const completed = ch.levels.every(lv => !!progress[`${ch.id}_${lv.id}_completed`])
                   const isSelected = selected === i
                   const p = mapPoints[i]
-                  // Place titles above nodes; clamp to a safe top margin to avoid clipping
-                  const MIN_TOP_Y = 3
-                  const titleY = Math.max(MIN_TOP_Y, p.y - 6)
-                  // Keep labels away from screen edges: nudge inward and switch textAnchor per side
+                  // Position labels further from nodes and adjust for top/bottom half
+                  const isTopHalf = p.y < 50
                   const isLeftSide = p.x < 50
-                  const titleX = isLeftSide ? p.x + 8 : p.x - 8
-                  const titleAnchor = isLeftSide ? 'start' : 'end'
+                  // Increase offset distance to prevent overlap
+                  const labelDist = 10
+                  const titleX = isLeftSide ? p.x - labelDist : p.x + labelDist
+                  const titleY = isTopHalf ? p.y - labelDist : p.y + labelDist + 1
+                  const titleAnchor = isLeftSide ? 'end' : 'start'
+                  const titleDY = isTopHalf ? -2 : 3
                   return (
                     <motion.g
                       key={ch.id}
-                      onClick={() => { if (unlocked) { playZoomIn(); setSelected(i) } }}
+                      onClick={() => { if (unlocked) { playZoomIn(); setSelected(i); setUserPan({ x: 0, y: 0 }) } }}
                       style={{ cursor: unlocked ? 'pointer' : 'not-allowed' }}
                       animate={{ y: [0, -0.9, 0, 0.9, 0] }}
                       transition={{ duration: 2.8 + (i % 4) * 0.5, repeat: Infinity, ease: 'easeInOut' }}
@@ -271,7 +348,7 @@ export default function StoryMapPage() {
                       <text x={p.x} y={p.y + 1.2} textAnchor="middle" fontSize="3" fill={unlocked ? '#fff' : '#444'}>
                         {completed ? '✦' : unlocked ? String(i + 1) : '🔒'}
                       </text>
-                      <text x={titleX} y={titleY} textAnchor={titleAnchor} fontSize="2.2" fill={ch.color} opacity={unlocked ? 0.95 : 0.42} letterSpacing="0.3">
+                      <text x={titleX} y={titleY} dy={titleDY} textAnchor={titleAnchor} fontSize="1.9" fill={ch.color} opacity={unlocked ? 0.9 : 0.35} letterSpacing="0.25" dominantBaseline={isTopHalf ? 'middle' : 'middle'}>
                         {ch.title}
                       </text>
                     </motion.g>
@@ -317,7 +394,7 @@ export default function StoryMapPage() {
                   transition={{ duration: 0.22 }}
                   style={{ position: 'absolute', left: '50%', bottom: '1rem', transform: 'translateX(-50%)', fontSize: '0.7rem', color: '#59607d', letterSpacing: '0.12em', textAlign: 'center', margin: 0, padding: '0.5rem 0.8rem', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8 }}
                 >
-                  TAP AN UNLOCKED CHAPTER
+                  DRAG TO EXPLORE • TAP TO SELECT
                 </motion.p>
               )}
             </AnimatePresence>
