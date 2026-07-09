@@ -637,6 +637,61 @@ function useS3GameLoop(engine, targetLines, levelStartLinesRef, levelKey, onComp
     return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up) }
   }, [togglePause, stickyDelayRef])
 
+  // Gamepad
+  useEffect(() => {
+    const AXIS_DEAD = 0.35
+    const GP_HELD_MAP = { 13: 'softDrop', 14: 'left', 15: 'right' }
+    const GP_ACTION_MAP = {
+      12: 'hardDrop', 0: 'rotateCCW', 1: 'rotateCW', 2: 'rotateCCW',
+      3: 'rotate180', 4: 'hold', 5: 'hold', 6: 'activateZone',
+      7: 'activateZone', 9: 'pause'
+    }
+    const prevButtons = {}
+    let gpHeldRef = { left: false, right: false, softDrop: false }
+    let rafId
+    const poll = () => {
+      const gamepads = navigator.getGamepads?.()
+      if (gamepads) {
+        for (const gp of gamepads) {
+          if (!gp) continue
+          for (const [btn, action] of Object.entries(GP_ACTION_MAP)) {
+            const pressed = gp.buttons[btn]?.pressed
+            const wasPressed = prevButtons[btn]
+            if (pressed && !wasPressed) {
+              if (action === 'pause') {
+                togglePause()
+              } else if (action === 'rewind') {
+                try { window.dispatchEvent(new CustomEvent('s3-rewind', { detail: { action: 'rewind', source: 'gamepad' } })) } catch {}
+              } else {
+                const delay = stickyDelayRef.current
+                const dispatch = () => { actionRef.current[action] = true }
+                if (delay > 0) { setTimeout(dispatch, delay) } else { dispatch() }
+              }
+              try { window.dispatchEvent(new Event('bg-beat')) } catch {}
+            }
+            prevButtons[btn] = pressed
+          }
+          for (const [btn, held] of Object.entries(GP_HELD_MAP)) {
+            const pressed = gp.buttons[btn]?.pressed
+            heldRef.current[held] = pressed
+          }
+          if (gp.axes.length >= 4) {
+            const hAxis = gp.axes[2], vAxis = gp.axes[3]
+            gpHeldRef.left = Math.abs(hAxis) > AXIS_DEAD && hAxis < 0
+            gpHeldRef.right = Math.abs(hAxis) > AXIS_DEAD && hAxis > 0
+            gpHeldRef.softDrop = Math.abs(vAxis) > AXIS_DEAD && vAxis > 0
+            heldRef.current.left = heldRef.current.left || gpHeldRef.left
+            heldRef.current.right = heldRef.current.right || gpHeldRef.right
+            heldRef.current.softDrop = heldRef.current.softDrop || gpHeldRef.softDrop
+          }
+        }
+      }
+      rafId = requestAnimationFrame(poll)
+    }
+    rafId = requestAnimationFrame(poll)
+    return () => cancelAnimationFrame(rafId)
+  }, [togglePause, stickyDelayRef])
+
   useEffect(() => {
     prevGameOverRef.current = false
     let frameId, lastTime = performance.now()
