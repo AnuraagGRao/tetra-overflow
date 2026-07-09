@@ -94,7 +94,7 @@ export default function StoryMapPage() {
   const [selected, setSelected] = useState(null) // chIdx
   const [loading, setLoading] = useState(true)
   const [userPan, setUserPan] = useState({ x: 0, y: 0 })
-  const [mapZoom, setMapZoom] = useState(0.55) // Manual zoom level (0.5 - 1.3)
+  const [mapZoom, setMapZoom] = useState(0.38) // Manual zoom level (0.3 - 2.0 = 30% - 200%)
   const gestureRef = useRef({ mode: 'none', lastX: 0, lastY: 0 })
   const mapViewportRef = useRef(null)
 
@@ -117,16 +117,16 @@ export default function StoryMapPage() {
 
   const mapPoints = useMemo(() => {
     const N = visibleChapters.length || 1
-    // Diagonal arrangement from bottom-left to top-right - compressed vertically
-    const xStart = 15
-    const xEnd = 85
-    const yStart = 72 // Earth at bottom
-    const yEnd = 28  // Light at top
+    // Zig-zag horizontal layout: nodes alternate up/down vertically
+    // Spread them horizontally across full width with large gaps
+    const xStart = 8
+    const xEnd = 92
+    const yTop = 25    // Top level
+    const yBottom = 70 // Bottom level
     const stepX = N > 1 ? (xEnd - xStart) / (N - 1) : 0
-    const stepY = N > 1 ? (yEnd - yStart) / (N - 1) : 0
     return visibleChapters.map((_, i) => ({
       x: xStart + i * stepX,
-      y: yStart + i * stepY,
+      y: i % 2 === 0 ? yTop : yBottom, // Alternate between top and bottom
     }))
   }, [visibleChapters])
 
@@ -156,16 +156,16 @@ export default function StoryMapPage() {
   const isPortrait = window.innerWidth < window.innerHeight
   
   // Combine manual zoom with responsive base scale
-  const zoomScale = selectedPoint ? mapZoom * 1.18 : mapZoom
+  const zoomScale = selectedPoint ? mapZoom * 1.5 : mapZoom
   // When chapter selected: auto-center it. Otherwise use manual pan.
-  const zoomX = selectedPoint ? (50 - selectedPoint.x) * 2.1 : userPan.x
-  const zoomY = selectedPoint ? (50 - selectedPoint.y) * 2.4 : userPan.y
+  const zoomX = selectedPoint ? (50 - selectedPoint.x) * 2.2 : userPan.x
+  const zoomY = selectedPoint ? (50 - selectedPoint.y) * 2.6 : userPan.y
 
-  // Zoom controls
-  const clampZoom = (z) => Math.max(0.5, Math.min(1.3, z))
-  const zoomIn = () => { playZoomIn(); setMapZoom(z => clampZoom(z + 0.1)) }
-  const zoomOut = () => { playZoomOut(); setMapZoom(z => clampZoom(z - 0.1)) }
-  const resetZoom = () => { setSelected(null); setMapZoom(0.55); setUserPan({ x: 0, y: 0 }) }
+  // Zoom controls - extended range for better exploration
+  const clampZoom = (z) => Math.max(0.3, Math.min(2.0, z))
+  const zoomIn = () => { playZoomIn(); setMapZoom(z => clampZoom(z + 0.15)) }
+  const zoomOut = () => { playZoomOut(); setMapZoom(z => clampZoom(z - 0.15)) }
+  const resetZoom = () => { setSelected(null); setMapZoom(0.38); setUserPan({ x: 0, y: 0 }) }
 
   // How many chapters unlocked
   const _unlockedChapters = STORY_CHAPTERS.filter((_, i) => isLevelUnlocked(i, 0, progress))
@@ -218,9 +218,11 @@ export default function StoryMapPage() {
         // Convert pixel deltas to viewport percentage
         const panDx = (dx / Math.max(1, rect.width)) * 100
         const panDy = (dy / Math.max(1, rect.height)) * 100
+        // Scale pan by zoom level for responsive dragging at any zoom
+        const zoomAdjust = Math.max(0.5, mapZoom)
         setUserPan(p => ({
-          x: Math.max(-80, Math.min(80, p.x + panDx)),
-          y: Math.max(-80, Math.min(80, p.y + panDy))
+          x: Math.max(-150, Math.min(150, p.x + panDx / zoomAdjust)),
+          y: Math.max(-150, Math.min(150, p.y + panDy / zoomAdjust))
         }))
       }
     }
@@ -316,14 +318,11 @@ export default function StoryMapPage() {
                   const isSelected = selected === i
                   const p = mapPoints[i]
                   // Position labels further from nodes and adjust for top/bottom half
-                  const isTopHalf = p.y < 50
-                  const isLeftSide = p.x < 50
-                  // Increase offset distance to prevent overlap
-                  const labelDist = 10
-                  const titleX = isLeftSide ? p.x - labelDist : p.x + labelDist
-                  const titleY = isTopHalf ? p.y - labelDist : p.y + labelDist + 1
-                  const titleAnchor = isLeftSide ? 'end' : 'start'
-                  const titleDY = isTopHalf ? -2 : 3
+                  // Position text BELOW nodes with good spacing
+                  const titleX = p.x
+                  const titleY = p.y + 8.5  // Below the node (8.5 units down in SVG coords)
+                  const titleAnchor = 'middle'
+                  const titleDY = 0
                   return (
                     <motion.g
                       key={ch.id}
@@ -348,7 +347,7 @@ export default function StoryMapPage() {
                       <text x={p.x} y={p.y + 1.2} textAnchor="middle" fontSize="3" fill={unlocked ? '#fff' : '#444'}>
                         {completed ? '✦' : unlocked ? String(i + 1) : '🔒'}
                       </text>
-                      <text x={titleX} y={titleY} dy={titleDY} textAnchor={titleAnchor} fontSize="1.9" fill={ch.color} opacity={unlocked ? 0.9 : 0.35} letterSpacing="0.25" dominantBaseline={isTopHalf ? 'middle' : 'middle'}>
+                      <text x={titleX} y={titleY} textAnchor={titleAnchor} fontSize="4.2" fontWeight="700" fill={ch.color} opacity={unlocked ? 1 : 0.4} letterSpacing="0.5" dominantBaseline="middle" style={{ textShadow: '0 0 2px rgba(0,0,0,0.8)' }}>
                         {ch.title}
                       </text>
                     </motion.g>

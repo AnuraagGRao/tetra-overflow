@@ -880,7 +880,7 @@ export default function StoryLevelPage() {
         <div style={{ position: 'absolute', inset: 0, zIndex: 10, display: 'flex', flexDirection: 'column', pointerEvents: phase === PHASE.TRANSITION ? 'none' : 'auto' }}>
           {/* HUD bar */}
           {!focus && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: isLandscape ? '4px 10px' : '6px 14px', background: 'rgba(0,0,0,0.55)', color: '#fff', fontSize: isLandscape ? '0.58rem' : '0.72rem', letterSpacing: '0.1em', flexShrink: 0, backdropFilter: 'blur(6px)', gap: isLandscape ? 4 : 8, flexWrap: isLandscape ? 'wrap' : 'nowrap' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: isLandscape ? '6px 10px' : '6px 14px', background: 'rgba(0,0,0,0.55)', color: '#fff', fontSize: isLandscape ? '0.65rem' : '0.72rem', letterSpacing: '0.1em', flexShrink: 0, backdropFilter: 'blur(6px)', gap: isLandscape ? 6 : 8, flexWrap: 'nowrap', minHeight: isLandscape ? 28 : undefined }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
                 <span style={{ fontSize: isLandscape ? '0.45rem' : '0.5rem', letterSpacing: '0.14em', color: chapter.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{chapter.title}</span>
                 {!isLandscape && <span style={{ color: '#333' }}>›</span>}
@@ -950,24 +950,48 @@ export default function StoryLevelPage() {
           )}
 
           {/* Middle: slim-left | canvas | hold+zone+next-right */}
-          <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'stretch' }}>
-            {/* Left strip: slim score / mode accent (no controls) */}
-            {!focus && (<div style={{ width: 6, flexShrink: 0, background: chapter.color, opacity: 0.25 }} />)}
+          <div style={{ flex: 1, minHeight: 0, display: isLandscape ? 'grid' : 'flex', gridTemplateColumns: isLandscape ? '110px 1fr 100px' : undefined, alignItems: 'stretch', gap: isLandscape ? 10 : 0, padding: isLandscape ? '10px' : undefined, background: isLandscape ? 'rgba(0,0,0,0.15)' : 'transparent', overflow: isLandscape ? 'hidden' : 'visible' }}>
+            {/* Left panel: HOLD + stats (landscape only) */}
+            {isLandscape && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0, minHeight: 0 }}>
+                <div style={{ background: 'rgba(0,0,0,0.4)', borderRadius: 6, padding: 8, border: `1px solid ${chapter.color}22` }}>
+                  <div style={{ fontSize: '0.45rem', letterSpacing: '0.12em', color: '#888', marginBottom: 4, textAlign: 'center', textTransform: 'uppercase' }}>Hold</div>
+                  <div style={{ display: 'flex', justifyContent: 'center' }}>
+                    <PieceMini type={state.hold} pieceTheme={pieceTheme} size={10} />
+                  </div>
+                </div>
+                <div style={{ background: 'rgba(0,0,0,0.4)', borderRadius: 6, padding: 6, border: `1px solid ${chapter.color}22`, fontSize: '0.45rem', color: '#aaa', flexShrink: 1, minHeight: 0, overflow: 'auto' }}>
+                  <div style={{ marginBottom: 4, textAlign: 'center', color: '#00d4ff', fontWeight: 700, whiteSpace: 'nowrap' }}>{state.score.toLocaleString()}</div>
+                  <div style={{ fontSize: '0.38rem', textAlign: 'center', lineHeight: 1.3 }}>
+                    <div>L{state.level}</div>
+                    <div>{linesThisLevel}/{effectiveTargetLines || '∞'}</div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Canvas */}
+            {!isLandscape && (<div style={{ width: 6, flexShrink: 0, background: chapter.color, opacity: 0.25 }} />)}
             <SynesthesiaMotionLayer
               className="mobile-canvas-wrap"
               style={{
                 background: 'transparent',
                 flex: 1,
                 minWidth: 0,
-                paddingBottom: focus && showOnScreenControls
-                  ? isLandscape ? 'calc(3.5rem + env(safe-area-inset-bottom, 0px))' : 'calc(4.5rem + env(safe-area-inset-bottom, 0px))'
+                minHeight: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                overflow: 'hidden',
+                paddingBottom: focus && showOnScreenControls && !isLandscape
+                  ? 'calc(4.5rem + env(safe-area-inset-bottom, 0px))'
                   : 0,
               }}
             >
+                {/* Canvas wrapper that fits entire board in container */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', maxWidth: '100%', maxHeight: '100%', padding: isLandscape ? '10px' : 0 }}>
                 {!isMobile ? (
-                  <div style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}>
+                  <div style={{ transform: `scale(${zoom})`, transformOrigin: 'center center', width: 'fit-content', height: 'fit-content', maxWidth: '90%', maxHeight: '90%' }}>
                     <GameCanvas
                       state={state}
                       onTap={() => { if (config?.sfxEnabled && !paused) try { playRotateSFX(pieceTheme || 'classic') } catch {}; emitSynesthesia(SYNESTHESIA_EVENT.ROTATE, { intensity: 1.0, source: 'story-tap' }); triggerAction('rotateCW'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
@@ -991,6 +1015,7 @@ export default function StoryLevelPage() {
                     boardAlpha={boardAlpha}
                   />
                 )}
+                </div>
                 {/* Focus toggle styled like Solo's UI tab */}
                 <button
                   onClick={() => setFocus(f => !f)}
@@ -1093,7 +1118,28 @@ export default function StoryLevelPage() {
                 )}
             </SynesthesiaMotionLayer>
 
-            {/* Zone end overlay — shows lines cleared + bonus when Zone deactivates */}
+            {/* Right panel: Next + Zone meter (landscape only) */}
+            {isLandscape && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0, minHeight: 0 }}>
+                <div style={{ background: 'rgba(0,0,0,0.4)', borderRadius: 6, padding: 8, border: `1px solid ${chapter.color}22`, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div style={{ fontSize: '0.45rem', letterSpacing: '0.12em', color: '#888', textAlign: 'center', textTransform: 'uppercase' }}>Next</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, justifyContent: 'center', alignItems: 'center', flex: 1, minHeight: 0, overflow: 'auto' }}>
+                    {(state.queue ?? []).slice(0, 3).map((t, i) => (
+                      <PieceMini key={i} type={t} pieceTheme={pieceTheme} size={8} />
+                    ))}
+                  </div>
+                </div>
+                <div style={{ background: `${state.zoneActive ? '#00e5ff22' : state.zoneMeter >= ZONE_MIN_METER ? '#22d3ee22' : '#ffffff08'}`, borderRadius: 6, padding: 6, border: `1px solid ${state.zoneActive ? '#00e5ff44' : state.zoneMeter >= ZONE_MIN_METER ? '#22d3ee44' : `${chapter.color}22`}`, display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ fontSize: '0.40rem', letterSpacing: '0.12em', color: state.zoneActive ? '#00e5ff' : '#888', textTransform: 'uppercase' }}>
+                    {state.zoneActive ? `${Math.ceil(state.zoneTimer/1000)}s` : 'Zone'}
+                  </div>
+                  <div style={{ width: 16, height: 40, background: 'rgba(0,0,0,0.3)', borderRadius: 3, border: `1px solid ${state.zoneActive ? '#00e5ff' : '#555'}`, position: 'relative', overflow: 'hidden' }}>
+                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: `${Math.max(0, Math.min(100, state.zoneActive ? (state.zoneTimer / Math.max(1, state.zoneDuration || ZONE_DURATION_MS)) * 100 : (state.zoneMeter || 0)))}%`, background: state.zoneActive ? '#00e5ff' : state.zoneMeter >= ZONE_MIN_METER ? '#22d3ee' : '#666', transition: 'height 0.1s linear' }} />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
             <AnimatePresence>
               {state.zoneEndResult && (
                 <motion.div className="zone-end-overlay"
@@ -1117,9 +1163,6 @@ export default function StoryLevelPage() {
                 </motion.div>
               )}
             </AnimatePresence>
-
-            {/* Right strip removed per request to maximize board area */}
-          </div>
 
           {showOnScreenControls && !focus && (
             <TouchControls onPress={handlePress} onRelease={handleRelease} />
