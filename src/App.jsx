@@ -1376,15 +1376,17 @@ export default function App() {
     return () => window.removeEventListener('tetris:nowplaying', handler)
   }, [])
 
-  // Resize → isMobile
+  // Resize → detect portrait vs landscape
   useEffect(() => {
     const handler = () => {
-      const m = window.innerWidth < 768 || (window.innerHeight < 600 && ('ontouchstart' in window || navigator.maxTouchPoints > 0)) || (window.innerWidth > window.innerHeight && ('ontouchstart' in window || navigator.maxTouchPoints > 0))
-      const ls = window.innerWidth > window.innerHeight && ('ontouchstart' in window || navigator.maxTouchPoints > 0)
-      isMobileRef.current = m
-      setIsMobile(m)
+      // Landscape when wider than tall
+      const ls = window.innerWidth > window.innerHeight
       setIsLandscape(ls)
+      // Mobile: always true (removed desktop mode)
+      setIsMobile(true)
+      isMobileRef.current = true
     }
+    handler() // Run on mount
     window.addEventListener('resize', handler)
     return () => window.removeEventListener('resize', handler)
   }, [])
@@ -2012,6 +2014,16 @@ export default function App() {
     }
     window.addEventListener('gamepadconnected', handleGamepadConnected)
     window.addEventListener('gamepaddisconnected', handleGamepadDisconnected)
+    
+    // Initial check for already-connected gamepads (Steam Deck workaround)
+    // Some devices have controllers connected before page load that don't fire events
+    const checkInitialGamepads = () => {
+      const gps = navigator.getGamepads?.()
+      const hasAny = gps && Array.from(gps).some(g => g !== null)
+      if (hasAny) setHasGamepad(true)
+    }
+    checkInitialGamepads()
+    
     const poll = () => {
       const gamepads = navigator.getGamepads?.()
       if (gamepads) {
@@ -3129,12 +3141,9 @@ export default function App() {
     <>
       {isLoading && <LoadingScreen onDone={() => setIsLoading(false)} />}
       {showSWBanner && <SWUpdateBanner onReload={() => window.location.reload()} onHardRefresh={hardRefreshApp} />}
-      <div className={`app${state.zoneActive ? ' zone-active' : ''}${config.showOnScreenControls ? ' osc-on' : ''}`} style={!isMobile ? { '--board-w': `calc(260px * ${zoom})` } : undefined}>
+      <div className={`app${state.zoneActive ? ' zone-active' : ''}${config.showOnScreenControls ? ' osc-on' : ''}`}>
       {renderInstallBanner()}
-      {isMobile
-        ? (isLandscape ? renderMobileLandscape() : renderMobileNormal())
-        : renderDesktop()
-      }
+      {isLandscape ? renderMobileLandscape() : renderMobileNormal()}
       {showAbout && (
         <AboutPage
           onClose={() => setShowAbout(false)}

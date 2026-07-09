@@ -773,6 +773,8 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; 
     position: relative;
     z-index: 2; /* Keep above fixed backgrounds */
     transition: max-height 0.35s ease, opacity 0.3s ease;
+    /* iPhone safe area padding */
+    padding-top: env(safe-area-inset-top, 0px);
   }
 
   .mobile-hud-hold {
