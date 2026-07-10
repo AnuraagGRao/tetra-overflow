@@ -16,6 +16,7 @@ import { Season3MusicManager } from '../audio/season3MusicManager'
 import { emitSynesthesia, SYNESTHESIA_EVENT } from '../logic/synesthesiaBus'
 import { hardResetAndReload } from '../logic/hardReset'
 import { BG_TYPE_TO_PIECE_THEME } from '../logic/themeMappings'
+import { useResponsiveHUD } from '../hooks/useResponsiveHUD'
 
 const MAX_FRAME_MS = 34
 const VISIBLE_ROWS = BOARD_HEIGHT - 2   // rows 2-21 visible (rows 0-1 are spawn buffer)
@@ -741,6 +742,14 @@ export default function Season3LevelPage() {
   const [easyMode,   setEasyMode]   = useState(() => { try { return localStorage.getItem('story-easy') === '1' } catch { return false } })
   const [focus,      setFocus]      = useState(() => { try { return localStorage.getItem('focus-mode') === '1' } catch { return false } })
   const [isMobile,   setIsMobile]   = useState(() => window.innerWidth < 768)
+  const [isLandscape, setIsLandscape] = useState(() => {
+    const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0
+    return window.innerWidth > window.innerHeight && hasTouch
+  })
+  
+  // Get responsive HUD sizing that matches SOLO mode
+  const hudSizing = useResponsiveHUD(isLandscape)
+  
   const [zoom,       setZoom]       = useState(() => {
     const saved = Number(localStorage.getItem('tetris-zoom') || 1)
     return saved >= 1 && saved <= 1.5 ? saved : 1
@@ -796,7 +805,11 @@ export default function Season3LevelPage() {
   useEffect(() => { try { localStorage.setItem('story-easy', easyMode ? '1' : '0') } catch {} }, [easyMode])
 
   useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth < 768)
+    const onResize = () => {
+      setIsMobile(window.innerWidth < 768)
+      const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0
+      setIsLandscape(window.innerWidth > window.innerHeight && hasTouch)
+    }
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
@@ -1210,9 +1223,9 @@ export default function Season3LevelPage() {
         <div style={{ position: 'absolute', inset: 0, zIndex: 10, display: 'flex', flexDirection: 'column' }}>
           {/* HUD */}
           {!focus && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: '0.7rem', letterSpacing: '0.1em', flexShrink: 0, backdropFilter: 'blur(6px)', gap: 6, flexWrap: 'nowrap' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: hudSizing.hudPadding, background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: hudSizing.isMobile ? (isLandscape ? '0.8rem' : '0.85rem') : '0.85rem', letterSpacing: '0.1em', flexShrink: 0, backdropFilter: 'blur(6px)', gap: 8, flexWrap: 'nowrap', minHeight: hudSizing.hudMinHeight }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                <span style={{ fontSize: '0.6rem', color: epochColor, fontWeight: 700 }}>{level.title}</span>
+                <span style={{ fontSize: hudSizing.statsLabel, color: epochColor, fontWeight: 700 }}>{level.title}</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                 {abilityActive && (
@@ -1288,12 +1301,48 @@ export default function Season3LevelPage() {
           })()}
 
           {/* Canvas area */}
-          <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'stretch' }}>
-            {!focus && <div style={{ width: 5, flexShrink: 0, background: epochColor, opacity: 0.22 }} />}
+          <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: isLandscape ? `clamp(90px, 12%, 140px) 1fr clamp(90px, 12%, 140px)` : `68px 1fr`, alignItems: 'stretch', gap: isLandscape ? 12 : 6, padding: isLandscape ? '12px' : '8px 6px 8px 6px', background: isLandscape ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.08)', overflow: isLandscape ? 'hidden' : 'visible' }}>
+            {/* Left panel: HOLD + stats */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: isLandscape ? 8 : 4, minWidth: 0, minHeight: 0 }}>
+              {/* Hold box */}
+              <div style={{ background: 'rgba(0,0,0,0.4)', borderRadius: isLandscape ? 8 : 6, padding: isLandscape ? '10px' : '8px', border: `1px solid ${epochColor}22`, display: 'flex', flexDirection: 'column', gap: isLandscape ? 4 : 2, alignItems: 'center' }}>
+                <div style={{ fontSize: hudSizing.statsLabel, letterSpacing: '0.12em', color: '#888', marginBottom: isLandscape ? 2 : 0, textAlign: 'center', textTransform: 'uppercase', fontWeight: 600 }}>Hold</div>
+                <div style={{ display: 'flex', justifyContent: 'center', flex: 1, minHeight: 0 }}>
+                  <PieceMini type={state.hold} pieceTheme={pieceTheme} size={isLandscape ? 12 : 10} />
+                </div>
+              </div>
+              {/* Stats box (landscape only) */}
+              {isLandscape && (
+                <div style={{ background: 'rgba(0,0,0,0.4)', borderRadius: 8, padding: '8px', border: `1px solid ${epochColor}22`, fontSize: hudSizing.statsLabel, color: '#aaa', flexShrink: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ marginBottom: 2, textAlign: 'center', color: '#00d4ff', fontWeight: 700, whiteSpace: 'nowrap', fontSize: hudSizing.statsValue }}>
+                    {state.score.toLocaleString()}
+                  </div>
+                  <div style={{ fontSize: hudSizing.statsLabel, textAlign: 'center', lineHeight: 1.3 }}>
+                    <div>L{state.level}</div>
+                    <div>{Math.min(linesThisLevel, effectiveTargetLines)}/{effectiveTargetLines}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {!isLandscape && !focus && <div style={{ width: 5, flexShrink: 0, background: epochColor, opacity: 0.22 }} />}
 
             <SynesthesiaMotionLayer
               className="mobile-canvas-wrap"
-              style={{ background: 'transparent', flex: 1, minWidth: 0, paddingBottom: focus && showOnScreenControls ? 'calc(4.5rem + env(safe-area-inset-bottom, 0px))' : 0 }}
+              style={{
+                background: 'transparent',
+                gridColumn: isLandscape ? 2 : undefined,
+                flex: isLandscape ? undefined : 1,
+                minWidth: 0,
+                minHeight: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                overflow: 'hidden',
+                paddingBottom: focus && showOnScreenControls && !isLandscape
+                  ? 'calc(4.5rem + env(safe-area-inset-bottom, 0px))'
+                  : 0,
+              }}
             >
               {isMobile ? (
                 <GameCanvas
@@ -1308,7 +1357,7 @@ export default function Season3LevelPage() {
                   boardAlpha={boardAlpha}
                 />
               ) : (
-                <div style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}>
+                <div style={{ transform: `scale(${zoom})`, transformOrigin: 'center center', maxWidth: '100%', maxHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <GameCanvas
                     state={{ ...state, queue: hideQueue && !state.zoneActive ? [] : state.queue }}
                     onTap={() => { if (config?.sfxEnabled && !paused) try { playRotateSFX(pieceTheme || 'classic') } catch {}; emitSynesthesia(SYNESTHESIA_EVENT.ROTATE, { intensity: 1.0, source: 's3-tap' }); triggerAction('rotateCW'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
@@ -1597,26 +1646,47 @@ export default function Season3LevelPage() {
               )}
             </SynesthesiaMotionLayer>
 
-            {showOnScreenControls && !focus && (
+            {/* Right panel: NEXT + REWIND */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: isLandscape ? 8 : 4, minWidth: 0, minHeight: 0 }}>
+              {/* Next box */}
+              <div style={{ background: 'rgba(0,0,0,0.4)', borderRadius: isLandscape ? 8 : 6, padding: isLandscape ? '10px' : '8px', border: `1px solid ${epochColor}22`, flexGrow: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: isLandscape ? 4 : 2, alignItems: 'center' }}>
+                <div style={{ fontSize: hudSizing.statsLabel, letterSpacing: '0.12em', color: '#888', marginBottom: isLandscape ? 0 : 0, textAlign: 'center', textTransform: 'uppercase', fontWeight: 600 }}>Next</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: isLandscape ? 2 : 1, justifyContent: 'center', alignItems: 'center' }}>
+                  {state.queue.slice(0, isLandscape ? 3 : 2).map((type, i) => (
+                    <PieceMini key={i} type={type} pieceTheme={pieceTheme} size={isLandscape ? 11 : 9} />
+                  ))}
+                </div>
+              </div>
+              {/* Rewind gauge (Season 3 specific) */}
+              {hasRewind && (
+                <RewindGauge
+                  fill={rewindGauge}
+                  ready={rewindGauge >= 1}
+                  onActivate={activateRewind}
+                />
+              )}
+            </div>
+          </div>
+
+          {showOnScreenControls && !focus && (
+            <TouchControls
+              onPress={handlePress}
+              onRelease={handleRelease}
+              onHardDrop={handleHardDrop}
+              haptic={config.hapticEnabled}
+            />
+          )}
+
+          {showOnScreenControls && focus && (
+            <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 60, pointerEvents: 'auto' }}>
               <TouchControls
                 onPress={handlePress}
                 onRelease={handleRelease}
                 onHardDrop={handleHardDrop}
                 haptic={config.hapticEnabled}
               />
-            )}
-
-            {showOnScreenControls && focus && (
-              <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 60, pointerEvents: 'auto' }}>
-                <TouchControls
-                  onPress={handlePress}
-                  onRelease={handleRelease}
-                  onHardDrop={handleHardDrop}
-                  haptic={config.hapticEnabled}
-                />
-              </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
 

@@ -15,6 +15,7 @@ import { emitSynesthesia, SYNESTHESIA_EVENT } from '../logic/synesthesiaBus'
 import homeIconUrl from '../icons/home-button.png'
 import { BOARD_HEIGHT } from '../logic/tetrominoes'
 import TouchControls from '../components/TouchControls'
+import { useResponsiveHUD } from '../hooks/useResponsiveHUD'
 
 const KEY_BINDINGS = {
   ArrowLeft:  { held: 'left' },
@@ -527,6 +528,7 @@ export default function MultiplayerPage() {
     const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0
     return window.innerWidth > window.innerHeight && hasTouch
   })
+  const hudSizing = useResponsiveHUD(isLandscape)
 
   const engine = useMemo(() => new TetrisEngine(), [])
 
@@ -1421,8 +1423,8 @@ export default function MultiplayerPage() {
               style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
 
               {/* HUD bar */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: isLandscape ? '3px 8px' : '4px 10px', background: 'rgba(0,0,0,0.7)', flexShrink: 0, backdropFilter: 'blur(6px)', gap: isLandscape ? 4 : 6 }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: isLandscape ? 0.5 : 1, minWidth: 68, fontSize: isLandscape ? '0.4rem' : '0.46rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: hudSizing.hudPadding, background: 'rgba(0,0,0,0.7)', flexShrink: 0, backdropFilter: 'blur(6px)', gap: isLandscape ? 4 : 8 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: isLandscape ? 0.5 : 1, minWidth: 68, fontSize: hudSizing.isMobile ? (isLandscape ? '0.52rem' : '0.62rem') : '0.85rem' }}>
                   <span style={{ color: '#666', letterSpacing: '0.1em', lineHeight: 1 }}>RND {currentRound}/{bestOf}</span>
                   <span style={{ color: '#444', letterSpacing: '0.08em', lineHeight: 1 }}>
                     P {Math.max(0, (lobby?.players || []).filter(p => !p.gameOver).length)}/{(lobby?.players || []).length}
@@ -1431,16 +1433,16 @@ export default function MultiplayerPage() {
                     {myWins}–{opponents.map(o => roundWins[o.uid] ?? 0).join('–')}
                   </span>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: isLandscape ? 0.5 : 1, fontSize: isLandscape ? '0.4rem' : undefined }}>
-                  <span style={{ color: '#00d4ff', fontWeight: 700, fontSize: isLandscape ? '0.56rem' : '0.72rem', display: 'flex', alignItems: 'center', gap: isLandscape ? 3 : 6, lineHeight: 1 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: isLandscape ? 0.5 : 1, fontSize: hudSizing.isMobile ? (isLandscape ? '0.52rem' : '0.62rem') : '0.85rem' }}>
+                  <span style={{ color: '#00d4ff', fontWeight: 700, fontSize: hudSizing.statsValue, display: 'flex', alignItems: 'center', gap: isLandscape ? 3 : 6, lineHeight: 1 }}>
                     {myState.score.toLocaleString()}
                     {userProfile?.selectedBadge && (
-                      <span style={{ fontSize: isLandscape ? '0.42rem' : '0.55rem', color: '#c084fc', border: '1px solid #c084fc55', borderRadius: 3, padding: '0 3px', letterSpacing: '0.10em' }}>{String(userProfile.selectedBadge).replace('badge_', '').toUpperCase()}</span>
+                      <span style={{ fontSize: hudSizing.statsLabel, color: '#c084fc', border: '1px solid #c084fc55', borderRadius: 3, padding: '0 3px', letterSpacing: '0.10em' }}>{String(userProfile.selectedBadge).replace('badge_', '').toUpperCase()}</span>
                     )}
                   </span>
                   <span style={{ color: '#555', letterSpacing: '0.08em', lineHeight: 1 }}>LVL {myState.level}</span>
                   {(myState.combo > 1 || myState.backToBack) && !isLandscape && (
-                    <span style={{ fontSize: '0.44rem', color: '#fbbf24', letterSpacing: '0.08em', fontWeight: 700, lineHeight: 1 }}>
+                    <span style={{ fontSize: hudSizing.statsLabel, color: '#fbbf24', letterSpacing: '0.08em', fontWeight: 700, lineHeight: 1 }}>
                       {myState.combo > 1 ? `CMB x${myState.combo}` : ''}
                       {myState.combo > 1 && myState.backToBack ? '  ·  ' : ''}
                       {myState.backToBack ? `B2B x${(myState.b2bCount ?? 0) + 1}` : ''}
@@ -1449,7 +1451,7 @@ export default function MultiplayerPage() {
                 </div>
                 <div style={{ display: 'flex', gap: isLandscape ? 2 : 4, alignItems: 'center' }}>
                   {/* Removed top focus toggle per request */}
-                  <button onClick={toggleMute} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.18)', color: muted ? '#444' : '#888', cursor: 'pointer', fontSize: isLandscape ? '0.48rem' : '0.56rem', padding: isLandscape ? '1px 4px' : '2px 6px', borderRadius: 4, fontFamily: 'inherit' }}>
+                  <button onClick={toggleMute} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.18)', color: muted ? '#444' : '#888', cursor: 'pointer', fontSize: hudSizing.statsLabel, padding: isLandscape ? '1px 4px' : '2px 6px', borderRadius: 4, fontFamily: 'inherit' }}>
                     {muted ? '🔇' : '🔊'}
                   </button>
                 </div>

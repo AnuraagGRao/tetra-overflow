@@ -16,6 +16,7 @@ import { Season2MusicManager } from '../audio/season2MusicManager'
 import { emitSynesthesia, SYNESTHESIA_EVENT } from '../logic/synesthesiaBus'
 import { hardResetAndReload } from '../logic/hardReset'
 import { BG_TYPE_TO_PIECE_THEME } from '../logic/themeMappings'
+import { useResponsiveHUD } from '../hooks/useResponsiveHUD'
 
 const MAX_FRAME_MS = 34
 
@@ -676,6 +677,14 @@ export default function ZodiacLevelPage() {
   const [easyMode,   setEasyMode]   = useState(() => { try { return localStorage.getItem('story-easy') === '1' } catch { return false } })
   const [focus,      setFocus]      = useState(() => { try { return localStorage.getItem('focus-mode') === '1' } catch { return false } })
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768)
+  const [isLandscape, setIsLandscape] = useState(() => {
+    const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0
+    return window.innerWidth > window.innerHeight && hasTouch
+  })
+  
+  // Get responsive HUD sizing that matches SOLO mode
+  const hudSizing = useResponsiveHUD(isLandscape)
+  
   const [zoom, setZoom] = useState(() => {
     const saved = Number(localStorage.getItem('tetris-zoom') || 1)
     return saved >= 1 && saved <= 1.5 ? saved : 1
@@ -742,7 +751,11 @@ export default function ZodiacLevelPage() {
   }, [])
 
   useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth < 768)
+    const onResize = () => {
+      setIsMobile(window.innerWidth < 768)
+      const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0
+      setIsLandscape(window.innerWidth > window.innerHeight && hasTouch)
+    }
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
@@ -1144,10 +1157,10 @@ export default function ZodiacLevelPage() {
         <div style={{ position: 'absolute', inset: 0, zIndex: 10, display: 'flex', flexDirection: 'column' }}>
           {/* HUD */}
           {!focus && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 14px', background: 'rgba(0,0,0,0.55)', color: '#fff', fontSize: '0.72rem', letterSpacing: '0.1em', flexShrink: 0, backdropFilter: 'blur(6px)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: '1.1rem', filter: `drop-shadow(0 0 6px ${boss.color})` }}>{boss.glyph}</span>
-                <span style={{ color: boss.color, fontWeight: 700, fontSize: '0.68rem' }}>{boss.name}</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: hudSizing.hudPadding, background: 'rgba(0,0,0,0.55)', color: '#fff', fontSize: hudSizing.isMobile ? (isLandscape ? '0.8rem' : '0.85rem') : '0.85rem', letterSpacing: '0.1em', flexShrink: 0, backdropFilter: 'blur(6px)', gap: isLandscape ? 8 : 10, flexWrap: 'nowrap', minHeight: hudSizing.hudMinHeight }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                <span style={{ fontSize: '1.1rem', filter: `drop-shadow(0 0 6px ${boss.color})`, flexShrink: 0 }}>{boss.glyph}</span>
+                <span style={{ color: boss.color, fontWeight: 700, fontSize: hudSizing.statsLabel, whiteSpace: 'nowrap' }}>{boss.name}</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 {/* Boss ability indicator */}
@@ -1230,16 +1243,45 @@ export default function ZodiacLevelPage() {
           })()}
 
           {/* Canvas area */}
-          <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'stretch' }}>
-            {!focus && <div style={{ width: 6, flexShrink: 0, background: boss.color, opacity: 0.25 }} />}
+          <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: isLandscape ? `clamp(90px, 12%, 140px) 1fr clamp(90px, 12%, 140px)` : `68px 1fr`, alignItems: 'stretch', gap: isLandscape ? 12 : 6, padding: isLandscape ? '12px' : '8px 6px 8px 6px', background: isLandscape ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.08)', overflow: isLandscape ? 'hidden' : 'visible' }}>
+            {/* Left panel: HOLD + stats */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: isLandscape ? 8 : 4, minWidth: 0, minHeight: 0 }}>
+              {/* Hold box */}
+              <div style={{ background: 'rgba(0,0,0,0.4)', borderRadius: isLandscape ? 8 : 6, padding: isLandscape ? '10px' : '8px', border: `1px solid ${boss.color}22`, display: 'flex', flexDirection: 'column', gap: isLandscape ? 4 : 2, alignItems: 'center' }}>
+                <div style={{ fontSize: hudSizing.statsLabel, letterSpacing: '0.12em', color: '#888', marginBottom: isLandscape ? 2 : 0, textAlign: 'center', textTransform: 'uppercase', fontWeight: 600 }}>Hold</div>
+                <div style={{ display: 'flex', justifyContent: 'center', flex: 1, minHeight: 0 }}>
+                  <PieceMini type={state.hold} pieceTheme={pieceTheme} size={isLandscape ? 12 : 10} />
+                </div>
+              </div>
+              {/* Stats box (landscape only) */}
+              {isLandscape && (
+                <div style={{ background: 'rgba(0,0,0,0.4)', borderRadius: 8, padding: '8px', border: `1px solid ${boss.color}22`, fontSize: hudSizing.statsLabel, color: '#aaa', flexShrink: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ marginBottom: 2, textAlign: 'center', color: '#00d4ff', fontWeight: 700, whiteSpace: 'nowrap', fontSize: hudSizing.statsValue }}>
+                    {state.score.toLocaleString()}
+                  </div>
+                  <div style={{ fontSize: hudSizing.statsLabel, textAlign: 'center', lineHeight: 1.3 }}>
+                    <div>L{state.level}</div>
+                    <div>{Math.min(linesThisLevel, effectiveTargetLines)}/{effectiveTargetLines}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {!isLandscape && <div style={{ width: 6, flexShrink: 0, background: boss.color, opacity: 0.25 }} />}
 
             <SynesthesiaMotionLayer
               className="mobile-canvas-wrap"
               style={{
                 background: 'transparent',
-                flex: 1,
+                gridColumn: isLandscape ? 2 : undefined,
+                flex: isLandscape ? undefined : 1,
                 minWidth: 0,
-                paddingBottom: focus && showOnScreenControls
+                minHeight: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                overflow: 'hidden',
+                paddingBottom: focus && showOnScreenControls && !isLandscape
                   ? 'calc(4.5rem + env(safe-area-inset-bottom, 0px))'
                   : 0,
               }}
@@ -1275,15 +1317,16 @@ export default function ZodiacLevelPage() {
                   />
                 )
                 if (!isMobile) return (
-                  <div style={{ ...illusionStyle, height: '100%', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', transform: `scale(${zoom})`, transformOrigin: 'center center' }}>
+                  <div style={{ ...illusionStyle, height: '100%', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', transform: `scale(${zoom})`, transformOrigin: 'center center', maxWidth: '100%', maxHeight: '100%' }}>
                     {gc}
                   </div>
                 )
-                // On mobile: wrap in a plain div so the filter never conflicts with
-                // framer-motion's own filter animations on SynesthesiaMotionLayer
-                return illusion
-                  ? <div style={illusionStyle}>{gc}</div>
-                  : gc
+                // On mobile: wrap in a container for proper centering
+                return (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', maxWidth: '100%', maxHeight: '100%', ...(illusion ? illusionStyle : {}) }}>
+                    {gc}
+                  </div>
+                )
               })()}
 
                   {/* Cancer: fog overlay on bottom rows */}
@@ -1511,6 +1554,43 @@ export default function ZodiacLevelPage() {
                   </div>
                 )}
               </SynesthesiaMotionLayer>
+
+            {/* Right panel: NEXT + ZONE */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: isLandscape ? 8 : 4, minWidth: 0, minHeight: 0 }}>
+              {/* Next box */}
+              <div style={{ background: 'rgba(0,0,0,0.4)', borderRadius: isLandscape ? 8 : 6, padding: isLandscape ? '10px' : '8px', border: `1px solid ${boss.color}22`, flexGrow: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: isLandscape ? 4 : 2, alignItems: 'center' }}>
+                <div style={{ fontSize: hudSizing.statsLabel, letterSpacing: '0.12em', color: '#888', textAlign: 'center', textTransform: 'uppercase', fontWeight: 600 }}>Next</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: isLandscape ? 2 : 1, justifyContent: 'center', alignItems: 'center' }}>
+                  {state.queue.slice(0, isLandscape ? 3 : 2).map((type, i) => (
+                    <PieceMini key={i} type={type} pieceTheme={pieceTheme} size={isLandscape ? 11 : 9} />
+                  ))}
+                </div>
+              </div>
+              {/* Zone button */}
+              <button
+                onClick={() => {
+                  if (state.zoneActive || state.zoneMeter < 30) return
+                  if (config?.sfxEnabled) try { playZoneActivateSFX(pieceTheme || 'classic') } catch {}
+                  triggerAction('activateZone')
+                }}
+                style={{
+                  background: state.zoneActive ? boss.color : state.zoneMeter >= 30 ? '#00d4ff' : 'rgba(0,0,0,0.4)',
+                  border: `1px solid ${state.zoneActive ? boss.color : state.zoneMeter >= 30 ? '#00d4ff' : boss.color}22`,
+                  borderRadius: isLandscape ? 8 : 6,
+                  padding: isLandscape ? '10px 6px' : '8px 6px',
+                  fontSize: hudSizing.statsLabel,
+                  fontWeight: 700,
+                  color: state.zoneActive ? '#000' : '#aaa',
+                  letterSpacing: '0.1em',
+                  textTransform: 'uppercase',
+                  cursor: state.zoneMeter >= 30 && !state.zoneActive ? 'pointer' : 'not-allowed',
+                  opacity: state.zoneMeter >= 30 || state.zoneActive ? 1 : 0.5,
+                  transition: 'all 0.2s',
+                }}
+              >
+                Zone
+              </button>
+            </div>
           </div>
 
           {showOnScreenControls && !focus && (

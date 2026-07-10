@@ -18,6 +18,7 @@ import { StoryMusicManager } from '../audio/storyMusicManager'
 import { emitSynesthesia, SYNESTHESIA_EVENT } from '../logic/synesthesiaBus'
 import { hardResetAndReload } from '../logic/hardReset'
 import GlitchOverlay from '../components/GlitchOverlay'
+import { useResponsiveHUD, SOLO_HUD_DEFAULTS } from '../hooks/useResponsiveHUD'
 
 // Uses shared mapping in logic/themeMappings.js
 
@@ -338,6 +339,10 @@ export default function StoryLevelPage() {
     const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0
     return window.innerWidth > window.innerHeight && hasTouch
   })
+  
+  // Get responsive HUD sizing that matches SOLO mode
+  const hudSizing = useResponsiveHUD(isLandscape)
+  
   const [zoom, setZoom] = useState(() => {
     const saved = Number(localStorage.getItem('tetris-zoom') || 1)
     return saved >= 1 && saved <= 1.5 ? saved : 1
@@ -880,13 +885,13 @@ export default function StoryLevelPage() {
         <div style={{ position: 'absolute', inset: 0, zIndex: 10, display: 'flex', flexDirection: 'column', pointerEvents: phase === PHASE.TRANSITION ? 'none' : 'auto' }}>
           {/* HUD bar */}
           {!focus && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: isLandscape ? '6px 10px' : '6px 14px', background: 'rgba(0,0,0,0.55)', color: '#fff', fontSize: isLandscape ? '0.65rem' : '0.72rem', letterSpacing: '0.1em', flexShrink: 0, backdropFilter: 'blur(6px)', gap: isLandscape ? 6 : 8, flexWrap: 'nowrap', minHeight: isLandscape ? 28 : undefined }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: hudSizing.hudPadding, background: 'rgba(0,0,0,0.55)', color: '#fff', fontSize: hudSizing.isMobile ? (isLandscape ? '0.8rem' : '0.85rem') : '0.85rem', letterSpacing: '0.1em', flexShrink: 0, backdropFilter: 'blur(6px)', gap: isLandscape ? 8 : 10, flexWrap: 'nowrap', minHeight: hudSizing.hudMinHeight }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
-                <span style={{ fontSize: isLandscape ? '0.45rem' : '0.5rem', letterSpacing: '0.14em', color: chapter.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{chapter.title}</span>
+                <span style={{ fontSize: hudSizing.statsLabel, letterSpacing: '0.14em', color: chapter.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{chapter.title}</span>
                 {!isLandscape && <span style={{ color: '#333' }}>›</span>}
                 {!isLandscape && <span style={{ color: '#ccc' }}>{level.title}</span>}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: isLandscape ? 4 : 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: isLandscape ? 6 : 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                 <button
                   onClick={() => triggerAction('activateZone')}
                   disabled={state.zoneMeter < ZONE_MIN_METER || state.zoneActive}
@@ -896,37 +901,37 @@ export default function StoryLevelPage() {
                     border: `1px solid ${state.zoneActive ? '#00e5ff' : state.zoneMeter >= ZONE_MIN_METER ? '#22d3ee' : 'rgba(255,255,255,0.1)'}`,
                     color: state.zoneActive ? '#00e5ff' : state.zoneMeter >= ZONE_MIN_METER ? '#80eaff' : '#555',
                     cursor: state.zoneMeter >= ZONE_MIN_METER && !state.zoneActive ? 'pointer' : 'default',
-                    fontSize: isLandscape ? '0.5rem' : '0.62rem', padding: isLandscape ? '1px 6px' : '2px 8px', borderRadius: 6, fontFamily: 'inherit', whiteSpace: 'nowrap'
+                    fontSize: hudSizing.statsValue, padding: '4px 10px', borderRadius: 6, fontFamily: 'inherit', whiteSpace: 'nowrap', fontWeight: 600
                   }}
                 >
                   ⚡ {state.zoneActive ? `${Math.ceil(state.zoneTimer/1000)}s` : 'ZONE'}
                 </button>
                 {level.targetLines > 0 && (
-                  <span style={{ color: '#555', fontSize: isLandscape ? '0.5rem' : '0.62rem', whiteSpace: 'nowrap' }}>
+                  <span style={{ color: '#888', fontSize: hudSizing.statsLabel, whiteSpace: 'nowrap', fontWeight: 600 }}>
                     {Math.min(linesThisLevel, effectiveTargetLines)}/{effectiveTargetLines}{!isLandscape && 'lines'}{isFinalConvergence && finalReadyToTopOut ? ' SURVIVE' : ''}
                   </span>
                 )}
                 {state.combo > 1 && !isLandscape && (
-                  <span style={{ color: '#f59e0b', fontSize: '0.62rem', fontWeight: 700 }}>
+                  <span style={{ color: '#f59e0b', fontSize: hudSizing.statsLabel, fontWeight: 700 }}>
                     COMBO x{state.combo}
                   </span>
                 )}
                 {state.backToBack && !isLandscape && (
-                  <span style={{ color: '#fbbf24', fontSize: '0.62rem', fontWeight: 700 }}>
+                  <span style={{ color: '#fbbf24', fontSize: hudSizing.statsLabel, fontWeight: 700 }}>
                     B2B x{(state.b2bCount ?? 0) + 1}
                   </span>
                 )}
-                <span style={{ color: '#00d4ff', fontWeight: 700, whiteSpace: 'nowrap' }}>{state.score.toLocaleString()}</span>
+                <span style={{ color: '#00d4ff', fontWeight: 700, fontSize: hudSizing.statsValue, whiteSpace: 'nowrap' }}>{state.score.toLocaleString()}</span>
                 <button
                   onClick={togglePause}
-                  style={{ background: 'none', border: '1px solid rgba(255,255,255,0.2)', color: '#aaa', cursor: 'pointer', fontSize: isLandscape ? '0.5rem' : '0.6rem', padding: isLandscape ? '2px 6px' : '3px 8px', borderRadius: 4, fontFamily: 'inherit', letterSpacing: '0.1em' }}
+                  style={{ background: 'none', border: '1px solid rgba(255,255,255,0.2)', color: '#aaa', cursor: 'pointer', fontSize: hudSizing.statsLabel, padding: '4px 8px', borderRadius: 4, fontFamily: 'inherit', letterSpacing: '0.1em', fontWeight: 600 }}
                 >
                   {paused ? '▶' : '⏸'}
                 </button>
                 {!isMobile && (
                   <button
                     onClick={cycleZoom}
-                    style={{ background: 'none', border: '1px solid rgba(255,255,255,0.2)', color: '#aaa', cursor: 'pointer', fontSize: isLandscape ? '0.5rem' : '0.6rem', padding: isLandscape ? '2px 6px' : '3px 8px', borderRadius: 4, fontFamily: 'inherit', letterSpacing: '0.1em' }}
+                    style={{ background: 'none', border: '1px solid rgba(255,255,255,0.2)', color: '#aaa', cursor: 'pointer', fontSize: hudSizing.statsLabel, padding: '4px 8px', borderRadius: 4, fontFamily: 'inherit', letterSpacing: '0.1em', fontWeight: 600 }}
                     title="Cycle zoom"
                   >
                     🔍 {Math.round(zoom * 100)}%
@@ -949,34 +954,39 @@ export default function StoryLevelPage() {
             </div>
           )}
 
-          {/* Middle: slim-left | canvas | hold+zone+next-right */}
-          <div style={{ flex: 1, minHeight: 0, display: isLandscape ? 'grid' : 'flex', gridTemplateColumns: isLandscape ? '110px 1fr 100px' : undefined, alignItems: 'stretch', gap: isLandscape ? 10 : 0, padding: isLandscape ? '10px' : undefined, background: isLandscape ? 'rgba(0,0,0,0.15)' : 'transparent', overflow: isLandscape ? 'hidden' : 'visible' }}>
-            {/* Left panel: HOLD + stats (landscape only) */}
-            {isLandscape && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0, minHeight: 0 }}>
-                <div style={{ background: 'rgba(0,0,0,0.4)', borderRadius: 6, padding: 8, border: `1px solid ${chapter.color}22` }}>
-                  <div style={{ fontSize: '0.45rem', letterSpacing: '0.12em', color: '#888', marginBottom: 4, textAlign: 'center', textTransform: 'uppercase' }}>Hold</div>
-                  <div style={{ display: 'flex', justifyContent: 'center' }}>
-                    <PieceMini type={state.hold} pieceTheme={pieceTheme} size={10} />
-                  </div>
+          {/* Middle: hold-left | canvas | next-right (portrait sidebar + landscape panels) */}
+          <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: isLandscape ? `clamp(90px, 12%, 140px) 1fr clamp(90px, 12%, 140px)` : `68px 1fr`, alignItems: 'stretch', gap: isLandscape ? 10 : 6, padding: isLandscape ? '10px' : '8px 6px 8px 6px', background: isLandscape ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.08)', overflow: 'hidden' }}>
+            {/* Left panel: HOLD + stats */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: isLandscape ? 6 : 4, minWidth: 0, minHeight: 0 }}>
+              {/* Hold box */}
+              <div style={{ background: 'rgba(0,0,0,0.4)', borderRadius: isLandscape ? 8 : 6, padding: isLandscape ? '10px' : '8px', border: `1px solid ${chapter.color}22`, display: 'flex', flexDirection: 'column', gap: isLandscape ? 4 : 2, alignItems: 'center' }}>
+                <div style={{ fontSize: hudSizing.statsLabel, letterSpacing: '0.12em', color: '#888', textAlign: 'center', textTransform: 'uppercase', fontWeight: 600 }}>Hold</div>
+                <div style={{ display: 'flex', justifyContent: 'center', flex: 1, minHeight: 0 }}>
+                  <PieceMini type={state.hold} pieceTheme={pieceTheme} size={isLandscape ? 12 : 10} />
                 </div>
-                <div style={{ background: 'rgba(0,0,0,0.4)', borderRadius: 6, padding: 6, border: `1px solid ${chapter.color}22`, fontSize: '0.45rem', color: '#aaa', flexShrink: 1, minHeight: 0, overflow: 'auto' }}>
-                  <div style={{ marginBottom: 4, textAlign: 'center', color: '#00d4ff', fontWeight: 700, whiteSpace: 'nowrap' }}>{state.score.toLocaleString()}</div>
-                  <div style={{ fontSize: '0.38rem', textAlign: 'center', lineHeight: 1.3 }}>
+              </div>
+              {/* Stats box (landscape only, portrait shows in main HUD) */}
+              {isLandscape && (
+                <div style={{ background: 'rgba(0,0,0,0.4)', borderRadius: 8, padding: '10px', border: `1px solid ${chapter.color}22`, fontSize: hudSizing.statsLabel, color: '#aaa', flexShrink: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ marginBottom: 2, textAlign: 'center', color: '#00d4ff', fontWeight: 700, whiteSpace: 'nowrap', fontSize: hudSizing.statsValue }}>
+                    {state.score.toLocaleString()}
+                  </div>
+                  <div style={{ fontSize: hudSizing.statsLabel, textAlign: 'center', lineHeight: 1.3 }}>
                     <div>L{state.level}</div>
                     <div>{linesThisLevel}/{effectiveTargetLines || '∞'}</div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
-            {/* Canvas */}
+            {/* Canvas (center column) */}
             {!isLandscape && (<div style={{ width: 6, flexShrink: 0, background: chapter.color, opacity: 0.25 }} />)}
             <SynesthesiaMotionLayer
               className="mobile-canvas-wrap"
               style={{
                 background: 'transparent',
-                flex: 1,
+                gridColumn: isLandscape ? 2 : undefined,
+                flex: isLandscape ? undefined : 1,
                 minWidth: 0,
                 minHeight: 0,
                 display: 'flex',
@@ -1118,27 +1128,32 @@ export default function StoryLevelPage() {
                 )}
             </SynesthesiaMotionLayer>
 
-            {/* Right panel: Next + Zone meter (landscape only) */}
-            {isLandscape && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0, minHeight: 0 }}>
-                <div style={{ background: 'rgba(0,0,0,0.4)', borderRadius: 6, padding: 8, border: `1px solid ${chapter.color}22`, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <div style={{ fontSize: '0.45rem', letterSpacing: '0.12em', color: '#888', textAlign: 'center', textTransform: 'uppercase' }}>Next</div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, justifyContent: 'center', alignItems: 'center', flex: 1, minHeight: 0, overflow: 'auto' }}>
-                    {(state.queue ?? []).slice(0, 3).map((t, i) => (
-                      <PieceMini key={i} type={t} pieceTheme={pieceTheme} size={8} />
-                    ))}
-                  </div>
-                </div>
-                <div style={{ background: `${state.zoneActive ? '#00e5ff22' : state.zoneMeter >= ZONE_MIN_METER ? '#22d3ee22' : '#ffffff08'}`, borderRadius: 6, padding: 6, border: `1px solid ${state.zoneActive ? '#00e5ff44' : state.zoneMeter >= ZONE_MIN_METER ? '#22d3ee44' : `${chapter.color}22`}`, display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center', justifyContent: 'center' }}>
-                  <div style={{ fontSize: '0.40rem', letterSpacing: '0.12em', color: state.zoneActive ? '#00e5ff' : '#888', textTransform: 'uppercase' }}>
-                    {state.zoneActive ? `${Math.ceil(state.zoneTimer/1000)}s` : 'Zone'}
-                  </div>
-                  <div style={{ width: 16, height: 40, background: 'rgba(0,0,0,0.3)', borderRadius: 3, border: `1px solid ${state.zoneActive ? '#00e5ff' : '#555'}`, position: 'relative', overflow: 'hidden' }}>
-                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: `${Math.max(0, Math.min(100, state.zoneActive ? (state.zoneTimer / Math.max(1, state.zoneDuration || ZONE_DURATION_MS)) * 100 : (state.zoneMeter || 0)))}%`, background: state.zoneActive ? '#00e5ff' : state.zoneMeter >= ZONE_MIN_METER ? '#22d3ee' : '#666', transition: 'height 0.1s linear' }} />
-                  </div>
+            {/* Right panel: Next + Zone meter */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: isLandscape ? 6 : 4, minWidth: 0, minHeight: 0 }}>
+              {/* Next box */}
+              <div style={{ background: 'rgba(0,0,0,0.4)', borderRadius: isLandscape ? 8 : 6, padding: isLandscape ? '10px' : '8px', border: `1px solid ${chapter.color}22`, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: isLandscape ? 4 : 2, alignItems: 'center' }}>
+                <div style={{ fontSize: hudSizing.statsLabel, letterSpacing: '0.12em', color: '#888', textAlign: 'center', textTransform: 'uppercase', fontWeight: 600 }}>Next</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: isLandscape ? 2 : 1, justifyContent: 'center', alignItems: 'center', flex: 1, minHeight: 0, overflow: 'auto' }}>
+                  {(state.queue ?? []).slice(0, isLandscape ? 3 : 2).map((t, i) => (
+                    <PieceMini key={i} type={t} pieceTheme={pieceTheme} size={isLandscape ? 11 : 9} />
+                  ))}
                 </div>
               </div>
-            )}
+              {/* Zone meter */}
+              <div style={{ background: `${state.zoneActive ? '#00e5ff22' : state.zoneMeter >= ZONE_MIN_METER ? '#22d3ee22' : '#ffffff08'}`, borderRadius: isLandscape ? 8 : 6, padding: isLandscape ? 8 : 6, border: `1px solid ${state.zoneActive ? '#00e5ff44' : state.zoneMeter >= ZONE_MIN_METER ? '#22d3ee44' : `${chapter.color}22`}`, display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ fontSize: hudSizing.statsLabel, letterSpacing: '0.12em', color: state.zoneActive ? '#00e5ff' : '#888', textTransform: 'uppercase', fontWeight: 600 }}>
+                  {state.zoneActive ? `${Math.ceil(state.zoneTimer/1000)}s` : 'Zone'}
+                </div>
+                <div style={{ width: 18, height: 45, background: 'rgba(0,0,0,0.3)', borderRadius: 3, border: `1px solid ${state.zoneActive ? '#00e5ff' : '#555'}`, position: 'relative', overflow: 'hidden' }}>
+                  <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: `${Math.max(0, Math.min(100, state.zoneActive ? (state.zoneTimer / Math.max(1, state.zoneDuration || ZONE_DURATION_MS)) * 100 : (state.zoneMeter || 0)))}%`, background: state.zoneActive ? '#00e5ff' : state.zoneMeter >= ZONE_MIN_METER ? '#22d3ee' : '#666', transition: 'height 0.1s linear' }} />
+                </div>
+                {!state.zoneActive && state.zoneMeter >= ZONE_MIN_METER && (
+                  <button onClick={() => triggerAction('activateZone')} style={{ fontSize: '0.5rem', background: 'none', border: `1px solid #22d3ee`, color: '#22d3ee', borderRadius: 3, padding: '2px 6px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                    ▶ Activate
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
             <AnimatePresence>
               {state.zoneEndResult && (

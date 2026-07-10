@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { BOARD_HEIGHT, BOARD_WIDTH, PIECES } from '../logic/tetrominoes'
 import { ZONE_DURATION_MS, GAME_MODE } from '../logic/gameEngine'
 import { useTheme } from '../contexts/ThemeContext'
@@ -9,7 +9,9 @@ const INFECTED_COLOR = PIECES.INF.color
 const ZONE_COLOR     = PIECES.ZONE.color
 const GBG_COLOR      = PIECES.GBG.color
 
-const CELL_SIZE = 26
+const CELL_SIZE_MIN = 16  // minimum cell size for tiny screens
+const CELL_SIZE_MAX = 40  // maximum cell size for huge screens
+const CELL_SIZE_DEFAULT = 26
 const BOARD_BASE_ALPHA = 0.32 // lighter board so backgrounds show through
 
 // ── Theme colour maps ────────────────────────────────────────────────────────
@@ -99,6 +101,9 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
   const { theme: contextTheme, colorMode, bgTheme } = useTheme()
   // Solo/Casual: allow mixing — use explicit theme unless an override is passed
   const theme = themeOverride ?? contextTheme
+  
+  // Responsive cell size based on container
+  const [cellSize, setCellSize] = useState(CELL_SIZE_DEFAULT)
   const canvasRef = useRef(null)
   const touchRef = useRef(null)
   const pulseRef = useRef(0)
@@ -129,6 +134,76 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
     return () => window.removeEventListener('storage', onStorage)
   }, [])
 
+  // Track container size and calculate optimal cell size
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    
+    const calculateOptimalCellSize = () => {
+      // Get immediate parent (the flex container)
+      const parent = canvas.parentElement
+      if (!parent) return CELL_SIZE_DEFAULT
+      
+      // Force a layout recalculation to get accurate dimensions
+      const rect = parent.getBoundingClientRect()
+      let containerW = rect.width
+      let containerH = rect.height
+      
+      // Fallback chain for getting dimensions
+      if (!containerW || containerW <= 0) {
+        containerW = parent.clientWidth || parent.offsetWidth || window.innerWidth
+      }
+      if (!containerH || containerH <= 0) {
+        containerH = parent.clientHeight || parent.offsetHeight || window.innerHeight
+      }
+      
+      // Last resort - use window dimensions
+      if (containerW <= 0) containerW = window.innerWidth
+      if (containerH <= 0) containerH = window.innerHeight
+      
+      if (!containerW || !containerH) return CELL_SIZE_DEFAULT
+      
+      // Calculate max cell size that fits both width and height
+      // Leave some breathing room for padding/margins
+      const maxByWidth = Math.floor((containerW * 0.95) / BOARD_WIDTH)
+      const maxByHeight = Math.floor((containerH * 0.95) / BOARD_HEIGHT)
+      const maxCellSize = Math.min(maxByWidth, maxByHeight)
+      
+      // Be more generous with max - allow larger cells on bigger screens
+      const calculated = Math.max(CELL_SIZE_MIN, Math.min(maxCellSize, 50))
+      return calculated
+    }
+    
+    // Calculate initial size
+    const newSize = calculateOptimalCellSize()
+    setCellSize(newSize)
+    
+    // Watch for resize changes
+    const resizeObserver = new ResizeObserver(() => {
+      const newSize = calculateOptimalCellSize()
+      setCellSize(newSize)
+    })
+    
+    // Observe the parent container for changes
+    const parent = canvas.parentElement
+    if (parent) {
+      resizeObserver.observe(parent)
+    }
+    
+    // Also listen to window resize as fallback
+    const handleWindowResize = () => {
+      const newSize = calculateOptimalCellSize()
+      setCellSize(newSize)
+    }
+    
+    window.addEventListener('resize', handleWindowResize)
+    
+    return () => {
+      resizeObserver.disconnect()
+      window.removeEventListener('resize', handleWindowResize)
+    }
+  }, [])
+
   // ── Touch constants ──────────────────────────────────────────────────────────
   // (DRAG_START_PX, TAP_MAX_PX, HARD_DROP_VEL_PX_MS defined at module level)
 
@@ -136,6 +211,9 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
     const canvas = canvasRef.current
     if (!canvas || !state.current) return
     const ctx = canvas.getContext('2d')
+    
+    // Use dynamic cellSize for responsive board
+    const CELL_SIZE = cellSize
 
     // ── Device Pixel Ratio scaling ───────────────────────────────────────────
     const nativeDpr = window.devicePixelRatio || 1
@@ -150,8 +228,8 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
                             : renderQuality === 'balanced' ? 0.6
                             : 0.4 // 'performance'
     
-    const cW = BOARD_WIDTH  * CELL_SIZE   // logical board width  (CSS px)
-    const cH = BOARD_HEIGHT * CELL_SIZE   // logical board height (CSS px)
+    const cW = BOARD_WIDTH  * cellSize   // logical board width  (CSS px)
+    const cH = BOARD_HEIGHT * cellSize   // logical board height (CSS px)
     const physW = Math.round(cW * dpr)
     const physH = Math.round(cH * dpr)
     if (canvas.width !== physW || canvas.height !== physH) {
@@ -1192,7 +1270,7 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
     }
 
     ctx.restore()
-  }, [state, theme, colorMode, bgTheme, renderQuality])
+  }, [state, theme, colorMode, bgTheme, renderQuality, cellSize])
 
   const handlePointerDown = (event) => {
     event.preventDefault()
@@ -1304,9 +1382,9 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
     <canvas
       ref={canvasRef}
       className="game-canvas"
-      width={BOARD_WIDTH * CELL_SIZE}
-      height={BOARD_HEIGHT * CELL_SIZE}
-      style={{ touchAction: 'none', width: BOARD_WIDTH * CELL_SIZE, height: BOARD_HEIGHT * CELL_SIZE }}
+      width={BOARD_WIDTH * cellSize}
+      height={BOARD_HEIGHT * cellSize}
+      style={{ touchAction: 'none', width: BOARD_WIDTH * cellSize, height: BOARD_HEIGHT * cellSize }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
