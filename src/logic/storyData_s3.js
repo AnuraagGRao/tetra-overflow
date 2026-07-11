@@ -19,6 +19,8 @@
 //   clear_lag                 — (boss) cleared lines stay visible 3s before disappearing
 //   petrification             — (final boss) random block turns to stone every 15s; Zone cleanses
 
+import { isDevMode } from './devMode'
+
 export const SEASON3_EPOCHS = [
   // ── Epoch 1: SYSTEM DEGRADATION (The Present) ─────────────────────────────
   {
@@ -234,6 +236,7 @@ export function getNextS3Level(epochId, levelId) {
 
 /** True if first level of an epoch is unlocked (prior epoch fully beaten or first epoch) */
 export function isEpochUnlocked(epochId, progress) {
+  if (isDevMode()) return true
   const idx = SEASON3_EPOCHS.findIndex(e => e.id === epochId)
   if (idx === 0) return true
   const prevEpoch = SEASON3_EPOCHS[idx - 1]
@@ -242,6 +245,7 @@ export function isEpochUnlocked(epochId, progress) {
 
 /** True if a specific level is unlocked */
 export function isS3LevelUnlocked(epochId, levelId, progress) {
+  if (isDevMode()) return true
   const epoch = SEASON3_EPOCHS.find(e => e.id === epochId)
   if (!epoch) return false
   const lvIdx = epoch.levels.findIndex(l => l.id === levelId)
@@ -258,7 +262,7 @@ export function isS3Complete(progress) {
   )
 }
 
-/** S3 unlocks after Ophiuchus (Season 2 final boss) is beaten */
+/** S3 unlocks after Ophiuchus (Season 2 final boss) is beaten (or in dev mode) */
 export function isS3Unlocked(progress) {
-  return !!progress['zodiac_ophiuchus_completed']
+  return isDevMode() || !!progress['zodiac_ophiuchus_completed']
 }

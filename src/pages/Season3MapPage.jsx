@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { getStoryProgress } from '../firebase/db'
 import { SEASON3_EPOCHS, isS3Unlocked, isEpochUnlocked, isS3LevelUnlocked, isS3Complete } from '../logic/storyData_s3'
 import { playTap, playBack, playTypeClick, playGlitchBurst } from '../audio/uiSfx'
+import StoryMapHUD from '../components/StoryMapHUD'
 import homeIconUrl from '../icons/home-button.png'
 
 // ── Pseudo-random helpers ────────────────────────────────────────────────────
@@ -71,6 +72,8 @@ function FractureLines({ epochs }) {
             />
             {/* Energy pulse dot travelling along path */}
             <motion.circle
+              cx={ep.mapX}
+              cy={ep.mapY}
               r="0.7" fill={ep.color} opacity={0.9}
               animate={{
                 cx: [ep.mapX, midX, next.mapX],
@@ -302,15 +305,19 @@ export default function Season3MapPage() {
     return fallbackEpoch ? { epochId: fallbackEpoch.id, levelId: fallbackEpoch.levels[0]?.id } : null
   }, [progress])
 
-  useEffect(() => {
-    if (!s3Unlocked || autoSelectedRef.current) return
-    const firstEpoch = SEASON3_EPOCHS.find(e => isEpochUnlocked(e.id, progress))
-    if (firstEpoch) { autoSelectedRef.current = true; setSelected(firstEpoch.id) }
-  }, [s3Unlocked, progress])
+  // NOTE: Auto-select disabled — user should manually click epoch panel to open
+  // (removed useEffect that auto-selected first epoch)
 
   const handleSelectLevel = (epochId, levelId) => {
     navigate(`/s3/${epochId}/${levelId}`)
   }
+
+  // Calculate completed epochs for HUD
+  const completedEpochCount = useMemo(() => {
+    return SEASON3_EPOCHS.filter(epoch =>
+      epoch.levels.every(l => !!progress[`s3_${epoch.id}_${l.id}_completed`])
+    ).length
+  }, [progress])
 
   // ── Zoom/pan helpers (match S2 behavior) ─────────────────────────────────
   const clamp = (v, min, max) => Math.max(min, Math.min(max, v))
@@ -410,7 +417,7 @@ export default function Season3MapPage() {
         </div>
         <motion.button
           whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
-          onClick={() => { playBack(); navigate('/zodiac') }}
+          onClick={() => { playBack(); navigate('/s2') }}
           style={{ background: 'none', border: '1px solid rgba(255,0,0,0.4)', color: '#ff4444', borderRadius: 8, padding: '10px 24px', cursor: 'pointer', fontSize: '0.78rem', letterSpacing: '0.18em', fontFamily: 'inherit', textTransform: 'uppercase' }}
         >
           ← Return to Zodiac
@@ -420,6 +427,27 @@ export default function Season3MapPage() {
   }
 
   return (
+    <StoryMapHUD
+      // Navigation
+      onHome={() => { playBack(); navigate('/s1') }}
+      onPreviousSeason={() => { playBack(); navigate('/s2') }}
+      onNextSeason={() => { playBack(); navigate('/s4') }}
+      previousSeasonName="S2"
+      nextSeasonName="S4"
+      
+      // Header content
+      seasonTitle="SEASON 3: TEMPORAL FRACTURE"
+      seasonSubtitle="Temporal Fracture"
+      seasonColor={SEASON3_EPOCHS[0]?.color || '#ff00ff'}
+      currentProgress={completedEpochCount}
+      totalProgress={4}
+      
+      // Map controls
+      onZoomIn={zoomIn}
+      onZoomOut={zoomOut}
+      onResetView={resetZoom}
+      currentZoom={mapZoom}
+    >
     <div style={{ position: 'fixed', inset: 0, overflow: 'hidden', background: '#03000a', fontFamily: '"Courier New", monospace' }}>
 
       {/* ── Layer 1: deep void gradient ─────────────────────────────────── */}
@@ -705,5 +733,6 @@ export default function Season3MapPage() {
         })()}
       </AnimatePresence>
     </div>
+    </StoryMapHUD>
   )
 }

@@ -17,6 +17,8 @@ import { emitSynesthesia, SYNESTHESIA_EVENT } from '../logic/synesthesiaBus'
 import { hardResetAndReload } from '../logic/hardReset'
 import { BG_TYPE_TO_PIECE_THEME } from '../logic/themeMappings'
 import { useResponsiveHUD } from '../hooks/useResponsiveHUD'
+import LandscapeGameLayout from '../components/LandscapeGameLayout'
+import ZoomControl from '../components/ZoomControl'
 
 const MAX_FRAME_MS = 34
 const VISIBLE_ROWS = BOARD_HEIGHT - 2   // rows 2-21 visible (rows 0-1 are spawn buffer)
@@ -743,8 +745,7 @@ export default function Season3LevelPage() {
   const [focus,      setFocus]      = useState(() => { try { return localStorage.getItem('focus-mode') === '1' } catch { return false } })
   const [isMobile,   setIsMobile]   = useState(() => window.innerWidth < 768)
   const [isLandscape, setIsLandscape] = useState(() => {
-    const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0
-    return window.innerWidth > window.innerHeight && hasTouch
+    return window.innerWidth > window.innerHeight
   })
   
   // Get responsive HUD sizing that matches SOLO mode
@@ -752,14 +753,9 @@ export default function Season3LevelPage() {
   
   const [zoom,       setZoom]       = useState(() => {
     const saved = Number(localStorage.getItem('tetris-zoom') || 1)
-    return saved >= 1 && saved <= 1.5 ? saved : 1
+    // Clamp to 0.5–2.0 (50%–200%)
+    return saved >= 0.5 && saved <= 2.0 ? saved : 1
   })
-  const cycleZoom = useCallback(() => setZoom(z => {
-    const next = z >= 1.5 ? 1 : z >= 1.25 ? 1.5 : 1.25
-    localStorage.setItem('tetris-zoom', next)
-    return next
-  }), [])
-
   const engine = useMemo(() => new TetrisEngine(), [])
 
   const levelStartLinesRef = useRef(0)
@@ -788,7 +784,7 @@ export default function Season3LevelPage() {
   const bypassUnlock = !!(location.state && location.state.fromS3Complete)
 
   const CONFIG_KEY = 'tetris-config'
-  const DEFAULT_CONFIG = { sfxEnabled: true, hapticEnabled: true, musicVolume: 1.0, sfxVolume: 2.0, das: 110, arr: 25, showOnScreenControls: false }
+  const DEFAULT_CONFIG = { sfxEnabled: true, hapticEnabled: true, musicVolume: 1.0, sfxVolume: 2.0, das: 110, arr: 25, showOnScreenControls: false, renderQuality: 'balanced', screenShakeMultiplier: 1.0 }
   const loadConfig = () => { try { return { ...DEFAULT_CONFIG, ...JSON.parse(localStorage.getItem(CONFIG_KEY) ?? '{}') } } catch { return { ...DEFAULT_CONFIG } } }
   const [config, setConfig] = useState(loadConfig)
 
@@ -807,8 +803,7 @@ export default function Season3LevelPage() {
   useEffect(() => {
     const onResize = () => {
       setIsMobile(window.innerWidth < 768)
-      const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0
-      setIsLandscape(window.innerWidth > window.innerHeight && hasTouch)
+      setIsLandscape(window.innerWidth > window.innerHeight)
     }
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
@@ -1221,9 +1216,10 @@ export default function Season3LevelPage() {
       {/* ── Game phase ─────────────────────────────────────────────────────── */}
       {phase === PHASE.GAME && (
         <div style={{ position: 'absolute', inset: 0, zIndex: 10, display: 'flex', flexDirection: 'column' }}>
-          {/* HUD */}
-          {!focus && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: hudSizing.hudPadding, background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: hudSizing.isMobile ? (isLandscape ? '0.8rem' : '0.85rem') : '0.85rem', letterSpacing: '0.1em', flexShrink: 0, backdropFilter: 'blur(6px)', gap: 8, flexWrap: 'nowrap', minHeight: hudSizing.hudMinHeight }}>
+          {isLandscape && <ZoomControl zoom={zoom} onChange={setZoom} />}
+          {/* HUD — Portrait mode only */}
+          {!focus && !isLandscape && (
+            <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: hudSizing.hudPadding, background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: hudSizing.isMobile ? (isLandscape ? '0.8rem' : '0.85rem') : '0.85rem', letterSpacing: '0.1em', flexShrink: 0, backdropFilter: 'blur(6px)', gap: 8, flexWrap: 'nowrap', minHeight: hudSizing.hudMinHeight }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                 <span style={{ fontSize: hudSizing.statsLabel, color: epochColor, fontWeight: 700 }}>{level.title}</span>
               </div>
@@ -1272,18 +1268,46 @@ export default function Season3LevelPage() {
                   style={{ background: 'none', border: '1px solid rgba(255,255,255,0.2)', color: '#aaa', cursor: 'pointer', fontSize: '0.6rem', padding: '3px 8px', borderRadius: 4, fontFamily: 'inherit' }}>
                   {paused ? '▶' : '⏸'}
                 </button>
-                {!isMobile && (
-                  <button onClick={cycleZoom}
-                    style={{ background: 'none', border: '1px solid rgba(255,255,255,0.2)', color: '#aaa', cursor: 'pointer', fontSize: '0.6rem', padding: '3px 8px', borderRadius: 4, fontFamily: 'inherit' }}>
-                    🔍 {Math.round(zoom * 100)}%
-                  </button>
+                {false && (
+                  <div>
+                    <button onClick={() => setZoomInputOpen(true)}
+                      style={{ background: 'none', border: '1px solid rgba(255,255,255,0.2)', color: '#aaa', cursor: 'pointer', fontSize: '0.6rem', padding: '3px 8px', borderRadius: 4, fontFamily: 'inherit' }}>
+                      🔍 {Math.round(zoom * 100)}%
+                    </button>
+                    {zoomInputOpen && (
+                      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => { setZoomInputOpen(false); setZoomInput(''); }}>
+                        <form onSubmit={handleZoomInput} onClick={e => e.stopPropagation()} style={{ background: 'rgba(20,20,30,0.95)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8, padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: 12, minWidth: 200, backdropFilter: 'blur(8px)' }}>
+                          <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#ccc' }}>Set Zoom Level</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <input
+                              type="number"
+                              min="50"
+                              max="200"
+                              step="1"
+                              value={zoomInput || Math.round(zoom * 100)}
+                              onChange={e => setZoomInput(e.target.value)}
+                              autoFocus
+                              onFocus={e => e.target.select()}
+                              style={{ flex: 1, padding: '6px 8px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 4, color: '#fff', fontFamily: 'inherit', fontSize: '0.95rem' }}
+                            />
+                            <span style={{ color: '#888' }}>%</span>
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: '#666' }}>Range: 50% — 200%</div>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button type="submit" style={{ flex: 1, background: 'rgba(100, 200, 255, 0.2)', border: '1px solid rgba(100, 200, 255, 0.4)', color: '#64c8ff', borderRadius: 4, padding: '6px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Apply</button>
+                            <button type="button" onClick={() => { setZoomInputOpen(false); setZoomInput(''); }} style={{ flex: 1, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)', color: '#aaa', borderRadius: 4, padding: '6px', cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+                          </div>
+                        </form>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
           )}
 
-          {/* Level HP bar */}
-          {(() => {
+          {/* Level HP bar — Portrait mode only */}
+          {!isLandscape && (() => {
             const hpPct  = Math.max(0, Math.min(100, 100 - (linesThisLevel / effectiveTargetLines) * 100))
             const hpColor = hpPct > 60 ? epochColor : hpPct > 30 ? '#f59e0b' : '#ef4444'
             return (
@@ -1300,375 +1324,405 @@ export default function Season3LevelPage() {
             )
           })()}
 
-          {/* Canvas area */}
-          <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: isLandscape ? `clamp(90px, 12%, 140px) 1fr clamp(90px, 12%, 140px)` : `68px 1fr`, alignItems: 'stretch', gap: isLandscape ? 12 : 6, padding: isLandscape ? '12px' : '8px 6px 8px 6px', background: isLandscape ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.08)', overflow: isLandscape ? 'hidden' : 'visible' }}>
-            {/* Left panel: HOLD + stats */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: isLandscape ? 8 : 4, minWidth: 0, minHeight: 0 }}>
-              {/* Hold box */}
-              <div style={{ background: 'rgba(0,0,0,0.4)', borderRadius: isLandscape ? 8 : 6, padding: isLandscape ? '10px' : '8px', border: `1px solid ${epochColor}22`, display: 'flex', flexDirection: 'column', gap: isLandscape ? 4 : 2, alignItems: 'center' }}>
-                <div style={{ fontSize: hudSizing.statsLabel, letterSpacing: '0.12em', color: '#888', marginBottom: isLandscape ? 2 : 0, textAlign: 'center', textTransform: 'uppercase', fontWeight: 600 }}>Hold</div>
-                <div style={{ display: 'flex', justifyContent: 'center', flex: 1, minHeight: 0 }}>
-                  <PieceMini type={state.hold} pieceTheme={pieceTheme} size={isLandscape ? 12 : 10} />
-                </div>
-              </div>
-              {/* Stats box (landscape only) */}
-              {isLandscape && (
-                <div style={{ background: 'rgba(0,0,0,0.4)', borderRadius: 8, padding: '8px', border: `1px solid ${epochColor}22`, fontSize: hudSizing.statsLabel, color: '#aaa', flexShrink: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center', justifyContent: 'center' }}>
-                  <div style={{ marginBottom: 2, textAlign: 'center', color: '#00d4ff', fontWeight: 700, whiteSpace: 'nowrap', fontSize: hudSizing.statsValue }}>
-                    {state.score.toLocaleString()}
-                  </div>
-                  <div style={{ fontSize: hudSizing.statsLabel, textAlign: 'center', lineHeight: 1.3 }}>
-                    <div>L{state.level}</div>
-                    <div>{Math.min(linesThisLevel, effectiveTargetLines)}/{effectiveTargetLines}</div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {!isLandscape && !focus && <div style={{ width: 5, flexShrink: 0, background: epochColor, opacity: 0.22 }} />}
-
-            <SynesthesiaMotionLayer
-              className="mobile-canvas-wrap"
-              style={{
-                background: 'transparent',
-                gridColumn: isLandscape ? 2 : undefined,
-                flex: isLandscape ? undefined : 1,
-                minWidth: 0,
-                minHeight: 0,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                overflow: 'hidden',
-                paddingBottom: focus && showOnScreenControls && !isLandscape
-                  ? 'calc(4.5rem + env(safe-area-inset-bottom, 0px))'
-                  : 0,
-              }}
+          {/* Canvas area — Landscape vs Portrait */}
+          {isLandscape ? (
+            <LandscapeGameLayout
+              isLandscape={isLandscape}
+              gameMode="story"
+              state={state}
+              paused={paused}
+              phase={phase}
+              hudSizing={hudSizing}
+              zoom={zoom}
+              zoneActive={state.zoneActive}
+              zoneMeter={state.zoneMeter}
+              zoneTimerMs={state.zoneTimer}
+              onActivateZone={() => triggerAction('activateZone')}
+              currentLevel={level}
+              targetLines={effectiveTargetLines}
+              linesThisLevel={linesThisLevel}
+              abilityActive={abilityActive}
+              abilityLabel={abilityLabel}
+              bossHpPct={Math.max(0, Math.min(100, 100 - (linesThisLevel / effectiveTargetLines) * 100))}
+              epochColor={epochColor}
+              onPause={togglePause}
+              onZoom={() => setZoomInputOpen(true)}
+              onSettings={() => setShowSettings(true)}
             >
-              {isMobile ? (
-                <GameCanvas
-                  state={{ ...state, queue: hideQueue && !state.zoneActive ? [] : state.queue }}
-                  onTap={() => { if (config?.sfxEnabled && !paused) try { playRotateSFX(pieceTheme || 'classic') } catch {}; emitSynesthesia(SYNESTHESIA_EVENT.ROTATE, { intensity: 1.0, source: 's3-tap' }); triggerAction('rotateCW'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
-                  onTwoFingerTap={() => { if (config?.sfxEnabled && !paused) try { playZoneActivateSFX(pieceTheme || 'classic') } catch {}; triggerAction('activateZone'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
-                  onDragBegin={handleDragBegin}
-                  onDragEnd={handleDragEnd}
-                  onHardDrop={handleHardDrop}
-                  onRewindGesture={activateRewind}
-                  themeOverride={pieceTheme}
-                  boardAlpha={boardAlpha}
-                />
-              ) : (
-                <div style={{ transform: `scale(${zoom})`, transformOrigin: 'center center', maxWidth: '100%', maxHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <GameCanvas
-                    state={{ ...state, queue: hideQueue && !state.zoneActive ? [] : state.queue }}
-                    onTap={() => { if (config?.sfxEnabled && !paused) try { playRotateSFX(pieceTheme || 'classic') } catch {}; emitSynesthesia(SYNESTHESIA_EVENT.ROTATE, { intensity: 1.0, source: 's3-tap' }); triggerAction('rotateCW'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
-                    onTwoFingerTap={() => { if (config?.sfxEnabled && !paused) try { playZoneActivateSFX(pieceTheme || 'classic') } catch {}; triggerAction('activateZone'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
-                    onDragBegin={handleDragBegin}
-                    onDragEnd={handleDragEnd}
-                    onHardDrop={handleHardDrop}
-                    onRewindGesture={activateRewind}
-                    themeOverride={pieceTheme}
-                    boardAlpha={boardAlpha}
-                  />
-                </div>
-              )}
-
-              {/* ── Time-Dilation Row overlays ─────────────────────────────── */}
-              {hasDilation && dilationRows.map(dr => (
+              <SynesthesiaMotionLayer
+                className="mobile-canvas-wrap"
+                style={{
+                  background: 'transparent',
+                  flex: 1,
+                  minWidth: 0,
+                  minHeight: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'visible',
+                  position: 'relative',
+                }}
+              >
+                {/* Board container wrapper - constrains overlays to board bounds */}
                 <div
-                  key={`dil-${dr.row}`}
                   style={{
-                    position: 'absolute',
-                    left: 0, right: 0,
-                    // visible rows start after hidden 2 rows; row pct within visible board
-                    top: `${(dr.row / VISIBLE_ROWS) * 100}%`,
-                    height: `${(1 / VISIBLE_ROWS) * 100}%`,
-                    background: dr.type === 'fast'
-                      ? 'rgba(255,60,60,0.18)'
-                      : 'rgba(60,120,255,0.18)',
-                    borderTop: `1px solid ${dr.type === 'fast' ? 'rgba(255,60,60,0.6)' : 'rgba(60,120,255,0.6)'}`,
-                    borderBottom: `1px solid ${dr.type === 'fast' ? 'rgba(255,60,60,0.3)' : 'rgba(60,120,255,0.3)'}`,
-                    pointerEvents: 'none',
-                    zIndex: 4,
-                    display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 6,
+                    position: 'relative',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '100%',
+                    height: '100%',
+                    overflow: 'visible',
                   }}
                 >
-                  <span style={{ fontSize: '0.42rem', color: dr.type === 'fast' ? '#ff6666' : '#6699ff', letterSpacing: '0.1em', opacity: 0.8 }}>
-                    {dr.type === 'fast' ? '⚡' : '❄'}
-                  </span>
-                </div>
-              ))}
-
-              {/* ── Phantom block overlays ─────────────────────────────────── */}
-              {hasPhantoms && phantoms.map(ph => {
-                const secondsLeft = Math.max(0, (ph.solidifyAt - Date.now()) / 1000)
-                const urgency = 1 - secondsLeft / 10
-                return ph.cells.map((cell, ci) => (
-                  <div
-                    key={`ph-${ph.id}-${ci}`}
-                    style={{
-                      position: 'absolute',
-                      left:   `${(cell.col / BOARD_WIDTH) * 100}%`,
-                      top:    `${((cell.row) / VISIBLE_ROWS) * 100}%`,
-                      width:  `${(1 / BOARD_WIDTH) * 100}%`,
-                      height: `${(1 / VISIBLE_ROWS) * 100}%`,
-                      background: `rgba(200,150,255,${0.12 + urgency * 0.25})`,
-                      border: `1px solid rgba(200,150,255,${0.3 + urgency * 0.5})`,
-                      pointerEvents: 'none',
-                      zIndex: 4,
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                ))
-              })}
-              {/* Phantom countdown labels */}
-              {hasPhantoms && phantoms.map(ph => {
-                const secsLeft = Math.max(0, Math.ceil((ph.solidifyAt - Date.now()) / 1000))
-                const topRow = Math.min(...ph.cells.map(c => c.row))
-                const leftCol = Math.min(...ph.cells.map(c => c.col))
-                return (
-                  <div
-                    key={`ph-label-${ph.id}`}
-                    style={{
-                      position: 'absolute',
-                      left:  `${(leftCol / BOARD_WIDTH) * 100}%`,
-                      top:   `${((topRow) / VISIBLE_ROWS) * 100 - 4}%`,
-                      fontSize: '0.45rem',
-                      color: secsLeft <= 3 ? '#ff8888' : '#cc99ff',
-                      fontWeight: 700,
-                      pointerEvents: 'none',
-                      zIndex: 5,
-                      letterSpacing: '0.06em',
-                      textShadow: '0 0 4px rgba(0,0,0,0.8)',
-                    }}
-                  >
-                    {secsLeft}s
+                  <div style={{ transform: `scale(${zoom})`, transformOrigin: 'center center', maxWidth: '100%', maxHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <GameCanvas
+                        state={{ ...state, queue: hideQueue && !state.zoneActive ? [] : state.queue }}
+                        onTap={() => { if (config?.sfxEnabled && !paused) try { playRotateSFX(pieceTheme || 'classic') } catch {}; emitSynesthesia(SYNESTHESIA_EVENT.ROTATE, { intensity: 1.0, source: 's3-tap' }); triggerAction('rotateCW'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
+                        onTwoFingerTap={() => { if (config?.sfxEnabled && !paused) try { playZoneActivateSFX(pieceTheme || 'classic') } catch {}; triggerAction('activateZone'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
+                        onDragBegin={handleDragBegin}
+                        onDragEnd={handleDragEnd}
+                        onHardDrop={handleHardDrop}
+                        onZoomGesture={scale => setZoom(value => Math.max(0.5, Math.min(2, value * scale)))}
+                        onRewindGesture={activateRewind}
+                        themeOverride={pieceTheme}
+                        boardAlpha={boardAlpha}
+                        screenShakeMultiplier={config?.screenShakeMultiplier ?? 1.0}
+                      />
                   </div>
-                )
-              })}
 
-              {/* ── Hover garbage visual ───────────────────────────────────── */}
-              {hoverGarbage.map(hg => {
-                const secsLeft = Math.max(0, (hg.solidifyAt - Date.now()) / 1000)
-                return (
-                  <motion.div
-                    key={`hg-${hg.id}`}
-                    style={{
-                      position: 'absolute',
-                      bottom: 0, left: 0, right: 0,
-                      height: `${(hg.rows / VISIBLE_ROWS) * 100}%`,
-                      background: 'rgba(255,80,80,0.12)',
-                      border: '2px dashed rgba(255,80,80,0.5)',
-                      pointerEvents: 'none', zIndex: 4,
-                    }}
-                    animate={{ opacity: [0.5, 1, 0.5] }}
-                    transition={{ duration: 0.8, repeat: Infinity }}
-                  >
-                    <div style={{ position: 'absolute', top: 4, right: 8, fontSize: '0.5rem', color: '#ff8888', fontWeight: 700 }}>
-                      {secsLeft > 0 ? `⚠ ${Math.ceil(secsLeft)}s` : 'INCOMING'}
+                  {/* Overlays — constrained to board bounds */}
+                  {hasDilation && dilationRows.map(dr => (
+                    <div key={`dil-${dr.row}`} style={{ position: 'absolute', left: 0, right: 0, top: `${(dr.row / VISIBLE_ROWS) * 100}%`, height: `${(1 / VISIBLE_ROWS) * 100}%`, background: dr.type === 'fast' ? 'rgba(255,60,60,0.18)' : 'rgba(60,120,255,0.18)', borderTop: `1px solid ${dr.type === 'fast' ? 'rgba(255,60,60,0.6)' : 'rgba(60,120,255,0.6)'}`, borderBottom: `1px solid ${dr.type === 'fast' ? 'rgba(255,60,60,0.3)' : 'rgba(60,120,255,0.3)'}`, pointerEvents: 'none', zIndex: 4, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 6 }}>
+                      <span style={{ fontSize: '0.42rem', color: dr.type === 'fast' ? '#ff6666' : '#6699ff', letterSpacing: '0.1em', opacity: 0.8 }}>{dr.type === 'fast' ? '⚡' : '❄'}</span>
                     </div>
-                  </motion.div>
-                )
-              })}
+                  ))}
 
-              {/* ── Clear lag ghost rows ───────────────────────────────────── */}
-              {clearLagRows.map((r, i) => (
-                <div key={`lag-${r.id}`}
-                  style={{
-                    position: 'absolute',
-                    bottom: `${(i / VISIBLE_ROWS) * 100}%`,
-                    left: 0, right: 0,
-                    height: `${(1 / VISIBLE_ROWS) * 100}%`,
-                    background: 'rgba(255,200,100,0.14)',
-                    borderTop: '1px solid rgba(255,200,100,0.4)',
-                    pointerEvents: 'none', zIndex: 4,
-                  }}
-                />
-              ))}
+                  {hasPhantoms && phantoms.map(ph => {
+                    const secondsLeft = Math.max(0, (ph.solidifyAt - Date.now()) / 1000)
+                    const urgency = 1 - secondsLeft / 10
+                  return ph.cells.map((cell, ci) => (
+                    <div key={`ph-${ph.id}-${ci}`} style={{ position: 'absolute', left: `${(cell.col / BOARD_WIDTH) * 100}%`, top: `${((cell.row) / VISIBLE_ROWS) * 100}%`, width: `${(1 / BOARD_WIDTH) * 100}%`, height: `${(1 / VISIBLE_ROWS) * 100}%`, background: `rgba(200,150,255,${0.12 + urgency * 0.25})`, border: `1px solid rgba(200,150,255,${0.3 + urgency * 0.5})`, pointerEvents: 'none', zIndex: 4, boxSizing: 'border-box' }} />
+                  ))
+                })}
 
-              {/* ── Shrinking board ceiling ────────────────────────────────── */}
-              {shrinkRows > 0 && (
-                <motion.div
-                  style={{
-                    position: 'absolute', top: 0, left: 0, right: 0,
-                    height: `${(shrinkRows / VISIBLE_ROWS) * 100}%`,
-                    background: 'rgba(255,0,0,0.22)',
-                    borderBottom: '2px solid rgba(255,0,0,0.7)',
-                    pointerEvents: 'none', zIndex: 6,
-                    display: 'flex', alignItems: 'flex-end', paddingBottom: 3, justifyContent: 'center',
-                  }}
-                  animate={{ height: `${(shrinkRows / VISIBLE_ROWS) * 100}%` }}
-                  transition={{ duration: 0.5, ease: 'easeInOut' }}
-                >
-                  <span style={{ fontSize: '0.42rem', color: '#ff6666', letterSpacing: '0.14em' }}>CEILING ▼</span>
-                </motion.div>
-              )}
+                {hasPhantoms && phantoms.map(ph => {
+                  const secsLeft = Math.max(0, Math.ceil((ph.solidifyAt - Date.now()) / 1000))
+                  const topRow = Math.min(...ph.cells.map(c => c.row))
+                  const leftCol = Math.min(...ph.cells.map(c => c.col))
+                  return (
+                    <div key={`ph-label-${ph.id}`} style={{ position: 'absolute', left: `${(leftCol / BOARD_WIDTH) * 100}%`, top: `${((topRow) / VISIBLE_ROWS) * 100 - 4}%`, fontSize: '0.45rem', color: secsLeft <= 3 ? '#ff8888' : '#cc99ff', fontWeight: 700, pointerEvents: 'none', zIndex: 5, letterSpacing: '0.06em', textShadow: '0 0 4px rgba(0,0,0,0.8)' }}>
+                      {secsLeft}s
+                    </div>
+                  )
+                })}
 
-              {/* ── Stone cells ────────────────────────────────────────────── */}
-              {[...stoneCells].map(key => {
-                const [r, c] = key.split(',').map(Number)
-                return (
-                  <div
-                    key={`stone-${key}`}
-                    style={{
-                      position: 'absolute',
-                      left:   `${(c / BOARD_WIDTH) * 100}%`,
-                      top:    `${((r - 2) / VISIBLE_ROWS) * 100}%`,
-                      width:  `${(1 / BOARD_WIDTH) * 100}%`,
-                      height: `${(1 / VISIBLE_ROWS) * 100}%`,
-                      background: 'rgba(120,120,120,0.6)',
-                      border: '1px solid rgba(180,180,180,0.7)',
-                      pointerEvents: 'none',
-                      zIndex: 5,
-                      boxSizing: 'border-box',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: '0.4rem',
-                    }}
-                  >
-                    ⬛
-                  </div>
-                )
-              })}
+                {hoverGarbage.map(hg => {
+                  const secsLeft = Math.max(0, (hg.solidifyAt - Date.now()) / 1000)
+                  return (
+                    <motion.div key={`hg-${hg.id}`} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: `${(hg.rows / VISIBLE_ROWS) * 100}%`, background: 'rgba(255,80,80,0.12)', border: '2px dashed rgba(255,80,80,0.5)', pointerEvents: 'none', zIndex: 4 }} animate={{ opacity: [0.5, 1, 0.5] }} transition={{ duration: 0.8, repeat: Infinity }}>
+                      <div style={{ position: 'absolute', top: 4, right: 8, fontSize: '0.5rem', color: '#ff8888', fontWeight: 700 }}>{secsLeft > 0 ? `⚠ ${Math.ceil(secsLeft)}s` : 'INCOMING'}</div>
+                    </motion.div>
+                  )
+                })}
 
-              {/* ── Floating ability toast ─────────────────────────────────── */}
-              <AnimatePresence>
-                {abilityToast && (
-                  <motion.div
-                    key={toastId}
-                    initial={{ opacity: 0, y: 8, scale: 0.88 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -8, scale: 0.94 }}
-                    transition={{ duration: 0.22 }}
-                    style={{
-                      position: 'absolute', top: '10%', left: '50%', transform: 'translateX(-50%)',
-                      background: 'rgba(0,0,0,0.88)',
-                      border: `1px solid ${epochColor}cc`,
-                      borderRadius: 8, padding: '6px 16px',
-                      fontSize: '0.72rem', color: epochColor, letterSpacing: '0.2em', fontWeight: 900,
-                      whiteSpace: 'nowrap', zIndex: 25, pointerEvents: 'none',
-                      boxShadow: `0 0 18px ${epochColor}55`,
-                    }}
-                  >
-                    {abilityToast}
+                {clearLagRows.map((r, i) => (
+                  <div key={`lag-${r.id}`} style={{ position: 'absolute', bottom: `${(i / VISIBLE_ROWS) * 100}%`, left: 0, right: 0, height: `${(1 / VISIBLE_ROWS) * 100}%`, background: 'rgba(255,200,100,0.14)', borderTop: '1px solid rgba(255,200,100,0.4)', pointerEvents: 'none', zIndex: 4 }} />
+                ))}
+
+                {shrinkRows > 0 && (
+                  <motion.div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: `${(shrinkRows / VISIBLE_ROWS) * 100}%`, background: 'rgba(255,0,0,0.22)', borderBottom: '2px solid rgba(255,0,0,0.7)', pointerEvents: 'none', zIndex: 6, display: 'flex', alignItems: 'flex-end', paddingBottom: 3, justifyContent: 'center' }} animate={{ height: `${(shrinkRows / VISIBLE_ROWS) * 100}%` }} transition={{ duration: 0.5, ease: 'easeInOut' }}>
+                    <span style={{ fontSize: '0.42rem', color: '#ff6666', letterSpacing: '0.14em' }}>CEILING ▼</span>
                   </motion.div>
                 )}
-              </AnimatePresence>
 
-              {/* Focus toggle */}
-              <button
-                onClick={() => setFocus(f => !f)}
-                className="ui-toggle-tab"
-                title={focus ? 'Exit Focus' : 'Enter Focus'}
-                aria-label={focus ? 'Exit Focus' : 'Enter Focus'}
-                style={{ right: 0 }}
-              >
-                {focus ? '▲' : '▼'}
-              </button>
+                {[...stoneCells].map(key => {
+                  const [r, c] = key.split(',').map(Number)
+                  return (
+                    <div key={`stone-${key}`} style={{ position: 'absolute', left: `${(c / BOARD_WIDTH) * 100}%`, top: `${((r - 2) / VISIBLE_ROWS) * 100}%`, width: `${(1 / BOARD_WIDTH) * 100}%`, height: `${(1 / VISIBLE_ROWS) * 100}%`, background: 'rgba(120,120,120,0.6)', border: '1px solid rgba(180,180,180,0.7)', pointerEvents: 'none', zIndex: 5, boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.4rem' }}>⬛</div>
+                  )
+                })}
 
-              {/* Focus mini HUD */}
-              {focus && (() => {
-                const zoneReady    = state.zoneMeter >= ZONE_MIN_METER && !state.zoneActive
-                const zoneFillPct  = Math.max(0, Math.min(100, state.zoneActive
-                  ? (state.zoneTimer / Math.max(1, state.zoneDuration || ZONE_DURATION_MS)) * 100
-                  : (state.zoneMeter || 0)))
-                const hpPct = Math.max(0, 100 - Math.min(100, (linesThisLevel / effectiveTargetLines) * 100))
-                return (
-                  <div className="fullscreen-mini-hud" style={{ right: 0 }}>
-                    <div style={{ width: '100%', padding: '4px 5px 0', boxSizing: 'border-box' }}>
-                      <div style={{ fontSize: '0.38rem', color: '#555', letterSpacing: '0.1em', marginBottom: 2, textAlign: 'center' }}>PROGRESS</div>
-                      <div style={{ height: 4, background: 'rgba(255,255,255,0.07)', borderRadius: 2, overflow: 'hidden' }}>
-                        <motion.div
-                          style={{ height: '100%', background: epochColor, borderRadius: 2 }}
-                          animate={{ width: `${hpPct}%` }}
-                          transition={{ duration: 0.4, ease: 'easeOut' }}
-                        />
-                      </div>
-                    </div>
-                    <div className="fmh-hold">
-                      <div className="fmh-label">Hold</div>
-                      <PieceMini type={state.hold} pieceTheme={pieceTheme} size={8} />
-                    </div>
-                    <div className="fmh-zone-wrap">
-                      <div className={`fmh-zone-bar${state.zoneActive ? ' zone-active' : ''}${zoneReady && !state.zoneActive ? ' zone-ready' : ''}`} style={{ height: `${zoneFillPct}%` }} />
-                    </div>
-                    <div className="fmh-next">
-                      <div className="fmh-label">Next</div>
-                      {(hideQueue && !state.zoneActive ? [] : (state.queue ?? [])).slice(0, 3).map((t, i) => (
-                        <PieceMini key={i} type={t} pieceTheme={pieceTheme} size={7} />
-                      ))}
-                      {hideQueue && !state.zoneActive && <div style={{ fontSize: '0.7rem', color: epochColor }}>?</div>}
-                    </div>
-                    {/* Rewind gauge in focus HUD */}
-                    {hasRewind && (
-                      <div style={{ padding: '4px 5px', textAlign: 'center', width: '100%', boxSizing: 'border-box' }}>
-                        <div style={{ fontSize: '0.38rem', color: '#555', marginBottom: 2, letterSpacing: '0.08em' }}>REWIND</div>
-                        <div style={{ height: 3, background: 'rgba(255,255,255,0.08)', borderRadius: 2, overflow: 'hidden' }}>
-                          <div style={{ height: '100%', width: `${rewindGauge * 100}%`, background: rewindGauge >= 1 ? '#64b4ff' : '#335577', borderRadius: 2 }} />
+                <AnimatePresence>
+                  {abilityToast && (
+                    <motion.div key={toastId} initial={{ opacity: 0, y: 8, scale: 0.88 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -8, scale: 0.94 }} transition={{ duration: 0.22 }} style={{ position: 'absolute', top: '10%', left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.88)', border: `1px solid ${epochColor}cc`, borderRadius: 8, padding: '6px 16px', fontSize: '0.72rem', color: epochColor, letterSpacing: '0.2em', fontWeight: 900, whiteSpace: 'nowrap', zIndex: 25, pointerEvents: 'none', boxShadow: `0 0 18px ${epochColor}55` }}>
+                      {abilityToast}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* End: Board container wrapper */}
+                </div>
+
+                <button onClick={() => setFocus(f => !f)} className="ui-toggle-tab" title={focus ? 'Exit Focus' : 'Enter Focus'} aria-label={focus ? 'Exit Focus' : 'Enter Focus'} style={{ right: 0 }}>
+                  {focus ? '▲' : '▼'}
+                </button>
+
+                {focus && (() => {
+                  const zoneReady = state.zoneMeter >= ZONE_MIN_METER && !state.zoneActive
+                  const zoneFillPct = Math.max(0, Math.min(100, state.zoneActive ? (state.zoneTimer / Math.max(1, state.zoneDuration || ZONE_DURATION_MS)) * 100 : (state.zoneMeter || 0)))
+                  const hpPct = Math.max(0, 100 - Math.min(100, (linesThisLevel / effectiveTargetLines) * 100))
+                  return (
+                    <div className="fullscreen-mini-hud" style={{ right: 0 }}>
+                      <div style={{ width: '100%', padding: '4px 5px 0', boxSizing: 'border-box' }}>
+                        <div style={{ fontSize: '0.38rem', color: '#555', letterSpacing: '0.1em', marginBottom: 2, textAlign: 'center' }}>PROGRESS</div>
+                        <div style={{ height: 4, background: 'rgba(255,255,255,0.07)', borderRadius: 2, overflow: 'hidden' }}>
+                          <motion.div style={{ height: '100%', background: epochColor, borderRadius: 2 }} animate={{ width: `${hpPct}%` }} transition={{ duration: 0.4, ease: 'easeOut' }} />
                         </div>
                       </div>
-                    )}
-                  </div>
-                )
-              })()}
+                      <div className="fmh-hold">
+                        <div className="fmh-label">Hold</div>
+                        <PieceMini type={state.hold} pieceTheme={pieceTheme} size={8} />
+                      </div>
+                      <div className="fmh-zone-wrap">
+                        <div className={`fmh-zone-bar${state.zoneActive ? ' zone-active' : ''}${zoneReady && !state.zoneActive ? ' zone-ready' : ''}`} style={{ height: `${zoneFillPct}%` }} />
+                      </div>
+                      <div className="fmh-next">
+                        <div className="fmh-label">Next</div>
+                        {(hideQueue && !state.zoneActive ? [] : (state.queue ?? [])).slice(0, 3).map((t, i) => (
+                          <PieceMini key={i} type={t} pieceTheme={pieceTheme} size={7} />
+                        ))}
+                        {hideQueue && !state.zoneActive && <div style={{ fontSize: '0.7rem', color: epochColor }}>?</div>}
+                      </div>
+                      {hasRewind && (
+                        <div style={{ padding: '4px 5px', textAlign: 'center', width: '100%', boxSizing: 'border-box' }}>
+                          <div style={{ fontSize: '0.38rem', color: '#555', marginBottom: 2, letterSpacing: '0.08em' }}>REWIND</div>
+                          <div style={{ height: 3, background: 'rgba(255,255,255,0.08)', borderRadius: 2, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${rewindGauge * 100}%`, background: rewindGauge >= 1 ? '#64b4ff' : '#335577', borderRadius: 2 }} />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
 
-              {/* Pause overlay */}
-              {paused && (
-                <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.82)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12 }}>
-                  <div style={{ fontSize: '1.2rem', fontWeight: 900, letterSpacing: '0.2em', color: '#fff' }}>PAUSED</div>
-                  <div style={{ fontSize: '0.6rem', color: epochColor, letterSpacing: '0.2em' }}>{epoch.title} — {level.title}</div>
-                  <div style={{ fontSize: '0.56rem', color: '#555', letterSpacing: '0.14em' }}>{linesThisLevel} / {effectiveTargetLines} lines</div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button type="button" onClick={() => musicRef.current?.prev?.()} style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '5px 10px', fontSize: '0.72rem', cursor: 'pointer', fontFamily: 'inherit' }}>⏮</button>
-                    <button type="button" onClick={() => musicRef.current?.pause?.()} style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '5px 10px', fontSize: '0.72rem', cursor: 'pointer', fontFamily: 'inherit' }}>⏸</button>
-                    <button type="button" onClick={() => musicRef.current?.resume?.()} style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '5px 10px', fontSize: '0.72rem', cursor: 'pointer', fontFamily: 'inherit' }}>▶</button>
-                    <button type="button" onClick={() => musicRef.current?.next?.()} style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '5px 10px', fontSize: '0.72rem', cursor: 'pointer', fontFamily: 'inherit' }}>⏭</button>
+                {paused && (
+                  <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.82)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12 }}>
+                    <div style={{ fontSize: '1.2rem', fontWeight: 900, letterSpacing: '0.2em', color: '#fff' }}>PAUSED</div>
+                    <div style={{ fontSize: '0.6rem', color: epochColor, letterSpacing: '0.2em' }}>{epoch.title} — {level.title}</div>
+                    <div style={{ fontSize: '0.56rem', color: '#555', letterSpacing: '0.14em' }}>{linesThisLevel} / {effectiveTargetLines} lines</div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button type="button" onClick={() => musicRef.current?.prev?.()} style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '5px 10px', fontSize: '0.72rem', cursor: 'pointer', fontFamily: 'inherit' }}>⏮</button>
+                      <button type="button" onClick={() => musicRef.current?.pause?.()} style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '5px 10px', fontSize: '0.72rem', cursor: 'pointer', fontFamily: 'inherit' }}>⏸</button>
+                      <button type="button" onClick={() => musicRef.current?.resume?.()} style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '5px 10px', fontSize: '0.72rem', cursor: 'pointer', fontFamily: 'inherit' }}>▶</button>
+                      <button type="button" onClick={() => musicRef.current?.next?.()} style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '5px 10px', fontSize: '0.72rem', cursor: 'pointer', fontFamily: 'inherit' }}>⏭</button>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: '0.60rem', color: '#777' }}>Vol</span>
+                      <input type="range" min={0} max={1} step={0.01} value={config.musicVolume} onChange={e => { const v = parseFloat(e.target.value); setConfig(p => ({ ...p, musicVolume: v })); musicRef.current?.setVolume?.(v) }} style={{ width: 140 }} />
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+                      <button onClick={() => setShowSettings(true)} style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontSize: '0.72rem', letterSpacing: '0.1em', fontFamily: 'inherit' }}>⚙ Settings</button>
+                    </div>
+                    <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={togglePause} style={{ background: 'none', border: `1px solid ${epochColor}`, color: epochColor, borderRadius: 6, padding: '8px 22px', cursor: 'pointer', fontSize: '0.8rem', letterSpacing: '0.16em', fontFamily: 'inherit', fontWeight: 700 }}>▶ RESUME</motion.button>
+                    <button onClick={() => navigate('/s3', { replace: true })} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.18)', color: '#bbb', borderRadius: 6, padding: '7px 18px', cursor: 'pointer', fontSize: '0.72rem', letterSpacing: '0.12em', fontFamily: 'inherit' }}>← S3 MAP</button>
+                    <button onClick={() => { togglePause(); pendingResetRef.current = true; setPhase(PHASE.STORY) }} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.1)', color: '#555', borderRadius: 6, padding: '6px 16px', cursor: 'pointer', fontSize: '0.65rem', letterSpacing: '0.1em', fontFamily: 'inherit' }}>RESTART</button>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: '0.60rem', color: '#777' }}>Vol</span>
-                    <input type="range" min={0} max={1} step={0.01} value={config.musicVolume}
-                      onChange={e => { const v = parseFloat(e.target.value); setConfig(p => ({ ...p, musicVolume: v })); musicRef.current?.setVolume?.(v) }}
-                      style={{ width: 140 }} />
+                )}
+              </SynesthesiaMotionLayer>
+            </LandscapeGameLayout>
+          ) : (
+            <>
+              {/* PORTRAIT MODE: Clean HUD + Canvas layout (matches Solo Mode) */}
+              {!focus && (
+                <div style={{ display: 'flex', alignItems: 'stretch', gap: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)', borderBottom: '1px solid rgba(255,255,255,0.1)', width: '100%', flexShrink: 0, overflow: 'hidden', paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+                  {/* Hold */}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0.3rem 0.45rem', borderRight: `1px solid ${epochColor}33`, gap: '0.1rem', minWidth: 58 }}>
+                    <div style={{ fontSize: '0.5rem', letterSpacing: '0.1em', color: '#888', textTransform: 'uppercase', fontWeight: 600 }}>Hold</div>
+                    <PieceMini type={state.hold} pieceTheme={pieceTheme} size={10} />
                   </div>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
-                    <button onClick={() => setShowSettings(true)} style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontSize: '0.72rem', letterSpacing: '0.1em', fontFamily: 'inherit' }}>⚙ Settings</button>
+                  {/* Center stats */}
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-around', padding: '0.3rem 0.5rem', gap: 4 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                      <div style={{ fontSize: '0.55rem', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#888', lineHeight: 1 }}>Lv</div>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#fff', lineHeight: 1.1 }}>{state.level}</div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                      <div style={{ fontSize: '0.55rem', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#888', lineHeight: 1 }}>Lines</div>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#fff', lineHeight: 1.1 }}>{linesThisLevel}/{effectiveTargetLines}</div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                      <div style={{ fontSize: '0.55rem', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#888', lineHeight: 1 }}>Score</div>
+                      <div style={{ fontSize: '0.95rem', fontWeight: 900, color: '#00d4ff', lineHeight: 1.1 }}>{state.score.toLocaleString()}</div>
+                    </div>
                   </div>
-                  <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={togglePause}
-                    style={{ background: 'none', border: `1px solid ${epochColor}`, color: epochColor, borderRadius: 6, padding: '8px 22px', cursor: 'pointer', fontSize: '0.8rem', letterSpacing: '0.16em', fontFamily: 'inherit', fontWeight: 700 }}>
-                    ▶ RESUME
-                  </motion.button>
-                  <button onClick={() => navigate('/s3', { replace: true })} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.18)', color: '#bbb', borderRadius: 6, padding: '7px 18px', cursor: 'pointer', fontSize: '0.72rem', letterSpacing: '0.12em', fontFamily: 'inherit' }}>
-                    ← S3 MAP
-                  </button>
-                  <button onClick={() => { togglePause(); pendingResetRef.current = true; setPhase(PHASE.STORY) }}
-                    style={{ background: 'none', border: '1px solid rgba(255,255,255,0.1)', color: '#555', borderRadius: 6, padding: '6px 16px', cursor: 'pointer', fontSize: '0.65rem', letterSpacing: '0.1em', fontFamily: 'inherit' }}>
-                    RESTART
-                  </button>
+                  {/* Next */}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0.3rem 0.45rem', borderLeft: `1px solid ${epochColor}33`, gap: '0.15rem', minWidth: 58 }}>
+                    <div style={{ fontSize: '0.5rem', letterSpacing: '0.1em', color: '#888', textTransform: 'uppercase', fontWeight: 600 }}>Next</div>
+                    {(hideQueue && !state.zoneActive ? [] : state.queue).slice(0, 3).map((t, i) => (
+                      <PieceMini key={i} type={t} pieceTheme={pieceTheme} size={7} />
+                    ))}
+                    {hideQueue && !state.zoneActive && <div style={{ fontSize: '0.9rem', color: epochColor }}>?</div>}
+                  </div>
                 </div>
               )}
-            </SynesthesiaMotionLayer>
 
-            {/* Right panel: NEXT + REWIND */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: isLandscape ? 8 : 4, minWidth: 0, minHeight: 0 }}>
-              {/* Next box */}
-              <div style={{ background: 'rgba(0,0,0,0.4)', borderRadius: isLandscape ? 8 : 6, padding: isLandscape ? '10px' : '8px', border: `1px solid ${epochColor}22`, flexGrow: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: isLandscape ? 4 : 2, alignItems: 'center' }}>
-                <div style={{ fontSize: hudSizing.statsLabel, letterSpacing: '0.12em', color: '#888', marginBottom: isLandscape ? 0 : 0, textAlign: 'center', textTransform: 'uppercase', fontWeight: 600 }}>Next</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: isLandscape ? 2 : 1, justifyContent: 'center', alignItems: 'center' }}>
-                  {state.queue.slice(0, isLandscape ? 3 : 2).map((type, i) => (
-                    <PieceMini key={i} type={type} pieceTheme={pieceTheme} size={isLandscape ? 11 : 9} />
-                  ))}
+              {/* Zone bar (portrait only, below HUD) */}
+              {!focus && (
+                <div style={{ height: 4, width: '100%', background: 'rgba(20, 30, 70, 0.8)', flexShrink: 0, position: 'relative', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${Math.max(0, Math.min(100, state.zoneActive ? (state.zoneTimer / Math.max(1, state.zoneDuration || ZONE_DURATION_MS)) * 100 : (state.zoneMeter || 0)))}%`, background: state.zoneActive ? 'linear-gradient(90deg, #8844ff, #00cfff)' : state.zoneMeter >= ZONE_MIN_METER ? 'linear-gradient(90deg, #00cfff, #fff)' : 'linear-gradient(90deg, #1e90ff, #00cfff)', transition: 'width 0.15s' }} />
                 </div>
-              </div>
-              {/* Rewind gauge (Season 3 specific) */}
-              {hasRewind && (
-                <RewindGauge
-                  fill={rewindGauge}
-                  ready={rewindGauge >= 1}
-                  onActivate={activateRewind}
-                />
               )}
-            </div>
-          </div>
 
-          {showOnScreenControls && !focus && (
+              <SynesthesiaMotionLayer
+                className="mobile-canvas-wrap"
+                style={{
+                  background: 'transparent',
+                  flex: 1,
+                  minWidth: 0,
+                  minHeight: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'hidden',
+                  paddingBottom: focus && showOnScreenControls ? 'calc(4.5rem + env(safe-area-inset-bottom, 0px))' : 0,
+                }}
+              >
+                <div style={{ transform: `scale(${zoom})`, transformOrigin: 'center center', maxWidth: '100%', maxHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <GameCanvas
+                      state={{ ...state, queue: hideQueue && !state.zoneActive ? [] : state.queue }}
+                      onTap={() => { if (config?.sfxEnabled && !paused) try { playRotateSFX(pieceTheme || 'classic') } catch {}; emitSynesthesia(SYNESTHESIA_EVENT.ROTATE, { intensity: 1.0, source: 's3-tap' }); triggerAction('rotateCW'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
+                      onTwoFingerTap={() => { if (config?.sfxEnabled && !paused) try { playZoneActivateSFX(pieceTheme || 'classic') } catch {}; triggerAction('activateZone'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
+                      onDragBegin={handleDragBegin}
+                      onDragEnd={handleDragEnd}
+                      onHardDrop={handleHardDrop}
+                      onZoomGesture={scale => setZoom(value => Math.max(0.5, Math.min(2, value * scale)))}
+                      onRewindGesture={activateRewind}
+                      themeOverride={pieceTheme}
+                      boardAlpha={boardAlpha}
+                    />
+                </div>
+
+                {/* Overlays for portrait mode */}
+                {hasDilation && dilationRows.map(dr => (
+                  <div key={`dil-${dr.row}`} style={{ position: 'absolute', left: 0, right: 0, top: `${(dr.row / VISIBLE_ROWS) * 100}%`, height: `${(1 / VISIBLE_ROWS) * 100}%`, background: dr.type === 'fast' ? 'rgba(255,60,60,0.18)' : 'rgba(60,120,255,0.18)', borderTop: `1px solid ${dr.type === 'fast' ? 'rgba(255,60,60,0.6)' : 'rgba(60,120,255,0.6)'}`, borderBottom: `1px solid ${dr.type === 'fast' ? 'rgba(255,60,60,0.3)' : 'rgba(60,120,255,0.3)'}`, pointerEvents: 'none', zIndex: 4, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 6 }}>
+                    <span style={{ fontSize: '0.42rem', color: dr.type === 'fast' ? '#ff6666' : '#6699ff', letterSpacing: '0.1em', opacity: 0.8 }}>{dr.type === 'fast' ? '⚡' : '❄'}</span>
+                  </div>
+                ))}
+
+                {hasPhantoms && phantoms.map(ph => {
+                  const secondsLeft = Math.max(0, (ph.solidifyAt - Date.now()) / 1000)
+                  const urgency = 1 - secondsLeft / 10
+                  return ph.cells.map((cell, ci) => (
+                    <div key={`ph-${ph.id}-${ci}`} style={{ position: 'absolute', left: `${(cell.col / BOARD_WIDTH) * 100}%`, top: `${((cell.row) / VISIBLE_ROWS) * 100}%`, width: `${(1 / BOARD_WIDTH) * 100}%`, height: `${(1 / VISIBLE_ROWS) * 100}%`, background: `rgba(200,150,255,${0.12 + urgency * 0.25})`, border: `1px solid rgba(200,150,255,${0.3 + urgency * 0.5})`, pointerEvents: 'none', zIndex: 4, boxSizing: 'border-box' }} />
+                  ))
+                })}
+
+                {hasPhantoms && phantoms.map(ph => {
+                  const secsLeft = Math.max(0, Math.ceil((ph.solidifyAt - Date.now()) / 1000))
+                  const topRow = Math.min(...ph.cells.map(c => c.row))
+                  const leftCol = Math.min(...ph.cells.map(c => c.col))
+                  return (
+                    <div key={`ph-label-${ph.id}`} style={{ position: 'absolute', left: `${(leftCol / BOARD_WIDTH) * 100}%`, top: `${((topRow) / VISIBLE_ROWS) * 100 - 4}%`, fontSize: '0.45rem', color: secsLeft <= 3 ? '#ff8888' : '#cc99ff', fontWeight: 700, pointerEvents: 'none', zIndex: 5, letterSpacing: '0.06em', textShadow: '0 0 4px rgba(0,0,0,0.8)' }}>
+                      {secsLeft}s
+                    </div>
+                  )
+                })}
+
+                {hoverGarbage.map(hg => {
+                  const secsLeft = Math.max(0, (hg.solidifyAt - Date.now()) / 1000)
+                  return (
+                    <motion.div key={`hg-${hg.id}`} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: `${(hg.rows / VISIBLE_ROWS) * 100}%`, background: 'rgba(255,80,80,0.12)', border: '2px dashed rgba(255,80,80,0.5)', pointerEvents: 'none', zIndex: 4 }} animate={{ opacity: [0.5, 1, 0.5] }} transition={{ duration: 0.8, repeat: Infinity }}>
+                      <div style={{ position: 'absolute', top: 4, right: 8, fontSize: '0.5rem', color: '#ff8888', fontWeight: 700 }}>{secsLeft > 0 ? `⚠ ${Math.ceil(secsLeft)}s` : 'INCOMING'}</div>
+                    </motion.div>
+                  )
+                })}
+
+                {clearLagRows.map((r, i) => (
+                  <div key={`lag-${r.id}`} style={{ position: 'absolute', bottom: `${(i / VISIBLE_ROWS) * 100}%`, left: 0, right: 0, height: `${(1 / VISIBLE_ROWS) * 100}%`, background: 'rgba(255,200,100,0.14)', borderTop: '1px solid rgba(255,200,100,0.4)', pointerEvents: 'none', zIndex: 4 }} />
+                ))}
+
+                {shrinkRows > 0 && (
+                  <motion.div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: `${(shrinkRows / VISIBLE_ROWS) * 100}%`, background: 'rgba(255,0,0,0.22)', borderBottom: '2px solid rgba(255,0,0,0.7)', pointerEvents: 'none', zIndex: 6, display: 'flex', alignItems: 'flex-end', paddingBottom: 3, justifyContent: 'center' }} animate={{ height: `${(shrinkRows / VISIBLE_ROWS) * 100}%` }} transition={{ duration: 0.5, ease: 'easeInOut' }}>
+                    <span style={{ fontSize: '0.42rem', color: '#ff6666', letterSpacing: '0.14em' }}>CEILING ▼</span>
+                  </motion.div>
+                )}
+
+                {[...stoneCells].map(key => {
+                  const [r, c] = key.split(',').map(Number)
+                  return (
+                    <div key={`stone-${key}`} style={{ position: 'absolute', left: `${(c / BOARD_WIDTH) * 100}%`, top: `${((r - 2) / VISIBLE_ROWS) * 100}%`, width: `${(1 / BOARD_WIDTH) * 100}%`, height: `${(1 / VISIBLE_ROWS) * 100}%`, background: 'rgba(120,120,120,0.6)', border: '1px solid rgba(180,180,180,0.7)', pointerEvents: 'none', zIndex: 5, boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.4rem' }}>⬛</div>
+                  )
+                })}
+
+                <AnimatePresence>
+                  {abilityToast && (
+                    <motion.div key={toastId} initial={{ opacity: 0, y: 8, scale: 0.88 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -8, scale: 0.94 }} transition={{ duration: 0.22 }} style={{ position: 'absolute', top: '10%', left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.88)', border: `1px solid ${epochColor}cc`, borderRadius: 8, padding: '6px 16px', fontSize: '0.72rem', color: epochColor, letterSpacing: '0.2em', fontWeight: 900, whiteSpace: 'nowrap', zIndex: 25, pointerEvents: 'none', boxShadow: `0 0 18px ${epochColor}55` }}>
+                      {abilityToast}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <button onClick={() => setFocus(f => !f)} className="ui-toggle-tab" title={focus ? 'Exit Focus' : 'Enter Focus'} aria-label={focus ? 'Exit Focus' : 'Enter Focus'} style={{ right: 0 }}>
+                  {focus ? '▲' : '▼'}
+                </button>
+
+                {focus && (() => {
+                  const zoneReady = state.zoneMeter >= ZONE_MIN_METER && !state.zoneActive
+                  const zoneFillPct = Math.max(0, Math.min(100, state.zoneActive ? (state.zoneTimer / Math.max(1, state.zoneDuration || ZONE_DURATION_MS)) * 100 : (state.zoneMeter || 0)))
+                  const hpPct = Math.max(0, 100 - Math.min(100, (linesThisLevel / effectiveTargetLines) * 100))
+                  return (
+                    <div className="fullscreen-mini-hud" style={{ right: 0 }}>
+                      <div style={{ width: '100%', padding: '4px 5px 0', boxSizing: 'border-box' }}>
+                        <div style={{ fontSize: '0.38rem', color: '#555', letterSpacing: '0.1em', marginBottom: 2, textAlign: 'center' }}>PROGRESS</div>
+                        <div style={{ height: 4, background: 'rgba(255,255,255,0.07)', borderRadius: 2, overflow: 'hidden' }}>
+                          <motion.div style={{ height: '100%', background: epochColor, borderRadius: 2 }} animate={{ width: `${hpPct}%` }} transition={{ duration: 0.4, ease: 'easeOut' }} />
+                        </div>
+                      </div>
+                      <div className="fmh-hold">
+                        <div className="fmh-label">Hold</div>
+                        <PieceMini type={state.hold} pieceTheme={pieceTheme} size={8} />
+                      </div>
+                      <div className="fmh-zone-wrap">
+                        <div className={`fmh-zone-bar${state.zoneActive ? ' zone-active' : ''}${zoneReady && !state.zoneActive ? ' zone-ready' : ''}`} style={{ height: `${zoneFillPct}%` }} />
+                      </div>
+                      <div className="fmh-next">
+                        <div className="fmh-label">Next</div>
+                        {(hideQueue && !state.zoneActive ? [] : (state.queue ?? [])).slice(0, 3).map((t, i) => (
+                          <PieceMini key={i} type={t} pieceTheme={pieceTheme} size={7} />
+                        ))}
+                        {hideQueue && !state.zoneActive && <div style={{ fontSize: '0.7rem', color: epochColor }}>?</div>}
+                      </div>
+                      {hasRewind && (
+                        <div style={{ padding: '4px 5px', textAlign: 'center', width: '100%', boxSizing: 'border-box' }}>
+                          <div style={{ fontSize: '0.38rem', color: '#555', marginBottom: 2, letterSpacing: '0.08em' }}>REWIND</div>
+                          <div style={{ height: 3, background: 'rgba(255,255,255,0.08)', borderRadius: 2, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${rewindGauge * 100}%`, background: rewindGauge >= 1 ? '#64b4ff' : '#335577', borderRadius: 2 }} />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
+
+                {paused && (
+                  <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.82)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12 }}>
+                    <div style={{ fontSize: '1.2rem', fontWeight: 900, letterSpacing: '0.2em', color: '#fff' }}>PAUSED</div>
+                    <div style={{ fontSize: '0.6rem', color: epochColor, letterSpacing: '0.2em' }}>{epoch.title} — {level.title}</div>
+                    <div style={{ fontSize: '0.56rem', color: '#555', letterSpacing: '0.14em' }}>{linesThisLevel} / {effectiveTargetLines} lines</div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button type="button" onClick={() => musicRef.current?.prev?.()} style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '5px 10px', fontSize: '0.72rem', cursor: 'pointer', fontFamily: 'inherit' }}>⏮</button>
+                      <button type="button" onClick={() => musicRef.current?.pause?.()} style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '5px 10px', fontSize: '0.72rem', cursor: 'pointer', fontFamily: 'inherit' }}>⏸</button>
+                      <button type="button" onClick={() => musicRef.current?.resume?.()} style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '5px 10px', fontSize: '0.72rem', cursor: 'pointer', fontFamily: 'inherit' }}>▶</button>
+                      <button type="button" onClick={() => musicRef.current?.next?.()} style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '5px 10px', fontSize: '0.72rem', cursor: 'pointer', fontFamily: 'inherit' }}>⏭</button>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: '0.60rem', color: '#777' }}>Vol</span>
+                      <input type="range" min={0} max={1} step={0.01} value={config.musicVolume} onChange={e => { const v = parseFloat(e.target.value); setConfig(p => ({ ...p, musicVolume: v })); musicRef.current?.setVolume?.(v) }} style={{ width: 140 }} />
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+                      <button onClick={() => setShowSettings(true)} style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontSize: '0.72rem', letterSpacing: '0.1em', fontFamily: 'inherit' }}>⚙ Settings</button>
+                    </div>
+                    <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={togglePause} style={{ background: 'none', border: `1px solid ${epochColor}`, color: epochColor, borderRadius: 6, padding: '8px 22px', cursor: 'pointer', fontSize: '0.8rem', letterSpacing: '0.16em', fontFamily: 'inherit', fontWeight: 700 }}>▶ RESUME</motion.button>
+                    <button onClick={() => navigate('/s3', { replace: true })} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.18)', color: '#bbb', borderRadius: 6, padding: '7px 18px', cursor: 'pointer', fontSize: '0.72rem', letterSpacing: '0.12em', fontFamily: 'inherit' }}>← S3 MAP</button>
+                    <button onClick={() => { togglePause(); pendingResetRef.current = true; setPhase(PHASE.STORY) }} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.1)', color: '#555', borderRadius: 6, padding: '6px 16px', cursor: 'pointer', fontSize: '0.65rem', letterSpacing: '0.1em', fontFamily: 'inherit' }}>RESTART</button>
+                  </div>
+                )}
+              </SynesthesiaMotionLayer>
+            </>
+          )}
+
+          {showOnScreenControls && !focus && !isLandscape && (
             <TouchControls
               onPress={handlePress}
               onRelease={handleRelease}
@@ -1677,7 +1731,7 @@ export default function Season3LevelPage() {
             />
           )}
 
-          {showOnScreenControls && focus && (
+          {showOnScreenControls && focus && !isLandscape && (
             <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 60, pointerEvents: 'auto' }}>
               <TouchControls
                 onPress={handlePress}

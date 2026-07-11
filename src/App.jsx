@@ -2557,13 +2557,13 @@ export default function App() {
                   <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
                     onTwoFingerTap={() => triggerAction('activateZone')}
                     onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop}
-                    boardAlpha={bgTheme ? 0.32 : undefined} renderQuality={config.renderQuality} />
+                    boardAlpha={bgTheme ? 0.32 : undefined} renderQuality={config.renderQuality} screenShakeMultiplier={config.screenShakeMultiplier ?? 1.0} />
                 </div>
               ) : (
                 <GameCanvas state={state} onTap={() => triggerAction('rotateCW')}
                   onTwoFingerTap={() => triggerAction('activateZone')}
                   onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} onHardDrop={handleHardDrop}
-                  boardAlpha={bgTheme ? 0.32 : undefined} renderQuality={config.renderQuality} />
+                  boardAlpha={bgTheme ? 0.32 : undefined} renderQuality={config.renderQuality} screenShakeMultiplier={config.screenShakeMultiplier ?? 1.0} />
               )}
               <GlitchOverlay active={glitchActive} />
               {isUltimate && !state.gameOver && (

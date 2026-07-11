@@ -14,6 +14,8 @@ import { BG_TYPE_TO_PIECE_THEME } from '../logic/themeMappings'
 import TouchControls from '../components/TouchControls'
 import BackgroundCanvas from '../components/BackgroundCanvas'
 import SynesthesiaMotionLayer from '../components/SynesthesiaMotionLayer'
+import LandscapeGameLayout from '../components/LandscapeGameLayout'
+import ZoomControl from '../components/ZoomControl'
 import { StoryMusicManager } from '../audio/storyMusicManager'
 import { emitSynesthesia, SYNESTHESIA_EVENT } from '../logic/synesthesiaBus'
 import { hardResetAndReload } from '../logic/hardReset'
@@ -345,14 +347,9 @@ export default function StoryLevelPage() {
   
   const [zoom, setZoom] = useState(() => {
     const saved = Number(localStorage.getItem('tetris-zoom') || 1)
-    return saved >= 1 && saved <= 1.5 ? saved : 1
+    // Clamp to 0.5–2.0 (50%–200%)
+    return saved >= 0.5 && saved <= 2.0 ? saved : 1
   })
-  const cycleZoom = useCallback(() => setZoom((z) => {
-    const next = z >= 1.5 ? 1 : z >= 1.25 ? 1.5 : 1.25
-    localStorage.setItem('tetris-zoom', next)
-    return next
-  }), [])
-
   // Engine persists across seamless level transitions — never reset between levels
   const engine = useMemo(() => new TetrisEngine(), [])  
 
@@ -370,7 +367,7 @@ export default function StoryLevelPage() {
   const finalClearSavedRef = useRef(false)
   const isFinalConvergence = currentChapterId === 'ch7' && currentLevelId === 'l5'
   const CONFIG_KEY = 'tetris-config'
-  const DEFAULT_CONFIG = { sfxEnabled: true, hapticEnabled: true, musicVolume: 1.0, sfxVolume: 2.0, das: 110, arr: 25, showOnScreenControls: false }
+  const DEFAULT_CONFIG = { sfxEnabled: true, hapticEnabled: true, musicVolume: 1.0, sfxVolume: 2.0, das: 110, arr: 25, showOnScreenControls: false, renderQuality: 'balanced', screenShakeMultiplier: 1.0 }
   const loadConfig = () => { try { return { ...DEFAULT_CONFIG, ...JSON.parse(localStorage.getItem(CONFIG_KEY) ?? '{}') } } catch { return { ...DEFAULT_CONFIG } } }
   const [config, setConfig] = useState(loadConfig)
 
@@ -530,7 +527,7 @@ export default function StoryLevelPage() {
         setCurrentChapterId('ch8')
         setCurrentLevelId('l1')
         setPhase(PHASE.STORY)
-        navigate('/story/ch8/l1', { replace: true })
+        navigate('/s1/ch8/l1', { replace: true })
       }
     }, 1000)
 
@@ -883,8 +880,9 @@ export default function StoryLevelPage() {
       {/* ── Game board (visible during GAME and TRANSITION) ─────────────── */}
       {(phase === PHASE.GAME || phase === PHASE.TRANSITION) && (
         <div style={{ position: 'absolute', inset: 0, zIndex: 10, display: 'flex', flexDirection: 'column', pointerEvents: phase === PHASE.TRANSITION ? 'none' : 'auto' }}>
+          {isLandscape && <ZoomControl zoom={zoom} onChange={setZoom} />}
           {/* HUD bar */}
-          {!focus && (
+          {!focus && !isLandscape && (
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: hudSizing.hudPadding, background: 'rgba(0,0,0,0.55)', color: '#fff', fontSize: hudSizing.isMobile ? (isLandscape ? '0.8rem' : '0.85rem') : '0.85rem', letterSpacing: '0.1em', flexShrink: 0, backdropFilter: 'blur(6px)', gap: isLandscape ? 8 : 10, flexWrap: 'nowrap', minHeight: hudSizing.hudMinHeight }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
                 <span style={{ fontSize: hudSizing.statsLabel, letterSpacing: '0.14em', color: chapter.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{chapter.title}</span>
@@ -928,14 +926,42 @@ export default function StoryLevelPage() {
                 >
                   {paused ? '▶' : '⏸'}
                 </button>
-                {!isMobile && (
-                  <button
-                    onClick={cycleZoom}
-                    style={{ background: 'none', border: '1px solid rgba(255,255,255,0.2)', color: '#aaa', cursor: 'pointer', fontSize: hudSizing.statsLabel, padding: '4px 8px', borderRadius: 4, fontFamily: 'inherit', letterSpacing: '0.1em', fontWeight: 600 }}
-                    title="Cycle zoom"
-                  >
-                    🔍 {Math.round(zoom * 100)}%
-                  </button>
+                {false && (
+                  <div>
+                    <button
+                      onClick={() => setZoomInputOpen(true)}
+                      style={{ background: 'none', border: '1px solid rgba(255,255,255,0.2)', color: '#aaa', cursor: 'pointer', fontSize: hudSizing.statsLabel, padding: '4px 8px', borderRadius: 4, fontFamily: 'inherit', letterSpacing: '0.1em', fontWeight: 600 }}
+                      title="Click to set custom zoom"
+                    >
+                      🔍 {Math.round(zoom * 100)}%
+                    </button>
+                    {zoomInputOpen && (
+                      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => { setZoomInputOpen(false); setZoomInput(''); }}>
+                        <form onSubmit={handleZoomInput} onClick={e => e.stopPropagation()} style={{ background: 'rgba(20,20,30,0.95)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8, padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: 12, minWidth: 200, backdropFilter: 'blur(8px)' }}>
+                          <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#ccc' }}>Set Zoom Level</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <input
+                              type="number"
+                              min="50"
+                              max="200"
+                              step="1"
+                              value={zoomInput || Math.round(zoom * 100)}
+                              onChange={e => setZoomInput(e.target.value)}
+                              autoFocus
+                              onFocus={e => e.target.select()}
+                              style={{ flex: 1, padding: '6px 8px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 4, color: '#fff', fontFamily: 'inherit', fontSize: '0.95rem' }}
+                            />
+                            <span style={{ color: '#888' }}>%</span>
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: '#666' }}>Range: 50% — 200%</div>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button type="submit" style={{ flex: 1, background: 'rgba(100, 200, 255, 0.2)', border: '1px solid rgba(100, 200, 255, 0.4)', color: '#64c8ff', borderRadius: 4, padding: '6px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Apply</button>
+                            <button type="button" onClick={() => { setZoomInputOpen(false); setZoomInput(''); }} style={{ flex: 1, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)', color: '#aaa', borderRadius: 4, padding: '6px', cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+                          </div>
+                        </form>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
@@ -954,54 +980,85 @@ export default function StoryLevelPage() {
             </div>
           )}
 
-          {/* Middle: hold-left | canvas | next-right (portrait sidebar + landscape panels) */}
-          <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: isLandscape ? `clamp(90px, 12%, 140px) 1fr clamp(90px, 12%, 140px)` : `68px 1fr`, alignItems: 'stretch', gap: isLandscape ? 10 : 6, padding: isLandscape ? '10px' : '8px 6px 8px 6px', background: isLandscape ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.08)', overflow: 'hidden' }}>
-            {/* Left panel: HOLD + stats */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: isLandscape ? 6 : 4, minWidth: 0, minHeight: 0 }}>
-              {/* Hold box */}
-              <div style={{ background: 'rgba(0,0,0,0.4)', borderRadius: isLandscape ? 8 : 6, padding: isLandscape ? '10px' : '8px', border: `1px solid ${chapter.color}22`, display: 'flex', flexDirection: 'column', gap: isLandscape ? 4 : 2, alignItems: 'center' }}>
-                <div style={{ fontSize: hudSizing.statsLabel, letterSpacing: '0.12em', color: '#888', textAlign: 'center', textTransform: 'uppercase', fontWeight: 600 }}>Hold</div>
-                <div style={{ display: 'flex', justifyContent: 'center', flex: 1, minHeight: 0 }}>
-                  <PieceMini type={state.hold} pieceTheme={pieceTheme} size={isLandscape ? 12 : 10} />
+          {/* PORTRAIT MODE: Clean HUD + Canvas layout (matches Solo Mode) */}
+          {!isLandscape && !focus && (
+            <div style={{ display: 'flex', alignItems: 'stretch', gap: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)', borderBottom: '1px solid rgba(255,255,255,0.1)', width: '100%', flexShrink: 0, overflow: 'hidden', paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+              {/* Hold */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0.3rem 0.45rem', borderRight: `1px solid ${chapter.color}33`, gap: '0.1rem', minWidth: 58 }}>
+                <div style={{ fontSize: '0.5rem', letterSpacing: '0.1em', color: '#888', textTransform: 'uppercase', fontWeight: 600 }}>Hold</div>
+                <PieceMini type={state.hold} pieceTheme={pieceTheme} size={10} />
+              </div>
+              {/* Center stats */}
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-around', padding: '0.3rem 0.5rem', gap: 4 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <div style={{ fontSize: '0.55rem', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#888', lineHeight: 1 }}>Lv</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#fff', lineHeight: 1.1 }}>{state.level}</div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <div style={{ fontSize: '0.55rem', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#888', lineHeight: 1 }}>Lines</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#fff', lineHeight: 1.1 }}>{linesThisLevel}/{effectiveTargetLines || '∞'}</div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <div style={{ fontSize: '0.55rem', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#888', lineHeight: 1 }}>Score</div>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 900, color: '#00d4ff', lineHeight: 1.1 }}>{state.score.toLocaleString()}</div>
                 </div>
               </div>
-              {/* Stats box (landscape only, portrait shows in main HUD) */}
-              {isLandscape && (
-                <div style={{ background: 'rgba(0,0,0,0.4)', borderRadius: 8, padding: '10px', border: `1px solid ${chapter.color}22`, fontSize: hudSizing.statsLabel, color: '#aaa', flexShrink: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center', justifyContent: 'center' }}>
-                  <div style={{ marginBottom: 2, textAlign: 'center', color: '#00d4ff', fontWeight: 700, whiteSpace: 'nowrap', fontSize: hudSizing.statsValue }}>
-                    {state.score.toLocaleString()}
-                  </div>
-                  <div style={{ fontSize: hudSizing.statsLabel, textAlign: 'center', lineHeight: 1.3 }}>
-                    <div>L{state.level}</div>
-                    <div>{linesThisLevel}/{effectiveTargetLines || '∞'}</div>
-                  </div>
-                </div>
-              )}
+              {/* Next */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0.3rem 0.45rem', borderLeft: `1px solid ${chapter.color}33`, gap: '0.15rem', minWidth: 58 }}>
+                <div style={{ fontSize: '0.5rem', letterSpacing: '0.1em', color: '#888', textTransform: 'uppercase', fontWeight: 600 }}>Next</div>
+                {(state.queue ?? []).slice(0, 3).map((t, i) => (
+                  <PieceMini key={i} type={t} pieceTheme={pieceTheme} size={7} />
+                ))}
+              </div>
             </div>
+          )}
 
-            {/* Canvas (center column) */}
-            {!isLandscape && (<div style={{ width: 6, flexShrink: 0, background: chapter.color, opacity: 0.25 }} />)}
-            <SynesthesiaMotionLayer
-              className="mobile-canvas-wrap"
-              style={{
-                background: 'transparent',
-                gridColumn: isLandscape ? 2 : undefined,
-                flex: isLandscape ? undefined : 1,
-                minWidth: 0,
-                minHeight: 0,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                overflow: 'hidden',
-                paddingBottom: focus && showOnScreenControls && !isLandscape
-                  ? 'calc(4.5rem + env(safe-area-inset-bottom, 0px))'
-                  : 0,
-              }}
+          {/* Zone bar (portrait only, below HUD) */}
+          {!isLandscape && !focus && (
+            <div style={{ height: 4, width: '100%', background: 'rgba(20, 30, 70, 0.8)', flexShrink: 0, position: 'relative', overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${Math.max(0, Math.min(100, state.zoneActive ? (state.zoneTimer / Math.max(1, state.zoneDuration || ZONE_DURATION_MS)) * 100 : (state.zoneMeter || 0)))}%`, background: state.zoneActive ? 'linear-gradient(90deg, #8844ff, #00cfff)' : state.zoneMeter >= ZONE_MIN_METER ? 'linear-gradient(90deg, #00cfff, #fff)' : 'linear-gradient(90deg, #1e90ff, #00cfff)', transition: 'width 0.15s' }} />
+            </div>
+          )}
+
+          {/* Canvas area — Landscape vs Portrait */}
+          {isLandscape ? (
+            <LandscapeGameLayout
+              isLandscape={isLandscape}
+              gameMode="story"
+              state={state}
+              paused={paused}
+              phase={phase}
+              hudSizing={hudSizing}
+              zoom={zoom}
+              zoneActive={state.zoneActive || false}
+              zoneMeter={state.zoneMeter || 0}
+              zoneTimerMs={state.zoneTimer || 0}
+              onActivateZone={() => triggerAction('activateZone')}
+              currentLevel={level}
+              targetLines={effectiveTargetLines}
+              linesThisLevel={linesThisLevel}
+              abilityActive={false}
+              abilityLabel={''}
+              epochColor={chapter.color}
+              onPause={togglePause}
+              onZoom={() => setZoomInputOpen(true)}
+              onSettings={() => setShowSettings(true)}
             >
-                {/* Canvas wrapper that fits entire board in container */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', maxWidth: '100%', maxHeight: '100%', padding: isLandscape ? '10px' : 0 }}>
-                {!isMobile ? (
-                  <div style={{ transform: `scale(${zoom})`, transformOrigin: 'center center', width: 'fit-content', height: 'fit-content', maxWidth: '90%', maxHeight: '90%' }}>
+              <SynesthesiaMotionLayer
+                className="mobile-canvas-wrap"
+                style={{
+                  background: 'transparent',
+                  flex: 1,
+                  minWidth: 0,
+                  minHeight: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'visible',
+                }}
+              >
+                {(() => {
+                  const gameCanvas = (
                     <GameCanvas
                       state={state}
                       onTap={() => { if (config?.sfxEnabled && !paused) try { playRotateSFX(pieceTheme || 'classic') } catch {}; emitSynesthesia(SYNESTHESIA_EVENT.ROTATE, { intensity: 1.0, source: 'story-tap' }); triggerAction('rotateCW'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
@@ -1009,23 +1066,163 @@ export default function StoryLevelPage() {
                       onDragBegin={handleDragBegin}
                       onDragEnd={handleDragEnd}
                       onHardDrop={handleHardDrop}
+                      onZoomGesture={scale => setZoom(value => Math.max(0.5, Math.min(2, value * scale)))}
                       themeOverride={pieceTheme}
                       boardAlpha={boardAlpha}
+                      screenShakeMultiplier={config?.screenShakeMultiplier ?? 1.0}
                     />
+                  )
+                  const canvasContent = (
+                    <div style={{ transform: `scale(${zoom})`, transformOrigin: 'center center', width: 'fit-content', height: 'fit-content', maxWidth: '90%', maxHeight: '90%' }}>
+                      {gameCanvas}
+                    </div>
+                  )
+                  
+                  return canvasContent
+                })()}
+                {/* Focus toggle styled like Solo's UI tab */}
+                <button
+                  onClick={() => setFocus(f => !f)}
+                  className="ui-toggle-tab"
+                  title={focus ? 'Exit Focus' : 'Enter Focus'}
+                  aria-label={focus ? 'Exit Focus' : 'Enter Focus'}
+                  style={{ right: 0 }}
+                >
+                  {focus ? '▲' : '▼'}
+                </button>
+                {focus && (() => {
+                  const zoneReady = state.zoneMeter >= ZONE_MIN_METER && !state.zoneActive
+                  const zoneFillPct = Math.max(0, Math.min(100, state.zoneActive
+                    ? (state.zoneTimer / Math.max(1, state.zoneDuration || ZONE_DURATION_MS)) * 100
+                    : (state.zoneMeter || 0)))
+                  return (
+                    <div className="fullscreen-mini-hud" style={{ right: 0 }}>
+                      <div className="fmh-hold">
+                        <div className="fmh-label">Hold</div>
+                        <PieceMini type={state.hold} pieceTheme={pieceTheme} size={8} />
+                      </div>
+                      <div className="fmh-zone-wrap">
+                        <div className={`fmh-zone-bar${state.zoneActive ? ' zone-active' : ''}${zoneReady && !state.zoneActive ? ' zone-ready' : ''}`} style={{ height: `${zoneFillPct}%` }} />
+                      </div>
+                      <div className="fmh-next">
+                        <div className="fmh-label">Next</div>
+                        {(state.queue ?? []).slice(0, 3).map((t, i) => (
+                          <PieceMini key={i} type={t} pieceTheme={pieceTheme} size={7} />
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })()}  
+                {/* Pause overlay */}
+                {paused && (
+                  <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.82)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12 }}>
+                    <div style={{ fontSize: '1.2rem', fontWeight: 900, letterSpacing: '0.2em', color: '#fff' }}>PAUSED</div>
+                    <div style={{ fontSize: '0.58rem', color: chapter.color, letterSpacing: '0.22em' }}>{chapter.title} › {level.title}</div>
+                    <div style={{ fontSize: '0.56rem', color: '#555', letterSpacing: '0.14em' }}>
+                      Lv {state.level} · {linesThisLevel} / {effectiveTargetLines || '∞'} lines
+                    </div>
+                    {/* Media controls — match Solo pause menu */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: '0.25rem', alignItems: 'center' }}>
+                      <div style={{ fontSize: '0.62rem', color: '#bbb', letterSpacing: '0.12em' }}>
+                        Now Playing: <span style={{ color: '#fff' }}>{storyMusicRef.current?.getNowPlaying?.()?.title || '—'}</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+                        <button type="button"
+                          onClick={() => storyMusicRef.current?.prev?.()}
+                          style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '5px 12px', fontSize: '0.72rem', cursor: 'pointer', fontFamily: 'inherit' }}>⏮</button>
+                        {storyMuted ? (
+                          <button type="button"
+                            onClick={() => { storyMusicRef.current?.resume?.(); setStoryMuted(false) }}
+                            style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '5px 12px', fontSize: '0.72rem', cursor: 'pointer', fontFamily: 'inherit' }}>▶</button>
+                        ) : (
+                          <button type="button"
+                            onClick={() => { storyMusicRef.current?.pause?.(); setStoryMuted(true) }}
+                            style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '5px 12px', fontSize: '0.72rem', cursor: 'pointer', fontFamily: 'inherit' }}>⏸</button>
+                        )}
+                        <button type="button"
+                          onClick={() => storyMusicRef.current?.next?.()}
+                          style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '5px 12px', fontSize: '0.72rem', cursor: 'pointer', fontFamily: 'inherit' }}>⏭</button>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: '0.60rem', color: '#777' }}>Vol</span>
+                        <input type="range" min={0} max={1} step={0.01}
+                          value={config.musicVolume}
+                          onChange={(e) => { const v = parseFloat(e.target.value); setConfig(prev => ({ ...prev, musicVolume: v })); storyMusicRef.current?.setVolume?.(v) }}
+                          style={{ width: 180 }} />
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+                      <button
+                        onClick={() => setShowSettings(true)}
+                        style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.18)', color: '#ccc', borderRadius: 6, padding: '6px 16px', cursor: 'pointer', fontSize: '0.72rem', letterSpacing: '0.1em', fontFamily: 'inherit' }}
+                      >
+                        ⚙ Settings
+                      </button>
+                    </div>
+                    <motion.button
+                      whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+                      onClick={togglePause}
+                      style={{ background: 'none', border: `1px solid ${chapter.color}`, color: chapter.color, borderRadius: 6, padding: '8px 22px', cursor: 'pointer', fontSize: '0.8rem', letterSpacing: '0.16em', fontFamily: 'inherit', fontWeight: 700 }}
+                    >
+                      ▶ RESUME
+                    </motion.button>
+                    <button
+                      onClick={() => navigate('/story', { replace: true })}
+                      style={{ background: 'none', border: '1px solid rgba(255,255,255,0.18)', color: '#bbb', borderRadius: 6, padding: '7px 18px', cursor: 'pointer', fontSize: '0.72rem', letterSpacing: '0.12em', fontFamily: 'inherit' }}
+                    >
+                      ← WORLD MAP
+                    </button>
+                    <button
+                      onClick={() => { togglePause(); pendingResetRef.current = true; setCurrentChapterId(currentChapterId); setCurrentLevelId(currentLevelId); setPhase(PHASE.STORY) }}
+                      style={{ background: 'none', border: '1px solid rgba(255,255,255,0.1)', color: '#555', borderRadius: 6, padding: '6px 16px', cursor: 'pointer', fontSize: '0.65rem', letterSpacing: '0.1em', fontFamily: 'inherit' }}
+                    >
+                      RESTART LEVEL
+                    </button>
                   </div>
-                ) : (
-                  <GameCanvas
-                    state={state}
-                    onTap={() => { if (config?.sfxEnabled && !paused) try { playRotateSFX(pieceTheme || 'classic') } catch {}; emitSynesthesia(SYNESTHESIA_EVENT.ROTATE, { intensity: 1.0, source: 'story-tap' }); triggerAction('rotateCW'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
-                    onTwoFingerTap={() => { if (config?.sfxEnabled && !paused) try { playZoneActivateSFX(pieceTheme || 'classic') } catch {}; triggerAction('activateZone'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
-                    onDragBegin={handleDragBegin}
-                    onDragEnd={handleDragEnd}
-                    onHardDrop={handleHardDrop}
-                    themeOverride={pieceTheme}
-                    boardAlpha={boardAlpha}
-                  />
                 )}
-                </div>
+              </SynesthesiaMotionLayer>
+            </LandscapeGameLayout>
+          ) : (
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 0, padding: 0, background: 'transparent', overflow: 'visible' }}>
+              <SynesthesiaMotionLayer
+                className="mobile-canvas-wrap"
+                style={{
+                  background: 'transparent',
+                  flex: 1,
+                  minWidth: 0,
+                  minHeight: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'hidden',
+                  paddingBottom: focus && showOnScreenControls
+                    ? 'calc(4.5rem + env(safe-area-inset-bottom, 0px))'
+                    : 0,
+                }}
+              >
+                {(() => {
+                  const gameCanvas = (
+                    <GameCanvas
+                      state={state}
+                      onTap={() => { if (config?.sfxEnabled && !paused) try { playRotateSFX(pieceTheme || 'classic') } catch {}; emitSynesthesia(SYNESTHESIA_EVENT.ROTATE, { intensity: 1.0, source: 'story-tap' }); triggerAction('rotateCW'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
+                      onTwoFingerTap={() => { if (config?.sfxEnabled && !paused) try { playZoneActivateSFX(pieceTheme || 'classic') } catch {}; triggerAction('activateZone'); try { window.dispatchEvent(new Event('bg-beat')) } catch {} }}
+                      onDragBegin={handleDragBegin}
+                      onDragEnd={handleDragEnd}
+                      onHardDrop={handleHardDrop}
+                      onZoomGesture={scale => setZoom(value => Math.max(0.5, Math.min(2, value * scale)))}
+                      themeOverride={pieceTheme}
+                      boardAlpha={boardAlpha}
+                      screenShakeMultiplier={config?.screenShakeMultiplier ?? 1.0}
+                    />
+                  )
+                  const canvasContent = !isMobile ? (
+                    <div style={{ transform: `scale(${zoom})`, transformOrigin: 'center center', width: 'fit-content', height: 'fit-content', maxWidth: '90%', maxHeight: '90%' }}>
+                      {gameCanvas}
+                    </div>
+                  ) : gameCanvas
+                  
+                  return canvasContent
+                })()}
                 {/* Focus toggle styled like Solo's UI tab */}
                 <button
                   onClick={() => setFocus(f => !f)}
@@ -1126,36 +1323,12 @@ export default function StoryLevelPage() {
                     </button>
                   </div>
                 )}
-            </SynesthesiaMotionLayer>
-
-            {/* Right panel: Next + Zone meter */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: isLandscape ? 6 : 4, minWidth: 0, minHeight: 0 }}>
-              {/* Next box */}
-              <div style={{ background: 'rgba(0,0,0,0.4)', borderRadius: isLandscape ? 8 : 6, padding: isLandscape ? '10px' : '8px', border: `1px solid ${chapter.color}22`, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: isLandscape ? 4 : 2, alignItems: 'center' }}>
-                <div style={{ fontSize: hudSizing.statsLabel, letterSpacing: '0.12em', color: '#888', textAlign: 'center', textTransform: 'uppercase', fontWeight: 600 }}>Next</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: isLandscape ? 2 : 1, justifyContent: 'center', alignItems: 'center', flex: 1, minHeight: 0, overflow: 'auto' }}>
-                  {(state.queue ?? []).slice(0, isLandscape ? 3 : 2).map((t, i) => (
-                    <PieceMini key={i} type={t} pieceTheme={pieceTheme} size={isLandscape ? 11 : 9} />
-                  ))}
-                </div>
-              </div>
-              {/* Zone meter */}
-              <div style={{ background: `${state.zoneActive ? '#00e5ff22' : state.zoneMeter >= ZONE_MIN_METER ? '#22d3ee22' : '#ffffff08'}`, borderRadius: isLandscape ? 8 : 6, padding: isLandscape ? 8 : 6, border: `1px solid ${state.zoneActive ? '#00e5ff44' : state.zoneMeter >= ZONE_MIN_METER ? '#22d3ee44' : `${chapter.color}22`}`, display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center', justifyContent: 'center' }}>
-                <div style={{ fontSize: hudSizing.statsLabel, letterSpacing: '0.12em', color: state.zoneActive ? '#00e5ff' : '#888', textTransform: 'uppercase', fontWeight: 600 }}>
-                  {state.zoneActive ? `${Math.ceil(state.zoneTimer/1000)}s` : 'Zone'}
-                </div>
-                <div style={{ width: 18, height: 45, background: 'rgba(0,0,0,0.3)', borderRadius: 3, border: `1px solid ${state.zoneActive ? '#00e5ff' : '#555'}`, position: 'relative', overflow: 'hidden' }}>
-                  <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: `${Math.max(0, Math.min(100, state.zoneActive ? (state.zoneTimer / Math.max(1, state.zoneDuration || ZONE_DURATION_MS)) * 100 : (state.zoneMeter || 0)))}%`, background: state.zoneActive ? '#00e5ff' : state.zoneMeter >= ZONE_MIN_METER ? '#22d3ee' : '#666', transition: 'height 0.1s linear' }} />
-                </div>
-                {!state.zoneActive && state.zoneMeter >= ZONE_MIN_METER && (
-                  <button onClick={() => triggerAction('activateZone')} style={{ fontSize: '0.5rem', background: 'none', border: `1px solid #22d3ee`, color: '#22d3ee', borderRadius: 3, padding: '2px 6px', cursor: 'pointer', fontFamily: 'inherit' }}>
-                    ▶ Activate
-                  </button>
-                )}
-              </div>
+              </SynesthesiaMotionLayer>
             </div>
-          </div>
-            <AnimatePresence>
+          )}
+
+          {/* Zone end overlay */}
+          <AnimatePresence>
               {state.zoneEndResult && (
                 <motion.div className="zone-end-overlay"
                   initial={{ opacity: 0, scale: 0.92 }}
@@ -1179,11 +1352,11 @@ export default function StoryLevelPage() {
               )}
             </AnimatePresence>
 
-          {showOnScreenControls && !focus && (
+          {showOnScreenControls && !focus && !isLandscape && (
             <TouchControls onPress={handlePress} onRelease={handleRelease} />
           )}
 
-          {showOnScreenControls && focus && (
+          {showOnScreenControls && focus && !isLandscape && (
             <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 60, pointerEvents: 'auto' }}>
               <TouchControls onPress={handlePress} onRelease={handleRelease} />
             </div>

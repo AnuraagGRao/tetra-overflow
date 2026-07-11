@@ -22,7 +22,7 @@ android {
         minSdk 21
         targetSdk 34
         versionCode 2
-        versionName "0.8.5"
+        versionName "0.9.0"
 
         manifestPlaceholders = [
             hostName: "tetra.anuraaggrao.com",

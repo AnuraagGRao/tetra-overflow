@@ -12,6 +12,8 @@ import GameCanvas, { PIECE_COLOR_MAPS } from '../components/GameCanvas'
 import TouchControls from '../components/TouchControls'
 import BackgroundCanvas from '../components/BackgroundCanvas'
 import SynesthesiaMotionLayer from '../components/SynesthesiaMotionLayer'
+import LandscapeGameLayout from '../components/LandscapeGameLayout'
+import ZoomControl from '../components/ZoomControl'
 import { Season2MusicManager } from '../audio/season2MusicManager'
 import { emitSynesthesia, SYNESTHESIA_EVENT } from '../logic/synesthesiaBus'
 import { hardResetAndReload } from '../logic/hardReset'
@@ -687,14 +689,9 @@ export default function ZodiacLevelPage() {
   
   const [zoom, setZoom] = useState(() => {
     const saved = Number(localStorage.getItem('tetris-zoom') || 1)
-    return saved >= 1 && saved <= 1.5 ? saved : 1
+    // Clamp to 0.5–2.0 (50%–200%)
+    return saved >= 0.5 && saved <= 2.0 ? saved : 1
   })
-  const cycleZoom = useCallback(() => setZoom((z) => {
-    const next = z >= 1.5 ? 1 : z >= 1.25 ? 1.5 : 1.25
-    localStorage.setItem('tetris-zoom', next)
-    return next
-  }), [])
-
   const engine = useMemo(() => new TetrisEngine(), [])
 
   const levelStartLinesRef = useRef(0)
@@ -730,7 +727,7 @@ export default function ZodiacLevelPage() {
   }, [bossId, effectiveProgress])
 
   const CONFIG_KEY = 'tetris-config'
-  const DEFAULT_CONFIG = { sfxEnabled: true, hapticEnabled: true, musicVolume: 1.0, sfxVolume: 2.0, das: 110, arr: 25, showOnScreenControls: false }
+  const DEFAULT_CONFIG = { sfxEnabled: true, hapticEnabled: true, musicVolume: 1.0, sfxVolume: 2.0, das: 110, arr: 25, showOnScreenControls: false, renderQuality: 'balanced', screenShakeMultiplier: 1.0 }
   const loadConfig = () => { try { return { ...DEFAULT_CONFIG, ...JSON.parse(localStorage.getItem(CONFIG_KEY) ?? '{}') } } catch { return { ...DEFAULT_CONFIG } } }
   const [config, setConfig] = useState(loadConfig)
 
@@ -1155,6 +1152,7 @@ export default function ZodiacLevelPage() {
       {/* ── Game phase ───────────────────────────────────────────────────── */}
       {phase === PHASE.GAME && (
         <div style={{ position: 'absolute', inset: 0, zIndex: 10, display: 'flex', flexDirection: 'column' }}>
+          {isLandscape && <ZoomControl zoom={zoom} onChange={setZoom} />}
           {/* HUD */}
           {!focus && (
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: hudSizing.hudPadding, background: 'rgba(0,0,0,0.55)', color: '#fff', fontSize: hudSizing.isMobile ? (isLandscape ? '0.8rem' : '0.85rem') : '0.85rem', letterSpacing: '0.1em', flexShrink: 0, backdropFilter: 'blur(6px)', gap: isLandscape ? 8 : 10, flexWrap: 'nowrap', minHeight: hudSizing.hudMinHeight }}>
@@ -1203,14 +1201,42 @@ export default function ZodiacLevelPage() {
                 >
                   {paused ? '▶' : '⏸'}
                 </button>
-                {!isMobile && (
-                  <button
-                    onClick={cycleZoom}
-                    style={{ background: 'none', border: '1px solid rgba(255,255,255,0.2)', color: '#aaa', cursor: 'pointer', fontSize: '0.6rem', padding: '3px 8px', borderRadius: 4, fontFamily: 'inherit' }}
-                    title="Cycle zoom"
-                  >
-                    🔍 {Math.round(zoom * 100)}%
-                  </button>
+                {false && (
+                  <div>
+                    <button
+                      onClick={() => setZoomInputOpen(true)}
+                      style={{ background: 'none', border: '1px solid rgba(255,255,255,0.2)', color: '#aaa', cursor: 'pointer', fontSize: '0.6rem', padding: '3px 8px', borderRadius: 4, fontFamily: 'inherit' }}
+                      title="Click to set custom zoom"
+                    >
+                      🔍 {Math.round(zoom * 100)}%
+                    </button>
+                    {zoomInputOpen && (
+                      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => { setZoomInputOpen(false); setZoomInput(''); }}>
+                        <form onSubmit={handleZoomInput} onClick={e => e.stopPropagation()} style={{ background: 'rgba(20,20,30,0.95)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8, padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: 12, minWidth: 200, backdropFilter: 'blur(8px)' }}>
+                          <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#ccc' }}>Set Zoom Level</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <input
+                              type="number"
+                              min="50"
+                              max="200"
+                              step="1"
+                              value={zoomInput || Math.round(zoom * 100)}
+                              onChange={e => setZoomInput(e.target.value)}
+                              autoFocus
+                              onFocus={e => e.target.select()}
+                              style={{ flex: 1, padding: '6px 8px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 4, color: '#fff', fontFamily: 'inherit', fontSize: '0.95rem' }}
+                            />
+                            <span style={{ color: '#888' }}>%</span>
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: '#666' }}>Range: 50% — 200%</div>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button type="submit" style={{ flex: 1, background: 'rgba(100, 200, 255, 0.2)', border: '1px solid rgba(100, 200, 255, 0.4)', color: '#64c8ff', borderRadius: 4, padding: '6px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Apply</button>
+                            <button type="button" onClick={() => { setZoomInputOpen(false); setZoomInput(''); }} style={{ flex: 1, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)', color: '#aaa', borderRadius: 4, padding: '6px', cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+                          </div>
+                        </form>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
@@ -1242,39 +1268,172 @@ export default function ZodiacLevelPage() {
             )
           })()}
 
-          {/* Canvas area */}
-          <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: isLandscape ? `clamp(90px, 12%, 140px) 1fr clamp(90px, 12%, 140px)` : `68px 1fr`, alignItems: 'stretch', gap: isLandscape ? 12 : 6, padding: isLandscape ? '12px' : '8px 6px 8px 6px', background: isLandscape ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.08)', overflow: isLandscape ? 'hidden' : 'visible' }}>
-            {/* Left panel: HOLD + stats */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: isLandscape ? 8 : 4, minWidth: 0, minHeight: 0 }}>
-              {/* Hold box */}
-              <div style={{ background: 'rgba(0,0,0,0.4)', borderRadius: isLandscape ? 8 : 6, padding: isLandscape ? '10px' : '8px', border: `1px solid ${boss.color}22`, display: 'flex', flexDirection: 'column', gap: isLandscape ? 4 : 2, alignItems: 'center' }}>
-                <div style={{ fontSize: hudSizing.statsLabel, letterSpacing: '0.12em', color: '#888', marginBottom: isLandscape ? 2 : 0, textAlign: 'center', textTransform: 'uppercase', fontWeight: 600 }}>Hold</div>
-                <div style={{ display: 'flex', justifyContent: 'center', flex: 1, minHeight: 0 }}>
-                  <PieceMini type={state.hold} pieceTheme={pieceTheme} size={isLandscape ? 12 : 10} />
+          {/* PORTRAIT MODE: Clean HUD + Canvas layout (matches Solo Mode) */}
+          {!isLandscape && !focus && (
+            <div style={{ display: 'flex', alignItems: 'stretch', gap: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)', borderBottom: '1px solid rgba(255,255,255,0.1)', width: '100%', flexShrink: 0, overflow: 'hidden', paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+              {/* Hold */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0.3rem 0.45rem', borderRight: `1px solid ${boss.color}33`, gap: '0.1rem', minWidth: 58 }}>
+                <div style={{ fontSize: '0.5rem', letterSpacing: '0.1em', color: '#888', textTransform: 'uppercase', fontWeight: 600 }}>Hold</div>
+                <PieceMini type={state.hold} pieceTheme={pieceTheme} size={10} />
+              </div>
+              {/* Center stats */}
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-around', padding: '0.3rem 0.5rem', gap: 4 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <div style={{ fontSize: '0.55rem', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#888', lineHeight: 1 }}>Lv</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#fff', lineHeight: 1.1 }}>{state.level}</div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <div style={{ fontSize: '0.55rem', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#888', lineHeight: 1 }}>Lines</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#fff', lineHeight: 1.1 }}>{Math.min(linesThisLevel, effectiveTargetLines)}/{effectiveTargetLines}</div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <div style={{ fontSize: '0.55rem', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#888', lineHeight: 1 }}>Score</div>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 900, color: '#00d4ff', lineHeight: 1.1 }}>{state.score.toLocaleString()}</div>
                 </div>
               </div>
-              {/* Stats box (landscape only) */}
-              {isLandscape && (
-                <div style={{ background: 'rgba(0,0,0,0.4)', borderRadius: 8, padding: '8px', border: `1px solid ${boss.color}22`, fontSize: hudSizing.statsLabel, color: '#aaa', flexShrink: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center', justifyContent: 'center' }}>
-                  <div style={{ marginBottom: 2, textAlign: 'center', color: '#00d4ff', fontWeight: 700, whiteSpace: 'nowrap', fontSize: hudSizing.statsValue }}>
-                    {state.score.toLocaleString()}
+              {/* Next */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0.3rem 0.45rem', borderLeft: `1px solid ${boss.color}33`, gap: '0.15rem', minWidth: 58 }}>
+                <div style={{ fontSize: '0.5rem', letterSpacing: '0.1em', color: '#888', textTransform: 'uppercase', fontWeight: 600 }}>Next</div>
+                {(state.queue ?? []).slice(0, 3).map((t, i) => (
+                  <PieceMini key={i} type={t} pieceTheme={pieceTheme} size={7} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Zone bar (portrait only, below HUD) */}
+          {!isLandscape && !focus && (
+            <div style={{ height: 4, width: '100%', background: 'rgba(20, 30, 70, 0.8)', flexShrink: 0, position: 'relative', overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${Math.max(0, Math.min(100, state.zoneActive ? (state.zoneTimer / Math.max(1, state.zoneDuration || ZONE_DURATION_MS)) * 100 : (state.zoneMeter || 0)))}%`, background: state.zoneActive ? 'linear-gradient(90deg, #8844ff, #00cfff)' : state.zoneMeter >= ZONE_MIN_METER ? 'linear-gradient(90deg, #00cfff, #fff)' : 'linear-gradient(90deg, #1e90ff, #00cfff)', transition: 'width 0.15s' }} />
+            </div>
+          )}
+
+          {/* Landscape mode: full 3-column layout */}
+          {isLandscape && (
+            <div style={{ flex: 1, minHeight: 0, width: '100%', display: 'flex', flexDirection: 'column' }}>
+              {(() => {
+                const gameCanvas = (
+                  <GameCanvas
+                    state={{
+                      ...state,
+                      queue: hideNextCount > 0 ? [] : state.queue,
+                    }}
+                    onTap={() => {
+                      if (rotationLocked) return
+                      if (config?.sfxEnabled && !paused) try { playRotateSFX(pieceTheme || 'classic') } catch {}
+                      emitSynesthesia(SYNESTHESIA_EVENT.ROTATE, { intensity: 1.0, source: 'zodiac-tap' })
+                      triggerAction('rotateCW')
+                    }}
+                    onTwoFingerTap={() => {
+                      if (config?.sfxEnabled && !paused) try { playZoneActivateSFX(pieceTheme || 'classic') } catch {}
+                      triggerAction('activateZone')
+                    }}
+                    onDragBegin={handleDragBegin}
+                    onDragEnd={handleDragEnd}
+                    onHardDrop={handleHardDrop}
+                    onZoomGesture={scale => setZoom(value => Math.max(0.5, Math.min(2, value * scale)))}
+                    themeOverride={pieceTheme}
+                    boardAlpha={boardAlpha}
+                    activePieceEffect={
+                      bossId === 'scorpio' && speedBoostActive ? 'poison'
+                      : bossId === 'virgo' && rotationLocked ? 'rotlock'
+                      : null
+                    }
+                    screenShakeMultiplier={config?.screenShakeMultiplier ?? 1.0}
+                  />
+                )
+                const canvasElement = !isMobile ? (
+                  <div style={{ ...illusionStyle, height: '100%', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', transform: `scale(${zoom})`, transformOrigin: 'center center', maxWidth: '100%', maxHeight: '100%' }}>
+                    {gameCanvas}
                   </div>
-                  <div style={{ fontSize: hudSizing.statsLabel, textAlign: 'center', lineHeight: 1.3 }}>
-                    <div>L{state.level}</div>
-                    <div>{Math.min(linesThisLevel, effectiveTargetLines)}/{effectiveTargetLines}</div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', maxWidth: '100%', maxHeight: '100%', transform: `scale(${zoom})`, transformOrigin: 'center center', ...(illusion ? illusionStyle : {}) }}>
+                    {gameCanvas}
                   </div>
-                </div>
+                )
+                return (
+                  <LandscapeGameLayout
+                    isLandscape={true}
+                    gameMode="story"
+                    state={state}
+                    paused={paused}
+                    phase={phase}
+                    hudSizing={hudSizing}
+                    zoom={zoom}
+                    zoneActive={state.zoneActive || false}
+                    zoneMeter={state.zoneMeter || 0}
+                    zoneTimerMs={state.zoneTimer || 0}
+                    onActivateZone={() => triggerAction('activateZone')}
+                    currentLevel={boss}
+                    targetLines={boss?.targetLines || 0}
+                    linesThisLevel={linesThisLevel}
+                    abilityActive={abilityActive}
+                    abilityLabel={abilityLabel}
+                    epochColor={boss?.color || '#ff0000'}
+                    onPause={togglePause}
+                    onZoom={() => setZoomInputOpen(true)}
+                    onSettings={() => setShowSettings(true)}
+                  >
+                    {canvasElement}
+                  </LandscapeGameLayout>
+                )
+              })()}
+              
+              {/* Cancer fog overlay */}
+              <AnimatePresence>
+                {fogRows && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    style={{
+                      position: 'absolute',
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      height: '27%',
+                      background: 'linear-gradient(to top, rgba(0, 30, 80, 0.78), transparent)',
+                      pointerEvents: 'none',
+                      backdropFilter: 'blur(1px)',
+                      zIndex: 5,
+                    }}
+                  />
+                )}
+              </AnimatePresence>
+
+              {/* Ophiuchus constriction overlay */}
+              {constrictionCols > 0 && (
+                <>
+                  <div style={{
+                    position: 'absolute', top: 0, left: 0, bottom: 0,
+                    width: `${constrictionCols * 8.8}%`,
+                    background: 'rgba(0,255,80,0.12)',
+                    borderRight: '2px solid rgba(0,255,80,0.4)',
+                    pointerEvents: 'none',
+                    zIndex: 3,
+                  }} />
+                  <div style={{
+                    position: 'absolute', top: 0, right: 0, bottom: 0,
+                    width: `${constrictionCols * 8.8}%`,
+                    background: 'rgba(0,255,80,0.12)',
+                    borderLeft: '2px solid rgba(0,255,80,0.4)',
+                    pointerEvents: 'none',
+                    zIndex: 3,
+                  }} />
+                </>
               )}
             </div>
+          )}
 
-            {!isLandscape && <div style={{ width: 6, flexShrink: 0, background: boss.color, opacity: 0.25 }} />}
-
-            <SynesthesiaMotionLayer
+          {/* Portrait mode: vertical flex layout */}
+          {!isLandscape && (
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 0, padding: 0, background: 'transparent', overflow: 'visible' }}>
+              <SynesthesiaMotionLayer
               className="mobile-canvas-wrap"
               style={{
                 background: 'transparent',
                 gridColumn: isLandscape ? 2 : undefined,
-                flex: isLandscape ? undefined : 1,
+                flex: !isLandscape ? 1 : undefined,
                 minWidth: 0,
                 minHeight: 0,
                 display: 'flex',
@@ -1287,7 +1446,7 @@ export default function ZodiacLevelPage() {
               }}
             >
               {(() => {
-                const gc = (
+                const gameCanvas = (
                   <GameCanvas
                     state={{
                       ...state,
@@ -1307,6 +1466,7 @@ export default function ZodiacLevelPage() {
                     onDragBegin={handleDragBegin}
                     onDragEnd={handleDragEnd}
                     onHardDrop={handleHardDrop}
+                    onZoomGesture={scale => setZoom(value => Math.max(0.5, Math.min(2, value * scale)))}
                     themeOverride={pieceTheme}
                     boardAlpha={boardAlpha}
                     activePieceEffect={
@@ -1314,18 +1474,43 @@ export default function ZodiacLevelPage() {
                       : bossId === 'virgo' && rotationLocked ? 'rotlock'
                       : null
                     }
+                    screenShakeMultiplier={config?.screenShakeMultiplier ?? 1.0}
                   />
                 )
-                if (!isMobile) return (
+                const canvasElement = !isMobile ? (
                   <div style={{ ...illusionStyle, height: '100%', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', transform: `scale(${zoom})`, transformOrigin: 'center center', maxWidth: '100%', maxHeight: '100%' }}>
-                    {gc}
+                    {gameCanvas}
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', maxWidth: '100%', maxHeight: '100%', ...(illusion ? illusionStyle : {}) }}>
+                    {gameCanvas}
                   </div>
                 )
-                // On mobile: wrap in a container for proper centering
                 return (
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', maxWidth: '100%', maxHeight: '100%', ...(illusion ? illusionStyle : {}) }}>
-                    {gc}
-                  </div>
+                  <LandscapeGameLayout
+                    isLandscape={isLandscape}
+                    gameMode="story"
+                    state={state}
+                    paused={paused}
+                    phase={phase}
+                    hudSizing={hudSizing}
+                    zoom={zoom}
+                    zoneActive={state.zoneActive || false}
+                    zoneMeter={state.zoneMeter || 0}
+                    zoneTimerMs={state.zoneTimer || 0}
+                    onActivateZone={() => triggerAction('activateZone')}
+                    currentLevel={boss}
+                    targetLines={boss?.targetLines || 0}
+                    linesThisLevel={linesThisLevel}
+                    abilityActive={abilityActive}
+                    abilityLabel={abilityLabel}
+                    epochColor={boss?.color || '#ff0000'}
+                    onPause={togglePause}
+                    onZoom={() => setZoomInputOpen(true)}
+                    onSettings={() => setShowSettings(true)}
+                  >
+                    {canvasElement}
+                  </LandscapeGameLayout>
                 )
               })()}
 
@@ -1555,51 +1740,16 @@ export default function ZodiacLevelPage() {
                 )}
               </SynesthesiaMotionLayer>
 
-            {/* Right panel: NEXT + ZONE */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: isLandscape ? 8 : 4, minWidth: 0, minHeight: 0 }}>
-              {/* Next box */}
-              <div style={{ background: 'rgba(0,0,0,0.4)', borderRadius: isLandscape ? 8 : 6, padding: isLandscape ? '10px' : '8px', border: `1px solid ${boss.color}22`, flexGrow: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: isLandscape ? 4 : 2, alignItems: 'center' }}>
-                <div style={{ fontSize: hudSizing.statsLabel, letterSpacing: '0.12em', color: '#888', textAlign: 'center', textTransform: 'uppercase', fontWeight: 600 }}>Next</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: isLandscape ? 2 : 1, justifyContent: 'center', alignItems: 'center' }}>
-                  {state.queue.slice(0, isLandscape ? 3 : 2).map((type, i) => (
-                    <PieceMini key={i} type={type} pieceTheme={pieceTheme} size={isLandscape ? 11 : 9} />
-                  ))}
+              {/* Touch controls (portrait mode only) */}
+              {showOnScreenControls && !focus && (
+                <TouchControls onPress={handlePress} onRelease={handleRelease} />
+              )}
+
+              {showOnScreenControls && focus && (
+                <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 60, pointerEvents: 'auto' }}>
+                  <TouchControls onPress={handlePress} onRelease={handleRelease} />
                 </div>
-              </div>
-              {/* Zone button */}
-              <button
-                onClick={() => {
-                  if (state.zoneActive || state.zoneMeter < 30) return
-                  if (config?.sfxEnabled) try { playZoneActivateSFX(pieceTheme || 'classic') } catch {}
-                  triggerAction('activateZone')
-                }}
-                style={{
-                  background: state.zoneActive ? boss.color : state.zoneMeter >= 30 ? '#00d4ff' : 'rgba(0,0,0,0.4)',
-                  border: `1px solid ${state.zoneActive ? boss.color : state.zoneMeter >= 30 ? '#00d4ff' : boss.color}22`,
-                  borderRadius: isLandscape ? 8 : 6,
-                  padding: isLandscape ? '10px 6px' : '8px 6px',
-                  fontSize: hudSizing.statsLabel,
-                  fontWeight: 700,
-                  color: state.zoneActive ? '#000' : '#aaa',
-                  letterSpacing: '0.1em',
-                  textTransform: 'uppercase',
-                  cursor: state.zoneMeter >= 30 && !state.zoneActive ? 'pointer' : 'not-allowed',
-                  opacity: state.zoneMeter >= 30 || state.zoneActive ? 1 : 0.5,
-                  transition: 'all 0.2s',
-                }}
-              >
-                Zone
-              </button>
-            </div>
-          </div>
-
-          {showOnScreenControls && !focus && (
-            <TouchControls onPress={handlePress} onRelease={handleRelease} />
-          )}
-
-          {showOnScreenControls && focus && (
-            <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 60, pointerEvents: 'auto' }}>
-              <TouchControls onPress={handlePress} onRelease={handleRelease} />
+              )}
             </div>
           )}
         </div>
@@ -1670,7 +1820,7 @@ export default function ZodiacLevelPage() {
                     </button>
                     {nextBossId && (
                       <button
-                        onClick={() => navigate(`/zodiac/${nextBossId}`, { replace: true })}
+                        onClick={() => navigate(`/s2/${nextBossId}`, { replace: true })}
                         style={{ background: 'linear-gradient(90deg,#22d3ee,#a855f7)', border: 'none', color: '#000', borderRadius: 8, padding: '9px 18px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 800, letterSpacing: '0.12em', fontFamily: 'inherit' }}
                       >
                         NEXT BOSS →

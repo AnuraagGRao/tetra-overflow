@@ -5,15 +5,18 @@ import { useAuth } from '../contexts/AuthContext'
 import { getStoryProgress, resetStoryProgress } from '../firebase/db'
 import { STORY_CHAPTERS } from '../logic/storyData'
 import { playTap, playZoomIn, playZoomOut, playBack } from '../audio/uiSfx'
+import StoryMapHUD from '../components/StoryMapHUD'
 import homeIconUrl from '../icons/home-button.png'
+import { isDevMode } from '../logic/devMode'
 
 // Season 2 unlock: ch8 l1 must be completed
 function isS2Unlocked(progress) {
-  return !!progress['ch8_l1_completed']
+  return isDevMode() || !!progress['ch8_l1_completed']
 }
 
 // Returns true if a level is unlocked given progress data
 function isLevelUnlocked(chIdx, lvIdx, progress) {
+  if (isDevMode()) return true
   if (chIdx === 0 && lvIdx === 0) return true
   const ch = STORY_CHAPTERS[chIdx]
   const prevLv = lvIdx > 0
@@ -104,7 +107,7 @@ export default function StoryMapPage() {
   }, [user])
 
   const handleSelectLevel = (chapterId, levelId) => {
-    navigate(`/story/${chapterId}/${levelId}`)
+    navigate(`/s1/${chapterId}/${levelId}`)
   }
 
   // Hide secret chapter ch8 (THE MATRIX) until Ch.7 L.5 is completed
@@ -172,6 +175,7 @@ export default function StoryMapPage() {
   const completedChapters = STORY_CHAPTERS.filter(ch =>
     ch.levels.every(lv => !!progress[`${ch.id}_${lv.id}_completed`])
   )
+  const completedChapterCount = completedChapters.length
 
   // Reset warning state
   const [resetPending, setResetPending] = useState(false);
@@ -254,22 +258,27 @@ export default function StoryMapPage() {
   }
 
   return (
+    <StoryMapHUD
+      // Navigation
+      onHome={() => { playBack(); navigate('/') }}
+      onPreviousSeason={null}
+      onNextSeason={() => { playBack(); navigate('/s2') }}
+      nextSeasonName="S2"
+      
+      // Header content
+      seasonTitle="S1"
+      seasonSubtitle="SEASON 1"
+      seasonColor="#00d4ff"
+      currentProgress={completedChapterCount}
+      totalProgress={8}
+      
+      // Map controls
+      onZoomIn={zoomIn}
+      onZoomOut={zoomOut}
+      onResetView={resetZoom}
+      currentZoom={mapZoom}
+    >
     <div style={{ minHeight: '100dvh', background: '#0a0a14', display: 'flex', flexDirection: 'column', fontFamily: '"Courier New", monospace', color: '#fff', overflow: 'hidden' }}>
-      {/* Header */}
-      <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'calc(env(safe-area-inset-top, 0px) + 1rem) 1.4rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
-        <button onClick={() => { playBack(); navigate('/') }} style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: '0.72rem', letterSpacing: '0.14em', fontFamily: 'inherit', padding: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <img src={homeIconUrl} alt="" style={{ width: 18, height: 18, objectFit: 'contain' }} />
-          <span>MENU</span>
-        </button>
-        <h1 style={{ margin: 0, fontSize: '1rem', fontWeight: 900, letterSpacing: '0.2em', color: '#a855f7' }}>STORY MODE</h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <div style={{ display: 'flex', gap: '0.2rem', background: 'rgba(168,85,247,0.1)', borderRadius: 6, padding: '0.15rem', border: '1px solid rgba(168,85,247,0.2)' }}>
-            <button onClick={zoomOut} title="Zoom Out" style={{ fontSize: '0.9rem', background: 'rgba(168,85,247,0.15)', border: 'none', color: '#a855f7', borderRadius: 4, padding: '0.15rem 0.4rem', cursor: 'pointer', fontWeight: 700, lineHeight: 1 }}>−</button>
-            <button onClick={resetZoom} title="Reset View" style={{ fontSize: '0.65rem', background: 'rgba(168,85,247,0.08)', border: 'none', color: '#8844cc', borderRadius: 4, padding: '0.15rem 0.35rem', cursor: 'pointer', fontWeight: 600, lineHeight: 1 }}>{Math.round(mapZoom * 100)}%</button>
-            <button onClick={zoomIn} title="Zoom In" style={{ fontSize: '0.9rem', background: 'rgba(168,85,247,0.15)', border: 'none', color: '#a855f7', borderRadius: 4, padding: '0.15rem 0.4rem', cursor: 'pointer', fontWeight: 700, lineHeight: 1 }}>+</button>
-          </div>
-        </div>
-      </header>
 
       {loading ? (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555', fontSize: '0.8rem', letterSpacing: '0.2em' }}>LOADING…</div>
@@ -287,23 +296,26 @@ export default function StoryMapPage() {
                 style={{ width: '100%', height: '100%' }}
               >
                 {stars.map(star => (
-                  <motion.circle
+                  <motion.g
                     key={star.id}
-                    cx={star.x}
-                    cy={star.y}
-                    r={star.r}
-                    fill="white"
                     animate={{
                       opacity: [star.o, Math.min(1, star.o + 0.3), star.o],
-                      cx: [star.x, star.x + star.driftX, star.x],
-                      cy: [star.y, star.y - star.driftY, star.y],
+                      x: [0, star.driftX, 0],
+                      y: [0, -star.driftY, 0],
                     }}
                     transition={{ duration: star.dur, delay: star.delay, repeat: Infinity, ease: 'easeInOut' }}
-                  />
+                  >
+                    <circle
+                      cx={star.x}
+                      cy={star.y}
+                      r={star.r}
+                      fill="white"
+                    />
+                  </motion.g>
                 ))}
 
                 <motion.path
-                  d={mapPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')}
+                  d={mapPoints.filter(p => p && typeof p.x === 'number' && typeof p.y === 'number').map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ') || 'M 0 0'}
                   stroke="rgba(255,255,255,0.1)"
                   strokeWidth="1"
                   fill="none"
@@ -317,6 +329,8 @@ export default function StoryMapPage() {
                   const completed = ch.levels.every(lv => !!progress[`${ch.id}_${lv.id}_completed`])
                   const isSelected = selected === i
                   const p = mapPoints[i]
+                  // Guard: skip if position not available
+                  if (!p || typeof p.x !== 'number' || typeof p.y !== 'number') return null
                   // Position labels further from nodes and adjust for top/bottom half
                   // Position text BELOW nodes with good spacing
                   const titleX = p.x
@@ -408,7 +422,7 @@ export default function StoryMapPage() {
               <motion.button
                 whileHover={{ scale: 1.04 }}
                 whileTap={{ scale: 0.96 }}
-                onClick={() => { playZoomIn(); navigate('/zodiac') }}
+                onClick={() => { playZoomIn(); navigate('/s2') }}
                 style={{
                   background: 'linear-gradient(135deg, rgba(168,85,247,0.15), rgba(0,212,255,0.1))',
                   border: '1px solid rgba(168,85,247,0.5)',
@@ -454,5 +468,6 @@ export default function StoryMapPage() {
         </>
       )}
     </div>
+    </StoryMapHUD>
   )
 }

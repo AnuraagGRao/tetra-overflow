@@ -18,6 +18,8 @@ import ZodiacMapPage from './pages/ZodiacMapPage'
 import ZodiacLevelPage from './pages/ZodiacLevelPage'
 import Season3MapPage from './pages/Season3MapPage'
 import Season3LevelPage from './pages/Season3LevelPage'
+import Season4MapPage from './pages/Season4MapPage'
+import Season4LevelPage from './pages/Season4LevelPage'
 import DownloadPage from './pages/DownloadPage'
 
 function NowPlayingToast() {
@@ -148,17 +150,23 @@ export default function AppRouter() {
         <Route path="/" element={<MainMenuPage />} />
         <Route path="/auth" element={<AuthPage />} />
         <Route path="/play" element={<CasualGamePage />} />
-        <Route path="/story" element={<AuthRoute><StoryMapPage /></AuthRoute>} />
+        <Route path="/s1" element={<AuthRoute><StoryMapPage /></AuthRoute>} />
+        <Route path="/s1/:chapterId/:levelId" element={<AuthRoute><StoryLevelPage /></AuthRoute>} />
+        <Route path="/story" element={<Navigate to="/s1" replace />} />
         <Route path="/story/:chapterId/:levelId" element={<AuthRoute><StoryLevelPage /></AuthRoute>} />
         <Route path="/stats" element={<AuthRoute><StatsPage /></AuthRoute>} />
         <Route path="/store" element={<AuthRoute><StorePage /></AuthRoute>} />
         <Route path="/multiplayer" element={<AuthRoute><MultiplayerPage /></AuthRoute>} />
         <Route path="/themes" element={<AuthRoute><ThemePage /></AuthRoute>} />
         <Route path="/lore" element={<AuthRoute><StoryLorePage /></AuthRoute>} />
-        <Route path="/zodiac" element={<AuthRoute><ZodiacMapPage /></AuthRoute>} />
+        <Route path="/s2" element={<AuthRoute><ZodiacMapPage /></AuthRoute>} />
+        <Route path="/s2/:bossId" element={<AuthRoute><ZodiacLevelPage /></AuthRoute>} />
+        <Route path="/zodiac" element={<Navigate to="/s2" replace />} />
         <Route path="/zodiac/:bossId" element={<AuthRoute><ZodiacLevelPage /></AuthRoute>} />
         <Route path="/s3" element={<AuthRoute><Season3MapPage /></AuthRoute>} />
         <Route path="/s3/:epochId/:levelId" element={<AuthRoute><Season3LevelPage /></AuthRoute>} />
+        <Route path="/s4" element={<AuthRoute><Season4MapPage /></AuthRoute>} />
+        <Route path="/s4/:sectorId/:levelId" element={<AuthRoute><Season4LevelPage /></AuthRoute>} />
         <Route path="/artwork" element={<ArtworkPage />} />
         <Route path="/info" element={<InfoPage />} />
         <Route path="/download" element={<DownloadPage />} />

@@ -189,6 +189,19 @@ export default function SettingsPage({ config, onConfig, onClose, onClearCache }
               ))}
             </div>
           </div>
+
+          <div className="settings-row">
+            <span className="settings-label">Screen Shake Intensity</span>
+            <div className="settings-slider-wrap">
+              <input
+                type="range" min="0" max="2" step="0.1"
+                value={config.screenShakeMultiplier ?? 1.0}
+                onChange={e => set('screenShakeMultiplier', +e.target.value)}
+                className="settings-slider"
+              />
+              <span className="settings-val">{((config.screenShakeMultiplier ?? 1.0) * 100).toFixed(0)}%</span>
+            </div>
+          </div>
         </div>
 
         {/* Update / cache tools */}

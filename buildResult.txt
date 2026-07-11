@@ -1,0 +1,303 @@
+
+> tetra-overflow-ultra@0.8.5 prebuild
+> node scripts/write-version-json.js
+
+[write-version-json] Wrote public/api/version.json with version 0.8.5
+
+> tetra-overflow-ultra@0.8.5 build
+> vite build
+
+[36mvite v6.4.2 [32mbuilding for production...[36m[39m
+transforming...
+[32mΓ£ô[39m 767 modules transformed.
+rendering chunks...
+[esbuild css minify]
+Γû▓ [WARNING] Unexpected "}" [css-syntax-error]
+
+    <stdin>:4015:0:
+      4015 Γöé }
+           Γò╡ ^
+
+
+[plugin vite:reporter] 
+(!) Z:/Coding/Weekend Stuff/SecondQ/tetris-mobile-clone/src/firebase/db.js is dynamically imported by Z:/Coding/Weekend Stuff/SecondQ/tetris-mobile-clone/src/App.jsx but also statically imported by Z:/Coding/Weekend Stuff/SecondQ/tetris-mobile-clone/src/App.jsx, Z:/Coding/Weekend Stuff/SecondQ/tetris-mobile-clone/src/components/DailyChallengesMenu.jsx, Z:/Coding/Weekend Stuff/SecondQ/tetris-mobile-clone/src/contexts/AuthContext.jsx, Z:/Coding/Weekend Stuff/SecondQ/tetris-mobile-clone/src/firebase/auth.js, Z:/Coding/Weekend Stuff/SecondQ/tetris-mobile-clone/src/pages/ArtworkPage.jsx, Z:/Coding/Weekend Stuff/SecondQ/tetris-mobile-clone/src/pages/MultiplayerPage.jsx, Z:/Coding/Weekend Stuff/SecondQ/tetris-mobile-clone/src/pages/Season3LevelPage.jsx, Z:/Coding/Weekend Stuff/SecondQ/tetris-mobile-clone/src/pages/Season3MapPage.jsx, Z:/Coding/Weekend Stuff/SecondQ/tetris-mobile-clone/src/pages/Season4LevelPage.jsx, Z:/Coding/Weekend Stuff/SecondQ/tetris-mobile-clone/src/pages/Season4MapPage.jsx, Z:/Coding/Weekend Stuff/SecondQ/tetris-mobile-clone/src/pages/StatsPage.jsx, Z:/Coding/Weekend Stuff/SecondQ/tetris-mobile-clone/src/pages/StorePage.jsx, Z:/Coding/Weekend Stuff/SecondQ/tetris-mobile-clone/src/pages/StoryLevelPage.jsx, Z:/Coding/Weekend Stuff/SecondQ/tetris-mobile-clone/src/pages/StoryLorePage.jsx, Z:/Coding/Weekend Stuff/SecondQ/tetris-mobile-clone/src/pages/StoryMapPage.jsx, Z:/Coding/Weekend Stuff/SecondQ/tetris-mobile-clone/src/pages/ThemePage.jsx, Z:/Coding/Weekend Stuff/SecondQ/tetris-mobile-clone/src/pages/ZodiacLevelPage.jsx, Z:/Coding/Weekend Stuff/SecondQ/tetris-mobile-clone/src/pages/ZodiacMapPage.jsx, dynamic import will not move module into another chunk.
+
+[plugin vite:reporter] 
+(!) Z:/Coding/Weekend Stuff/SecondQ/tetris-mobile-clone/src/logic/storyData_s3.js is dynamically imported by Z:/Coding/Weekend Stuff/SecondQ/tetris-mobile-clone/src/App.jsx but also statically imported by Z:/Coding/Weekend Stuff/SecondQ/tetris-mobile-clone/src/pages/Season3LevelPage.jsx, Z:/Coding/Weekend Stuff/SecondQ/tetris-mobile-clone/src/pages/Season3MapPage.jsx, Z:/Coding/Weekend Stuff/SecondQ/tetris-mobile-clone/src/pages/StoryLorePage.jsx, dynamic import will not move module into another chunk.
+
+computing gzip size...
+[2mdist/[22m[32mindex.html                                                                                         [39m[1m[2m     1.59 kB[22m[1m[22m[2m Γöé gzip:   0.72 kB[22m
+[2mdist/[22m[32massets/nyancat-kmkXUBn-.jpg                                                                        [39m[1m[2m    39.03 kB[22m[1m[22m
+[2mdist/[22m[32massets/pause-button-CZvIVDeH.png                                                                   [39m[1m[2m    48.32 kB[22m[1m[22m
+[2mdist/[22m[32massets/horror2-B7nTAqR4.jpg                                                                        [39m[1m[2m    66.23 kB[22m[1m[22m
+[2mdist/[22m[32massets/leaderboard-button-D4YMP4YI.png                                                             [39m[1m[2m    90.47 kB[22m[1m[22m
+[2mdist/[22m[32massets/horror1-CwxBucWC.jpg                                                                        [39m[1m[2m    95.08 kB[22m[1m[22m
+[2mdist/[22m[32massets/settings-button-o4rlL3nR.png                                                                [39m[1m[2m    99.88 kB[22m[1m[22m
+[2mdist/[22m[32massets/home-button-06SjU9rf.png                                                                    [39m[1m[2m   105.12 kB[22m[1m[22m
+[2mdist/[22m[32massets/horror5-DwdxPao-.jpg                                                                        [39m[1m[2m   108.01 kB[22m[1m[22m
+[2mdist/[22m[32massets/horror4-83BC0UTk.jpg                                                                        [39m[1m[2m   120.16 kB[22m[1m[22m
+[2mdist/[22m[32massets/horror2-DqfKntk9.mp3                                                                        [39m[1m[2m   121.76 kB[22m[1m[22m
+[2mdist/[22m[32massets/YTDown_YouTube_OIIAOIIA-CAT-but-in-4K-Not-Actually_Media_ZHgyQGoeaB0_009_128k-CrFH0mxO.mp3  [39m[1m[2m   145.47 kB[22m[1m[22m
+[2mdist/[22m[32massets/horror3-C9y-WhSC.jpg                                                                        [39m[1m[2m   158.35 kB[22m[1m[22m
+[2mdist/[22m[32massets/horror1-e3z0UJbw.mp3                                                                        [39m[1m[2m   171.29 kB[22m[1m[22m
+[2mdist/[22m[32massets/restart-refresh-button-CBI5FdnC.png                                                         [39m[1m[2m   193.73 kB[22m[1m[22m
+[2mdist/[22m[32massets/play-button-NrA8dAXg.png                                                                    [39m[1m[2m   194.17 kB[22m[1m[22m
+[2mdist/[22m[32massets/sound-button-BRZRFbNQ.png                                                                   [39m[1m[2m   204.11 kB[22m[1m[22m
+[2mdist/[22m[32massets/horror3-B1efv-eL.mp3                                                                        [39m[1m[2m   465.33 kB[22m[1m[22m
+[2mdist/[22m[32massets/store-button-B28T0FNJ.png                                                                   [39m[1m[2m   635.32 kB[22m[1m[22m
+[2mdist/[22m[32massets/story-button-D3f6MOcb.png                                                                   [39m[1m[2m   723.35 kB[22m[1m[22m
+[2mdist/[22m[32massets/Thirteenth_Constellation_ophiuchus-v6vKMAh0.mp3                                             [39m[1m[2m   743.99 kB[22m[1m[22m
+[2mdist/[22m[32massets/Alpha_and_Omega_convergence-DPL5NwYB.mp3                                                    [39m[1m[2m   744.61 kB[22m[1m[22m
+[2mdist/[22m[32massets/Final_Boss_Pursuit_fire-C6x-bl57.mp3                                                        [39m[1m[2m   744.61 kB[22m[1m[22m
+[2mdist/[22m[32massets/One_Last_Arc_cosmos-DVRkhBzc.mp3                                                            [39m[1m[2m   744.61 kB[22m[1m[22m
+[2mdist/[22m[32massets/One_Last_Arc_p2_cosmos-DN8Q_yfs.mp3                                                         [39m[1m[2m   744.61 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Final_Arc_convergence-y5U06G0Y.mp3                                                      [39m[1m[2m   744.61 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Final_Ascent_fire-BHmMuaL3.mp3                                                          [39m[1m[2m   744.61 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Last_Orbit_cosmos-C7-90NSh.mp3                                                          [39m[1m[2m   744.61 kB[22m[1m[22m
+[2mdist/[22m[32massets/Full_Throttle_Logic-TXza6xB-.mp3                                                            [39m[1m[2m   744.61 kB[22m[1m[22m
+[2mdist/[22m[32massets/Slow_Sunday_Window-Dn3vH_Fh.mp3                                                             [39m[1m[2m   744.61 kB[22m[1m[22m
+[2mdist/[22m[32massets/Perfect_Rotation-IFGh56fd.mp3                                                               [39m[1m[2m   744.61 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Last_Key-D6Iv0uan.mp3                                                                   [39m[1m[2m   744.61 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Winning_Move-DAx1kFH-.mp3                                                               [39m[1m[2m   744.61 kB[22m[1m[22m
+[2mdist/[22m[32massets/Turbo_Jump-B4302tmF.mp3                                                                     [39m[1m[2m   744.61 kB[22m[1m[22m
+[2mdist/[22m[32massets/Crossing_the_Zenith_ophiuchus-DKPRU4Fl.mp3                                                  [39m[1m[2m   744.61 kB[22m[1m[22m
+[2mdist/[22m[32massets/Iron_Geometry_capricorn-D-7TOBMB.mp3                                                        [39m[1m[2m   744.61 kB[22m[1m[22m
+[2mdist/[22m[32massets/Submerged_Geometry_pieces-rUnU5Q1v.mp3                                                      [39m[1m[2m   744.61 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_th_Coil_ophiuchus-CvDcgT5r.mp3                                                          [39m[1m[2m   744.61 kB[22m[1m[22m
+[2mdist/[22m[32massets/Thirteenth_Ascent_ophiuchus-_5To6Xxw.mp3                                                    [39m[1m[2m   744.61 kB[22m[1m[22m
+[2mdist/[22m[32massets/oiia_cat_assets_by_awesomeconsoles7_djwlgwe-fullview-DB0AIHiu.png                           [39m[1m[2m 1,098.97 kB[22m[1m[22m
+[2mdist/[22m[32massets/Submerged_Geometry-D_UD08-G.mp4                                                             [39m[1m[2m 2,795.80 kB[22m[1m[22m
+[2mdist/[22m[32massets/Total_Board_Wipe-Br6VCdyN.mp3                                                               [39m[1m[2m 2,800.34 kB[22m[1m[22m
+[2mdist/[22m[32massets/Velocity_Of_A_Cloud_air-BZ9iEQyE.mp3                                                        [39m[1m[2m 3,007.23 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Winning_Move-DiLecD-D.mp4                                                               [39m[1m[2m 3,051.03 kB[22m[1m[22m
+[2mdist/[22m[32massets/Slow_Sunday_Window-B2vrwO9k.mp4                                                             [39m[1m[2m 3,098.49 kB[22m[1m[22m
+[2mdist/[22m[32massets/Perfect_Rotation-uIwerL1o.mp4                                                               [39m[1m[2m 3,247.34 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Last_Key-BtoNaFlu.mp4                                                                   [39m[1m[2m 3,259.54 kB[22m[1m[22m
+[2mdist/[22m[32massets/Iron_Geometry-58jWDY2W.mp4                                                                  [39m[1m[2m 3,395.56 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_th_Coil-B1X1E96k.mp4                                                                    [39m[1m[2m 3,630.54 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Final_Ascent-DLlwLOcf.mp4                                                               [39m[1m[2m 3,630.96 kB[22m[1m[22m
+[2mdist/[22m[32massets/Alpha_and_Omega-DaF_kbiC.mp4                                                                [39m[1m[2m 3,637.38 kB[22m[1m[22m
+[2mdist/[22m[32massets/One_Last_Arc-D6ahdT3T.mp4                                                                   [39m[1m[2m 3,672.02 kB[22m[1m[22m
+[2mdist/[22m[32massets/Thirteenth_Ascent-PeN3--iC.mp4                                                              [39m[1m[2m 3,734.72 kB[22m[1m[22m
+[2mdist/[22m[32massets/Full_Throttle_Logic-BfJfPrWG.mp4                                                            [39m[1m[2m 3,738.09 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Final_Arc-HYwXJlfX.mp4                                                                  [39m[1m[2m 3,748.80 kB[22m[1m[22m
+[2mdist/[22m[32massets/Final_Boss_Pursuit-DHyRNwC2.mp4                                                             [39m[1m[2m 3,779.61 kB[22m[1m[22m
+[2mdist/[22m[32massets/Ascending_the_Zenith_s4-mEvnpoFZ.mp3                                                        [39m[1m[2m 3,910.65 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Last_Orbit-COr1ftey.mp4                                                                 [39m[1m[2m 3,916.06 kB[22m[1m[22m
+[2mdist/[22m[32massets/Gravity_Lockdown-BCIGF7dc.mp3                                                               [39m[1m[2m 3,932.59 kB[22m[1m[22m
+[2mdist/[22m[32massets/Thirteenth_Constellation-CVMZ5hWx.mp4                                                       [39m[1m[2m 3,937.35 kB[22m[1m[22m
+[2mdist/[22m[32massets/Clay_and_Iron_earth-AgCjdaZQ.mp3                                                            [39m[1m[2m 3,949.52 kB[22m[1m[22m
+[2mdist/[22m[32massets/Crossing_the_Zenith-DeYlapy2.mp4                                                            [39m[1m[2m 3,962.91 kB[22m[1m[22m
+[2mdist/[22m[32massets/Gravity_s_Last_Descent-CUNviX8O.mp3                                                         [39m[1m[2m 3,971.95 kB[22m[1m[22m
+[2mdist/[22m[32massets/Before_The_Screen_Goes_Black_s2-DRmYqiGu.mp3                                                [39m[1m[2m 4,046.70 kB[22m[1m[22m
+[2mdist/[22m[32massets/Aligning_the_Lattice_convergence-C8ktgUG2.mp3                                               [39m[1m[2m 4,083.69 kB[22m[1m[22m
+[2mdist/[22m[32massets/Before_the_First_Move-ILWhoGt4.mp3                                                          [39m[1m[2m 4,084.94 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Loop_Resolves_void-D0Y1fCJ8.mp3                                                         [39m[1m[2m 4,086.82 kB[22m[1m[22m
+[2mdist/[22m[32massets/Unscheduled_Shutdown_e1-BZ9l9K7R.mp3                                                        [39m[1m[2m 4,090.58 kB[22m[1m[22m
+[2mdist/[22m[32massets/Peak_Operational_Load_e1-Cwc-QTKP.mp3                                                       [39m[1m[2m 4,100.61 kB[22m[1m[22m
+[2mdist/[22m[32massets/Bedrock_Authority_earth-CPMpxp9Y.mp3                                                        [39m[1m[2m 4,102.49 kB[22m[1m[22m
+[2mdist/[22m[32massets/Clockwork_Failure_e1-CLayB8EA.mp3                                                           [39m[1m[2m 4,126.94 kB[22m[1m[22m
+[2mdist/[22m[32massets/Midnight_Assembly-CtDrmEbJ.mp3                                                              [39m[1m[2m 4,126.95 kB[22m[1m[22m
+[2mdist/[22m[32massets/Before_The_Screen_Went_Dark_e2-DvZG0eCB.mp3                                                 [39m[1m[2m 4,127.57 kB[22m[1m[22m
+[2mdist/[22m[32massets/Amber_Haze_fire-Blxdfv4g.mp3                                                                [39m[1m[2m 4,128.20 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Velvet_Blue_air-BhWAZI-4.mp3                                                            [39m[1m[2m 4,129.45 kB[22m[1m[22m
+[2mdist/[22m[32massets/Clay_Turned_to_Stone_earth-_3Q08o6H.mp3                                                     [39m[1m[2m 4,131.96 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_View_From_Orbit_cosmos-_7Y-4BzI.mp3                                                     [39m[1m[2m 4,133.22 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Silver_Current_cancer-Ok_aT1fy.mp3                                                      [39m[1m[2m 4,135.72 kB[22m[1m[22m
+[2mdist/[22m[32massets/Zero_Margin_capricorn-CFJIYGJ5.mp3                                                          [39m[1m[2m 4,135.72 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Final_Column_s1-Dkfl121R.mp3                                                            [39m[1m[2m 4,144.50 kB[22m[1m[22m
+[2mdist/[22m[32massets/Saltwater_Shelter_cancer-D9yjgJM7.mp3                                                       [39m[1m[2m 4,145.75 kB[22m[1m[22m
+[2mdist/[22m[32massets/Critical_Overload_e4-QYPIP2J7.mp3                                                           [39m[1m[2m 4,147.01 kB[22m[1m[22m
+[2mdist/[22m[32massets/Perfect_Alignment_s1-SYhm8dGO.mp3                                                           [39m[1m[2m 4,152.02 kB[22m[1m[22m
+[2mdist/[22m[32massets/Controller_Disconnected_e2-B_cXQUch.mp3                                                     [39m[1m[2m 4,152.65 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Sting_Is_The_Key_scorpio-BOwG26_W.mp3                                                   [39m[1m[2m 4,155.16 kB[22m[1m[22m
+[2mdist/[22m[32massets/Terminal_Overload_e1-DPLsKI_P.mp3                                                           [39m[1m[2m 4,155.78 kB[22m[1m[22m
+[2mdist/[22m[32massets/Geometry_Bends_convergence-DTOQWrMx.mp3                                                     [39m[1m[2m 4,162.05 kB[22m[1m[22m
+[2mdist/[22m[32massets/Gravity_s_Last_Pull_void-BwcWKjB5.mp3                                                       [39m[1m[2m 4,163.31 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Final_Alignment_convergence-Bcd6o3YJ.mp3                                                [39m[1m[2m 4,164.56 kB[22m[1m[22m
+[2mdist/[22m[32massets/Mercury_Rising_gemini-Cg49wUfn.mp3                                                          [39m[1m[2m 4,164.56 kB[22m[1m[22m
+[2mdist/[22m[32massets/Where_Stones_Become_Streams_water-L0GqLbwB.mp3                                              [39m[1m[2m 4,165.82 kB[22m[1m[22m
+[2mdist/[22m[32massets/Clear_the_Board_aries-B7eZ613Z.mp3                                                          [39m[1m[2m 4,167.07 kB[22m[1m[22m
+[2mdist/[22m[32massets/Velocity_Spike_s2-CfDQzDhZ.mp3                                                              [39m[1m[2m 4,170.20 kB[22m[1m[22m
+[2mdist/[22m[32massets/White_Hot_Velocity_fire-DCoXiuwP.mp3                                                        [39m[1m[2m 4,170.20 kB[22m[1m[22m
+[2mdist/[22m[32massets/Grid_Collapse_convergence-DnNJMMMr.mp3                                                      [39m[1m[2m 4,173.34 kB[22m[1m[22m
+[2mdist/[22m[32massets/Logic_In_Retreat_void-BqRJxeQ2.mp3                                                          [39m[1m[2m 4,173.97 kB[22m[1m[22m
+[2mdist/[22m[32massets/Before_the_Match-Cixfszrk.mp3                                                               [39m[1m[2m 4,174.59 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Last_Level_s4-C1i_pgSR.mp3                                                              [39m[1m[2m 4,178.98 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Last_Rotation-CaiW6dDn.mp3                                                              [39m[1m[2m 4,178.98 kB[22m[1m[22m
+[2mdist/[22m[32massets/Logic_Into_Trust_cosmos-BjaEFuCv.mp3                                                        [39m[1m[2m 4,181.49 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Last_Column-CUnOVFJ3.mp3                                                                [39m[1m[2m 4,182.74 kB[22m[1m[22m
+[2mdist/[22m[32massets/Top_Row_Velocity_aries-BRIZq6Ra.mp3                                                         [39m[1m[2m 4,182.74 kB[22m[1m[22m
+[2mdist/[22m[32massets/Greenery_and_Stone_taurus-CS8KsyGD.mp3                                                      [39m[1m[2m 4,192.15 kB[22m[1m[22m
+[2mdist/[22m[32massets/Point_of_Impact-BtjUoGat.mp3                                                                [39m[1m[2m 4,198.42 kB[22m[1m[22m
+[2mdist/[22m[32massets/Peak_Altitude_s4-B40xKonF.mp3                                                               [39m[1m[2m 4,199.04 kB[22m[1m[22m
+[2mdist/[22m[32massets/Clearing_The_Lines_virgo-CAUQBLeA.mp3                                                       [39m[1m[2m 4,200.93 kB[22m[1m[22m
+[2mdist/[22m[32massets/Protocol_Termination_matrix-DrDvsZbn.mp3                                                    [39m[1m[2m 4,204.69 kB[22m[1m[22m
+[2mdist/[22m[32massets/Vertical_Flow_virgo-BbXYxrb5.mp3                                                            [39m[1m[2m 4,209.70 kB[22m[1m[22m
+[2mdist/[22m[32massets/Heat_of_the_Closing_Gate_fire-cU9z2Afs.mp3                                                  [39m[1m[2m 4,212.84 kB[22m[1m[22m
+[2mdist/[22m[32massets/Centaur_s_Aim_sagittarius-BQS0XaQ6.mp3                                                      [39m[1m[2m 4,214.72 kB[22m[1m[22m
+[2mdist/[22m[32massets/Midnight_Assembly_e2-Czs8hcxw.mp3                                                           [39m[1m[2m 4,216.60 kB[22m[1m[22m
+[2mdist/[22m[32massets/Broken_Glass_Logic_void-tjblrnYl.mp3                                                        [39m[1m[2m 4,216.60 kB[22m[1m[22m
+[2mdist/[22m[32massets/LeoΓÇÖs_Crown_leo-CL3C2c74.mp3                                                                [39m[1m[2m 4,217.23 kB[22m[1m[22m
+[2mdist/[22m[32massets/Maximum_Thermal_Load_Two_s3-KdBJvqnN.mp3                                                    [39m[1m[2m 4,220.36 kB[22m[1m[22m
+[2mdist/[22m[32massets/Weightless_Ascent_air-89FOvcTr.mp3                                                          [39m[1m[2m 4,222.87 kB[22m[1m[22m
+[2mdist/[22m[32massets/Bedrock_Spine_earth-BBf-vcmX.mp3                                                            [39m[1m[2m 4,224.75 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Venusian_Flow_libra-DloZ0fQn.mp3                                                        [39m[1m[2m 4,229.14 kB[22m[1m[22m
+[2mdist/[22m[32massets/Celestial_Math_cosmos-Ce92dZzM.mp3                                                          [39m[1m[2m 4,231.64 kB[22m[1m[22m
+[2mdist/[22m[32massets/Obsidian_Apex_scorpio-mAseufUL.mp3                                                          [39m[1m[2m 4,232.27 kB[22m[1m[22m
+[2mdist/[22m[32massets/Maximum_Load_e3-CK-MCWFe.mp3                                                                [39m[1m[2m 4,232.90 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Seventh_Pulse_s3-BKLh0KU0.mp3                                                           [39m[1m[2m 4,232.90 kB[22m[1m[22m
+[2mdist/[22m[32massets/Top_Of_The_Table-DrRkS4Bj.mp3                                                               [39m[1m[2m 4,234.15 kB[22m[1m[22m
+[2mdist/[22m[32massets/Kernel_Panic_e4--nvmz7Fu.mp3                                                                [39m[1m[2m 4,234.78 kB[22m[1m[22m
+[2mdist/[22m[32massets/Last_Quarter-Dhpa6lCX.mp3                                                                   [39m[1m[2m 4,236.03 kB[22m[1m[22m
+[2mdist/[22m[32massets/One_Last_Arc (1)-C6-vGYIz.mp4                                                               [39m[1m[2m 4,237.37 kB[22m[1m[22m
+[2mdist/[22m[32massets/Final_Block_Drop-DZdUa8ze.mp3                                                               [39m[1m[2m 4,237.91 kB[22m[1m[22m
+[2mdist/[22m[32massets/Pattern_Perfect-DkMtX6oR.mp3                                                                [39m[1m[2m 4,237.91 kB[22m[1m[22m
+[2mdist/[22m[32massets/Cascading_Logic_s3-ClaSlV73.mp3                                                             [39m[1m[2m 4,239.17 kB[22m[1m[22m
+[2mdist/[22m[32massets/Gemini_Rising_gemini-Y5dStyjF.mp3                                                           [39m[1m[2m 4,239.17 kB[22m[1m[22m
+[2mdist/[22m[32massets/Time_Is_A_Liquid_pieces-CA-hLB70.mp3                                                        [39m[1m[2m 4,239.80 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Center_Pulls_cosmos-B4Py6y8I.mp3                                                        [39m[1m[2m 4,243.56 kB[22m[1m[22m
+[2mdist/[22m[32massets/Biological_Tax_e3-sTUeET6s.mp3                                                              [39m[1m[2m 4,247.94 kB[22m[1m[22m
+[2mdist/[22m[32massets/Horizon_Drift_air-CnktbXDZ.mp3                                                              [39m[1m[2m 4,248.57 kB[22m[1m[22m
+[2mdist/[22m[32massets/Poise_in_the_Frame_libra-DQmdUX6h.mp3                                                       [39m[1m[2m 4,248.57 kB[22m[1m[22m
+[2mdist/[22m[32massets/Ultra_Mind_convergence-CQiBTwPP.mp3                                                         [39m[1m[2m 4,250.45 kB[22m[1m[22m
+[2mdist/[22m[32massets/Crown_Made_of_Fire_leo-CIRz1uLe.mp3                                                         [39m[1m[2m 4,250.45 kB[22m[1m[22m
+[2mdist/[22m[32massets/Slipping_Like_Mercury_aquarius-DqA6q0cZ.mp3                                                 [39m[1m[2m 4,254.84 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Waterbearer_aquarius-Ci8PA8VZ.mp3                                                       [39m[1m[2m 4,255.47 kB[22m[1m[22m
+[2mdist/[22m[32massets/Where_Shadows_Grow_water-Boi9Lrel.mp3                                                       [39m[1m[2m 4,256.72 kB[22m[1m[22m
+[2mdist/[22m[32massets/Beneath_The_Current_water-DyAITF_f.mp3                                                      [39m[1m[2m 4,257.97 kB[22m[1m[22m
+[2mdist/[22m[32massets/Margin_Of_Error-C8nrwGz3.mp3                                                                [39m[1m[2m 4,261.11 kB[22m[1m[22m
+[2mdist/[22m[32massets/One_More_Continue-CKw_0HZm.mp3                                                              [39m[1m[2m 4,263.62 kB[22m[1m[22m
+[2mdist/[22m[32massets/Pattern_Lock_convergence-C8hQX-7B.mp3                                                       [39m[1m[2m 4,264.24 kB[22m[1m[22m
+[2mdist/[22m[32massets/Relentless_Collapse_e4-ve4f9wgy.mp3                                                         [39m[1m[2m 4,264.24 kB[22m[1m[22m
+[2mdist/[22m[32massets/One_Final_Gate_matrix-C5v0x61F.mp3                                                          [39m[1m[2m 4,266.75 kB[22m[1m[22m
+[2mdist/[22m[32massets/Midnight_at_Degrees_e4-DPIC1l9F.mp3                                                         [39m[1m[2m 4,270.51 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Last_Column_old-DFCWJDIz.mp3                                                            [39m[1m[2m 4,274.28 kB[22m[1m[22m
+[2mdist/[22m[32massets/Patience_In_The_Wrist_taurus-oP4oU-gX.mp3                                                   [39m[1m[2m 4,276.16 kB[22m[1m[22m
+[2mdist/[22m[32massets/Tidal_Pulse_water-CGTwxgA2.mp3                                                              [39m[1m[2m 4,281.17 kB[22m[1m[22m
+[2mdist/[22m[32massets/After_the_Power_Dies_e2-B2VYyAv0.mp3                                                        [39m[1m[2m 4,281.17 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_ArcherΓÇÖs_Aim_sagittarius-DzDV2QgR.mp3                                                   [39m[1m[2m 4,286.19 kB[22m[1m[22m
+[2mdist/[22m[32massets/Systemic_Entropy_e3-cBqRAWeP.mp3                                                            [39m[1m[2m 4,331.33 kB[22m[1m[22m
+[2mdist/[22m[32massets/Obsidian_Interface_matrix-BYmqmBQG.mp3                                                      [39m[1m[2m 4,348.26 kB[22m[1m[22m
+[2mdist/[22m[32massets/Maximum_Thermal_Load_e4-zASYg0DW.mp3                                                        [39m[1m[2m 4,350.13 kB[22m[1m[22m
+[2mdist/[22m[32massets/Heart_Is_A_Machine_e3-CcREK1gq.mp3                                                          [39m[1m[2m 4,357.03 kB[22m[1m[22m
+[2mdist/[22m[32massets/Thermal_Throttling_e4-Df1YMH54.mp3                                                          [39m[1m[2m 4,377.09 kB[22m[1m[22m
+[2mdist/[22m[32massets/Horizon_Drift-B7C5UHwY.mp4                                                                  [39m[1m[2m 7,861.33 kB[22m[1m[22m
+[2mdist/[22m[32massets/Gravity_s_Last_Pull-DUmtOvFC.mp4                                                            [39m[1m[2m 8,032.89 kB[22m[1m[22m
+[2mdist/[22m[32massets/Vertical_Flow-BhZeCKue.mp4                                                                  [39m[1m[2m 8,107.58 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Venusian_Flow-kwr3oxeP.mp4                                                              [39m[1m[2m 8,160.73 kB[22m[1m[22m
+[2mdist/[22m[32massets/Before_the_First_Move-CS22cKAf.mp4                                                          [39m[1m[2m 8,468.66 kB[22m[1m[22m
+[2mdist/[22m[32massets/Beneath_The_Current-aYPFFshv.mp4                                                            [39m[1m[2m 8,475.29 kB[22m[1m[22m
+[2mdist/[22m[32massets/Weightless_Ascent-BXN9pZkd.mp4                                                              [39m[1m[2m 8,519.40 kB[22m[1m[22m
+[2mdist/[22m[32massets/Before_the_Match-BC12t-xm.mp4                                                               [39m[1m[2m 8,739.62 kB[22m[1m[22m
+[2mdist/[22m[32massets/Saltwater_Shelter-Dp_Eq9Bz.mp4                                                              [39m[1m[2m 8,796.35 kB[22m[1m[22m
+[2mdist/[22m[32massets/Ascending_the_Zenith-DfQG3sil.mp4                                                           [39m[1m[2m 9,075.56 kB[22m[1m[22m
+[2mdist/[22m[32massets/Poise_in_the_Frame-DIqd3xdX.mp4                                                             [39m[1m[2m 9,160.60 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Last_Rotation-CLsKoQeG.mp4                                                              [39m[1m[2m 9,251.88 kB[22m[1m[22m
+[2mdist/[22m[32massets/Clearing_The_Lines-Bykge9ba.mp4                                                             [39m[1m[2m 9,266.17 kB[22m[1m[22m
+[2mdist/[22m[32massets/Top_Of_The_Table-D2SNrNRs.mp4                                                               [39m[1m[2m 9,365.44 kB[22m[1m[22m
+[2mdist/[22m[32massets/Clear_the_Board-C5C1h72u.mp4                                                                [39m[1m[2m 9,400.14 kB[22m[1m[22m
+[2mdist/[22m[32massets/Obsidian_Apex-CXSFrBGp.mp4                                                                  [39m[1m[2m 9,506.24 kB[22m[1m[22m
+[2mdist/[22m[32massets/Total_Board_Wipe-ydRZUUUp.mp4                                                               [39m[1m[2m 9,548.62 kB[22m[1m[22m
+[2mdist/[22m[32massets/Before_The_Screen_Goes_Black-D4JzdPbI.mp4                                                   [39m[1m[2m 9,574.67 kB[22m[1m[22m
+[2mdist/[22m[32massets/Zero_Margin-DHao7Rny.mp4                                                                    [39m[1m[2m 9,577.38 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Loop_Resolves-CoRGFq18.mp4                                                              [39m[1m[2m 9,801.68 kB[22m[1m[22m
+[2mdist/[22m[32massets/Top_Row_Velocity-CIxmEwkw.mp4                                                               [39m[1m[2m 9,887.93 kB[22m[1m[22m
+[2mdist/[22m[32massets/Velocity_Spike-CdWUdCS9.mp4                                                                 [39m[1m[2m 9,965.55 kB[22m[1m[22m
+[2mdist/[22m[32massets/Aligning_the_Lattice-Dlf2uw-3.mp4                                                           [39m[1m[2m 9,965.87 kB[22m[1m[22m
+[2mdist/[22m[32massets/Velocity_Of_A_Cloud-CcHw2jfp.mp4                                                            [39m[1m[2m 9,989.38 kB[22m[1m[22m
+[2mdist/[22m[32massets/Logic_Into_Trust-DYwjWDkA.mp4                                                               [39m[1m[2m10,010.83 kB[22m[1m[22m
+[2mdist/[22m[32massets/Tidal_Pulse-BXnbuyMV.mp4                                                                    [39m[1m[2m10,430.21 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Last_Column-CfLwhV9p.mp4                                                                [39m[1m[2m10,524.89 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Final_Alignment-9rMVA-EK.mp4                                                            [39m[1m[2m10,713.57 kB[22m[1m[22m
+[2mdist/[22m[32massets/Where_Shadows_Grow-BfP1eFbK.mp4                                                             [39m[1m[2m10,836.07 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Last_Column_old-CYU2NuBc.mp4                                                            [39m[1m[2m10,844.16 kB[22m[1m[22m
+[2mdist/[22m[32massets/Midnight_Assembly-D_kME74y.mp4                                                              [39m[1m[2m10,937.73 kB[22m[1m[22m
+[2mdist/[22m[32massets/Final_Block_Drop-5G-AaFxy.mp4                                                               [39m[1m[2m11,048.17 kB[22m[1m[22m
+[2mdist/[22m[32massets/Maximum_Load-BAtuYqTs.mp4                                                                   [39m[1m[2m11,051.21 kB[22m[1m[22m
+[2mdist/[22m[32massets/Cascading_Logic-Czzi9QXu.mp4                                                                [39m[1m[2m11,069.62 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_View_From_Orbit-DcAWNpA0.mp4                                                            [39m[1m[2m11,093.65 kB[22m[1m[22m
+[2mdist/[22m[32massets/Pattern_Lock-DVP8vcu1.mp4                                                                   [39m[1m[2m11,185.10 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_ArcherΓÇÖs_Aim-DoUVlQ4U.mp4                                                               [39m[1m[2m11,216.02 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Sting_Is_The_Key-_5qFcoT7.mp4                                                           [39m[1m[2m11,231.64 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Velvet_Blue-CYcWeXOC.mp4                                                                [39m[1m[2m11,232.49 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Final_Column-j9PBusa_.mp4                                                               [39m[1m[2m11,235.83 kB[22m[1m[22m
+[2mdist/[22m[32massets/Patience_In_The_Wrist-BV8MGJpv.mp4                                                          [39m[1m[2m11,310.67 kB[22m[1m[22m
+[2mdist/[22m[32massets/Greenery_and_Stone-CyUDWVct.mp4                                                             [39m[1m[2m11,332.35 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Center_Pulls-fgO2vVfc.mp4                                                               [39m[1m[2m11,364.04 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Silver_Current-CPsAGLTT.mp4                                                             [39m[1m[2m11,407.60 kB[22m[1m[22m
+[2mdist/[22m[32massets/Clay_and_Iron-B1_cen4D.mp4                                                                  [39m[1m[2m11,482.42 kB[22m[1m[22m
+[2mdist/[22m[32massets/Controller_Disconnected-C2aw_eqz.mp4                                                        [39m[1m[2m11,497.57 kB[22m[1m[22m
+[2mdist/[22m[32massets/Slipping_Like_Mercury-DVQgc0Zn.mp4                                                          [39m[1m[2m11,642.77 kB[22m[1m[22m
+[2mdist/[22m[32massets/Peak_Altitude-MjLyG0DS.mp4                                                                  [39m[1m[2m11,654.92 kB[22m[1m[22m
+[2mdist/[22m[32massets/Margin_Of_Error-Da5f9wpB.mp4                                                                [39m[1m[2m11,764.27 kB[22m[1m[22m
+[2mdist/[22m[32massets/Where_Stones_Become_Streams-B-2ZQ6Wt.mp4                                                    [39m[1m[2m11,878.97 kB[22m[1m[22m
+[2mdist/[22m[32massets/Pattern_Perfect-D2Ns9Chs.mp4                                                                [39m[1m[2m11,974.19 kB[22m[1m[22m
+[2mdist/[22m[32massets/Ultra_Mind-Cm9W28vz.mp4                                                                     [39m[1m[2m11,992.30 kB[22m[1m[22m
+[2mdist/[22m[32massets/Amber_Haze-BkC6Nm6W.mp4                                                                     [39m[1m[2m11,998.82 kB[22m[1m[22m
+[2mdist/[22m[32massets/One_Final_Gate-C-OgOaQs.mp4                                                                 [39m[1m[2m12,046.52 kB[22m[1m[22m
+[2mdist/[22m[32massets/Obsidian_Interface-DSysaVUA.mp4                                                             [39m[1m[2m12,061.01 kB[22m[1m[22m
+[2mdist/[22m[32massets/Gravity_Lockdown-DetyM_D9.mp4                                                               [39m[1m[2m12,081.47 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Last_Level-DXa__O9o.mp4                                                                 [39m[1m[2m12,090.95 kB[22m[1m[22m
+[2mdist/[22m[32massets/Perfect_Alignment-Kr6Yqe2g.mp4                                                              [39m[1m[2m12,135.26 kB[22m[1m[22m
+[2mdist/[22m[32massets/Clay_Turned_to_Stone-D7lQpcic.mp4                                                           [39m[1m[2m12,139.11 kB[22m[1m[22m
+[2mdist/[22m[32massets/Bedrock_Spine-lWoErV5I.mp4                                                                  [39m[1m[2m12,193.64 kB[22m[1m[22m
+[2mdist/[22m[32massets/Gravity_s_Last_Descent-Af7RG2CW.mp4                                                         [39m[1m[2m12,271.76 kB[22m[1m[22m
+[2mdist/[22m[32massets/Midnight_at_Degrees-9qvmkZhC.mp4                                                            [39m[1m[2m12,293.26 kB[22m[1m[22m
+[2mdist/[22m[32massets/Maximum_Thermal_Load-mj5fqhIh.mp4                                                           [39m[1m[2m12,353.32 kB[22m[1m[22m
+[2mdist/[22m[32massets/Clockwork_Failure-CYz5Qh9Q.mp4                                                              [39m[1m[2m12,377.07 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Seventh_Pulse-CawUi6sd.mp4                                                              [39m[1m[2m12,377.19 kB[22m[1m[22m
+[2mdist/[22m[32massets/LeoΓÇÖs_Crown-D8vyFXJA.mp4                                                                    [39m[1m[2m12,399.77 kB[22m[1m[22m
+[2mdist/[22m[32massets/Critical_Overload-qJdt6Q3v.mp4                                                              [39m[1m[2m12,487.55 kB[22m[1m[22m
+[2mdist/[22m[32massets/Peak_Operational_Load-vupGHxp5.mp4                                                          [39m[1m[2m12,497.25 kB[22m[1m[22m
+[2mdist/[22m[32massets/Celestial_Math-CN9CY85v.mp4                                                                 [39m[1m[2m12,572.00 kB[22m[1m[22m
+[2mdist/[22m[32massets/Gemini_Rising-C-ZjFwBK.mp4                                                                  [39m[1m[2m12,700.16 kB[22m[1m[22m
+[2mdist/[22m[32massets/Bedrock_Authority-l4XbZQw2.mp4                                                              [39m[1m[2m12,718.35 kB[22m[1m[22m
+[2mdist/[22m[32massets/Hold_That_L_Piece-DRLmLICe.mp4                                                              [39m[1m[2m12,722.20 kB[22m[1m[22m
+[2mdist/[22m[32massets/Logic_In_Retreat-L3hJ75Iy.mp4                                                               [39m[1m[2m12,760.29 kB[22m[1m[22m
+[2mdist/[22m[32massets/Before_The_Screen_Went_Dark-0cDL9-kg.mp4                                                    [39m[1m[2m12,773.56 kB[22m[1m[22m
+[2mdist/[22m[32massets/Heat_of_the_Closing_Gate-BfhofGnh.mp4                                                       [39m[1m[2m12,778.20 kB[22m[1m[22m
+[2mdist/[22m[32massets/White_Hot_Velocity-CEsVYWCX.mp4                                                             [39m[1m[2m12,816.93 kB[22m[1m[22m
+[2mdist/[22m[32massets/Broken_Glass_Logic-Bje_xNZt.mp4                                                             [39m[1m[2m12,817.33 kB[22m[1m[22m
+[2mdist/[22m[32massets/Time_Is_A_Liquid-DVm8RJmV.mp4                                                               [39m[1m[2m12,858.62 kB[22m[1m[22m
+[2mdist/[22m[32massets/Centaur_s_Aim-BkRM2CFQ.mp4                                                                  [39m[1m[2m12,921.27 kB[22m[1m[22m
+[2mdist/[22m[32massets/Unscheduled_Shutdown-JsCgMVvO.mp4                                                           [39m[1m[2m12,922.64 kB[22m[1m[22m
+[2mdist/[22m[32massets/Relentless_Collapse-C81RDZ7J.mp4                                                            [39m[1m[2m13,015.73 kB[22m[1m[22m
+[2mdist/[22m[32massets/Midnight_Assembly_Season3-BR_eJnBw.mp4                                                      [39m[1m[2m13,018.30 kB[22m[1m[22m
+[2mdist/[22m[32massets/Crown_Made_of_Fire-t-Q-ywoo.mp4                                                             [39m[1m[2m13,154.93 kB[22m[1m[22m
+[2mdist/[22m[32massets/After_the_Power_Dies-Dy_Nhjlj.mp4                                                           [39m[1m[2m13,218.93 kB[22m[1m[22m
+[2mdist/[22m[32massets/Grid_Collapse-Cu7DNS3u.mp4                                                                  [39m[1m[2m13,428.92 kB[22m[1m[22m
+[2mdist/[22m[32massets/Geometry_Bends-DL45woQ3.mp4                                                                 [39m[1m[2m13,537.05 kB[22m[1m[22m
+[2mdist/[22m[32massets/Protocol_Termination-DeQnp1Sc.mp4                                                           [39m[1m[2m13,785.90 kB[22m[1m[22m
+[2mdist/[22m[32massets/Maximum_Thermal_Load_Two-BrRwiCNs.mp4                                                       [39m[1m[2m13,834.60 kB[22m[1m[22m
+[2mdist/[22m[32massets/Kernel_Panic-Fe2rAjRj.mp4                                                                   [39m[1m[2m13,839.64 kB[22m[1m[22m
+[2mdist/[22m[32massets/Heart_Is_A_Machine-Dy-_2dLv.mp4                                                             [39m[1m[2m13,905.68 kB[22m[1m[22m
+[2mdist/[22m[32massets/Terminal_Overload-CnYNWoBq.mp4                                                              [39m[1m[2m14,463.41 kB[22m[1m[22m
+[2mdist/[22m[32massets/Systemic_Entropy-VpP4a03v.mp4                                                               [39m[1m[2m14,977.18 kB[22m[1m[22m
+[2mdist/[22m[32massets/Thermal_Throttling-Dro5H1qj.mp4                                                             [39m[1m[2m15,117.85 kB[22m[1m[22m
+[2mdist/[22m[32massets/The_Waterbearer-B1EuFZwZ.mp4                                                                [39m[1m[2m15,373.26 kB[22m[1m[22m
+[2mdist/[22m[32massets/Biological_Tax-DO2JCXDS.mp4                                                                 [39m[1m[2m15,490.68 kB[22m[1m[22m
+[2mdist/[22m[32massets/Point_of_Impact-D7IjRYdS.mp4                                                                [39m[1m[2m15,534.51 kB[22m[1m[22m
+[2mdist/[22m[35massets/index-DsYeo2mg.css                                                                          [39m[1m[2m    79.10 kB[22m[1m[22m[2m Γöé gzip:  16.08 kB[22m
+[2mdist/[22m[36massets/vanta.dots.min-BF0cIZHJ.js                                                                  [39m[1m[2m    10.99 kB[22m[1m[22m[2m Γöé gzip:   3.87 kB[22m
+[2mdist/[22m[36massets/vanta.cells.min-CZnnkj9w.js                                                                 [39m[1m[2m    12.06 kB[22m[1m[22m[2m Γöé gzip:   4.20 kB[22m
+[2mdist/[22m[36massets/vanta.waves.min-CiXBh7Qk.js                                                                 [39m[1m[2m    12.12 kB[22m[1m[22m[2m Γöé gzip:   4.17 kB[22m
+[2mdist/[22m[36massets/vanta.fog.min-L0mHLWwq.js                                                                   [39m[1m[2m    12.80 kB[22m[1m[22m[2m Γöé gzip:   4.49 kB[22m
+[2mdist/[22m[36massets/vanta.net.min-IaWXU4qd.js                                                                   [39m[1m[2m    13.56 kB[22m[1m[22m[2m Γöé gzip:   4.66 kB[22m
+[2mdist/[22m[36massets/vanta.clouds.min-DFt1Lnpt.js                                                                [39m[1m[2m    15.46 kB[22m[1m[22m[2m Γöé gzip:   5.23 kB[22m
+[2mdist/[22m[36massets/vanta.halo.min-BZFucA4C.js                                                                  [39m[1m[2m    20.60 kB[22m[1m[22m[2m Γöé gzip:   7.02 kB[22m
+[2mdist/[22m[36massets/vanta.birds.min-C7GD-vtN.js                                                                 [39m[1m[2m    28.71 kB[22m[1m[22m[2m Γöé gzip:   9.12 kB[22m
+[2mdist/[22m[36massets/three.module-BdiB4GDF.js                                                                    [39m[1m[33m   649.33 kB[39m[22m[2m Γöé gzip: 167.05 kB[22m
+[2mdist/[22m[36massets/index-Bq8N6yIS.js                                                                           [39m[1m[33m 1,769.35 kB[39m[22m[2m Γöé gzip: 478.06 kB[22m
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+[32mΓ£ô built in 16.67s[39m
+
+> tetra-overflow-ultra@0.8.5 postbuild
+> node scripts/inject-precache.js
+
+[inject-precache] Precached 14 assets in dist/sw.js
+[inject-precache] Updated manifest.json for base /

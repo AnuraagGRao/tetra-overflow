@@ -12,6 +12,7 @@ import { mpPlayLobbyMusic, mpStopMusic, mpMuteMusic, mpSetMusicVolume } from '..
 import GameCanvas from '../components/GameCanvas'
 import SynesthesiaMotionLayer from '../components/SynesthesiaMotionLayer'
 import { emitSynesthesia, SYNESTHESIA_EVENT } from '../logic/synesthesiaBus'
+import LandscapeGameLayout from '../components/LandscapeGameLayout'
 import homeIconUrl from '../icons/home-button.png'
 import { BOARD_HEIGHT } from '../logic/tetrominoes'
 import TouchControls from '../components/TouchControls'
@@ -1527,15 +1528,36 @@ export default function MultiplayerPage() {
 
                 {/* Canvas */}
                 <SynesthesiaMotionLayer className="mobile-canvas-wrap" style={{ background: 'transparent', flex: 1, minWidth: 0, paddingBottom: showOnScreenControls ? isLandscape ? '3.5rem' : '4.5rem' : 0 }}>
-                    <GameCanvas
+                    <LandscapeGameLayout
+                      isLandscape={isLandscape}
+                      gameMode="versus"
                       state={myState}
-                      onTap={() => triggerAction('rotateCW')}
-                      onTwoFingerTap={() => triggerAction('activateZone')}
-                      onDragBegin={handleDragBegin}
-                      onDragEnd={handleDragEnd}
-                      onHardDrop={handleHardDrop}
-                      renderQuality={(() => { try { return JSON.parse(localStorage.getItem('tetris-config') || '{}').renderQuality || 'balanced' } catch { return 'balanced' } })()}
-                    />
+                      paused={_paused}
+                      phase={screen === SCREEN.GAME ? 'game' : 'lobby'}
+                      hudSizing={hudSizing}
+                      zoom={1.0}
+                      zoneActive={myState?.zoneActive || false}
+                      zoneMeter={myState?.zoneMeter || 0}
+                      zoneTimerMs={myState?.zoneTimer || 0}
+                      onActivateZone={() => triggerAction('activateZone')}
+                      opponentName={targetUid && playerProfiles[targetUid]?.displayName ? playerProfiles[targetUid].displayName : 'Opponent'}
+                      opponentLines={targetUid && lobbyRef.current?.players ? (lobbyRef.current.players.find(p => p.uid === targetUid)?.linesCleared ?? 0) : 0}
+                      garbageIncoming={targetUid ? (opponentGarbageRef.current[targetUid] ?? 0) : 0}
+                      onPause={() => setPaused(p => !p)}
+                      onZoom={() => {}}
+                      onSettings={() => {}}
+                    >
+                      <GameCanvas
+                        state={myState}
+                        onTap={() => triggerAction('rotateCW')}
+                        onTwoFingerTap={() => triggerAction('activateZone')}
+                        onDragBegin={handleDragBegin}
+                        onDragEnd={handleDragEnd}
+                        onHardDrop={handleHardDrop}
+                        renderQuality={(() => { try { return JSON.parse(localStorage.getItem('tetris-config') || '{}').renderQuality || 'balanced' } catch { return 'balanced' } })()}
+                        screenShakeMultiplier={(() => { try { return JSON.parse(localStorage.getItem('tetris-config') || '{}').screenShakeMultiplier ?? 1.0 } catch { return 1.0 } })()}
+                      />
+                    </LandscapeGameLayout>
                     {/* Small right-side focus toggle for mobile */}
                     <button
                       onClick={() => setFocus(f => !f)}

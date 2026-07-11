@@ -5,6 +5,7 @@ import BackgroundCanvas from '../components/BackgroundCanvas'
 import { STORY_CHAPTERS } from '../logic/storyData'
 import { ZODIAC_BOSSES, OPHIUCHUS, allZodiacBeaten, ophiuchusBeaten } from '../logic/storyData_s2'
 import { SEASON3_EPOCHS } from '../logic/storyData_s3'
+import { SEASON4_SECTORS, isS4Complete } from '../logic/storyData_s4'
 import { useAuth } from '../contexts/AuthContext'
 import { getStoryProgress } from '../firebase/db'
 import homeIconUrl from '../icons/home-button.png'
@@ -124,6 +125,43 @@ export default function StoryLorePage() {
           color: epoch.color,
           glowColor: epoch.glowColor,
           sectionLabel: `S3 · EPOCH ${epIdx + 1}`,
+          levels: completedLevels,
+        })
+      })
+    }
+
+    // Append Season 4 — The Genesis Protocol: one page per sector, only beaten levels
+    const anyS4Beaten = SEASON4_SECTORS.some(sector =>
+      sector.levels.some(l => !!progress[`s4_${sector.id}_${l.id}_completed`])
+    )
+    if (anyS4Beaten) {
+      SEASON4_SECTORS.forEach((sector, secIdx) => {
+        const completedLevels = sector.levels
+          .filter(l => !!progress[`s4_${sector.id}_${l.id}_completed`])
+          .map(l => ({
+            id: l.id,
+            title: l.title,
+            subtitle: l.subtitle,
+            bgType: l.bgType,
+            bpm: l.bpm,
+            gravityMult: l.gravityMult,
+            targetLines: l.targetLines,
+            easyTargetLines: l.easyTargetLines,
+            isBoss: l.isBoss,
+            abilityLabel: l.abilityLabel,
+            abilityDesc: l.abilityDesc,
+            storyBefore: l.storyBefore,
+            storyAfter: l.storyAfter,
+          }))
+        if (completedLevels.length === 0) return
+        const sectorDone = sector.levels.every(l => !!progress[`s4_${sector.id}_${l.id}_completed`])
+        visible.push({
+          id: `s4_${sector.id}`,
+          title: sector.title,
+          subtitle: sectorDone ? `${sector.subtitle} — Complete` : sector.subtitle,
+          color: sector.color,
+          glowColor: sector.glowColor,
+          sectionLabel: `S4 · SECTOR ${secIdx + 1}`,
           levels: completedLevels,
         })
       })

@@ -97,7 +97,7 @@ const HARD_DROP_VEL_PX_MS = 0.45 // px/ms threshold for hard-drop vs soft-drop
 
 // drawCell is defined per-frame inside the useEffect as a theme-aware closure
 
-export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, onDragEnd, onHardDrop, themeOverride, boardAlpha, renderQuality = 'balanced', activePieceEffect = null, onRewindGesture }) {
+export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, onDragEnd, onHardDrop, themeOverride, boardAlpha, renderQuality = 'balanced', activePieceEffect = null, onRewindGesture, onZoomGesture, screenShakeMultiplier = 1.0 }) {
   const { theme: contextTheme, colorMode, bgTheme } = useTheme()
   // Solo/Casual: allow mixing — use explicit theme unless an override is passed
   const theme = themeOverride ?? contextTheme
@@ -111,6 +111,7 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
   const tapTimerRef = useRef(null) // eslint-disable-line no-unused-vars
   const activePointersRef = useRef(new Map())
   const twoFingerRef = useRef(null)
+  const pinchRef = useRef(null)
   const TAP_MULTI_WINDOW_MS = 420
   const selectedEffectRef = useRef([])
   const trailsRef = useRef([])
@@ -718,10 +719,11 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
 
     ctx.save()
 
-    // Screen shake
+    // Screen shake (multiplied by user's shake intensity setting)
     if (state.shake > 0.5) {
-      const sx = (Math.random() - 0.5) * state.shake
-      const sy = (Math.random() - 0.5) * state.shake * 0.5
+      const shakeIntensity = state.shake * screenShakeMultiplier
+      const sx = (Math.random() - 0.5) * shakeIntensity
+      const sy = (Math.random() - 0.5) * shakeIntensity * 0.5
       ctx.translate(sx, sy)
     }
 
@@ -1277,11 +1279,13 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
     event.currentTarget.setPointerCapture(event.pointerId)
     // Register pointer for multi-finger detection
     if (event.pointerType === "touch") {
-      activePointersRef.current.set(event.pointerId, performance.now())
+      activePointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY, time: performance.now() })
       if (activePointersRef.current.size >= 2) {
+        const points = Array.from(activePointersRef.current.values())
+        pinchRef.current = { distance: Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y) }
         // Two-finger gesture: fire two-finger tap when the second contact arrives
         if (activePointersRef.current.size === 2) {
-          const times = Array.from(activePointersRef.current.values())
+          const times = Array.from(activePointersRef.current.values()).map(pointer => pointer.time)
           if (Math.abs(times[0] - times[1]) < TAP_MULTI_WINDOW_MS) {
             setTimeout(() => onTwoFingerTap?.(), 0)
           }
@@ -1310,6 +1314,17 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
   }
 
   const handlePointerMove = (event) => {
+    if (event.pointerType === 'touch' && activePointersRef.current.has(event.pointerId)) {
+      activePointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY, time: performance.now() })
+    }
+    if (activePointersRef.current.size >= 2 && pinchRef.current && onZoomGesture) {
+      const points = Array.from(activePointersRef.current.values())
+      const distance = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y)
+      if (distance > 0 && pinchRef.current.distance > 0) {
+        onZoomGesture(distance / pinchRef.current.distance)
+        pinchRef.current.distance = distance
+      }
+    }
     // Two-finger swipe-left detection for rewind
     if (activePointersRef.current.size >= 2 && twoFingerRef.current && !twoFingerRef.current.triggered) {
       const tf = twoFingerRef.current
@@ -1337,7 +1352,10 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
 
   const handlePointerUp = (event) => {
     activePointersRef.current.delete(event.pointerId)
-    if (activePointersRef.current.size < 2) twoFingerRef.current = null
+    if (activePointersRef.current.size < 2) {
+      twoFingerRef.current = null
+      pinchRef.current = null
+    }
     const start = touchRef.current
     touchRef.current = null
     if (!start) return

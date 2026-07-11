@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { getStoryProgress } from '../firebase/db'
 import { ZODIAC_BOSSES, OPHIUCHUS, allZodiacBeaten, ophiuchusBeaten, getZodiacPositions } from '../logic/storyData_s2'
 import { playTap, playZoomIn, playBack } from '../audio/uiSfx'
+import StoryMapHUD from '../components/StoryMapHUD'
 import homeIconUrl from '../icons/home-button.png'
 
 // Stars for the background (uniformly distributed across the full map)
@@ -55,11 +56,14 @@ function ConstellationLines({ positions }) {
   // Draw lines between neighboring signs for a star-map feel
   const lines = []
   for (let i = 0; i < positions.length; i++) {
+    const curr = positions[i]
     const next = positions[(i + 1) % positions.length]
+    // Guard: skip if position not available
+    if (!curr || typeof curr.x !== 'number' || typeof curr.y !== 'number' || !next || typeof next.x !== 'number' || typeof next.y !== 'number') continue
     lines.push(
       <motion.line
         key={i}
-        x1={positions[i].x} y1={positions[i].y}
+        x1={curr.x} y1={curr.y}
         x2={next.x} y2={next.y}
         stroke="rgba(255,255,255,0.06)"
         strokeWidth="0.35"
@@ -280,37 +284,35 @@ export default function ZodiacMapPage() {
     : null
 
   const defeatedCount = ZODIAC_BOSSES.filter(b => !!progress[`zodiac_${b.id}_completed`]).length
+  const totalBosses = 12 + (allBeaten ? 1 : 0)
+  const progressCount = ophiuchus13 ? totalBosses : defeatedCount
 
   return (
+    <StoryMapHUD
+      // Navigation
+      onHome={() => { playBack(); navigate('/s1') }}
+      onPreviousSeason={() => { playBack(); navigate('/s1') }}
+      onNextSeason={() => { playBack(); navigate('/s3') }}
+      previousSeasonName="S1"
+      nextSeasonName="S3"
+      
+      // Header content
+      seasonTitle="S2"
+      seasonSubtitle="SEASON 2"
+      seasonColor="#a855f7"
+      currentProgress={progressCount}
+      totalProgress={13}
+      
+      // Map controls
+      onZoomIn={zoomIn}
+      onZoomOut={zoomOut}
+      onResetView={resetZoom}
+      currentZoom={mapZoom}
+    >
     <div
       style={{ minHeight: '100dvh', background: '#070710', display: 'flex', flexDirection: 'column', fontFamily: '"Courier New", monospace', color: '#fff', overflow: 'hidden' }}
       onClick={() => setSelected(null)}
     >
-      {/* ── Header ── */}
-      <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.4rem', borderBottom: '1px solid rgba(255,255,255,0.05)', flexShrink: 0, zIndex: 10, position: 'relative' }}>
-        <button
-          onClick={e => { e.stopPropagation(); playBack(); navigate('/story') }}
-          style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: '0.72rem', letterSpacing: '0.14em', fontFamily: 'inherit', padding: 0, display: 'flex', alignItems: 'center', gap: 8 }}
-        >
-          <img src={homeIconUrl} alt="" style={{ width: 18, height: 18, objectFit: 'contain' }} />
-          <span>SEASON 1</span>
-        </button>
-
-        <div style={{ textAlign: 'center' }}>
-          <h1 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 900, letterSpacing: '0.22em', background: 'linear-gradient(135deg, #a855f7, #00d4ff)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            THE ZODIAC ARC
-          </h1>
-          <div style={{ fontSize: '0.52rem', color: '#555', letterSpacing: '0.18em', marginTop: 2 }}>
-            SEASON 2
-          </div>
-        </div>
-
-        <div style={{ fontSize: '0.65rem', color: '#555', letterSpacing: '0.1em' }}>
-          {defeatedCount}/12
-          {ophiuchus13 && <span style={{ color: '#00ff99', marginLeft: 4 }}>+⛎</span>}
-          {!allBeaten && defeatedCount > 0 && <span style={{ color: '#555', marginLeft: 4, fontSize: '0.55rem' }}>— beat all 12 to reveal the truth</span>}
-        </div>
-      </header>
 
       {loading ? (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555', fontSize: '0.8rem', letterSpacing: '0.2em' }}>
@@ -370,19 +372,22 @@ export default function ZodiacMapPage() {
             style={{ width: '100%', height: '100%', position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none' }}
           >
             {BG_STARS.map((star) => (
-              <motion.circle
+              <motion.g
                 key={`bg-${star.id}`}
-                cx={star.x}
-                cy={star.y}
-                r={star.r}
-                fill="white"
                 animate={{
                   opacity: [star.o, Math.min(1, star.o + 0.2), star.o],
-                  cx: [star.x, star.x + star.driftX, star.x],
-                  cy: [star.y, star.y + star.driftY, star.y],
+                  x: [0, star.driftX, 0],
+                  y: [0, star.driftY, 0],
                 }}
                 transition={{ duration: star.dur, delay: star.delay, repeat: Infinity, ease: 'easeInOut' }}
-              />
+              >
+                <circle
+                  cx={star.x}
+                  cy={star.y}
+                  r={star.r}
+                  fill="white"
+                />
+              </motion.g>
             ))}
           </svg>
 
@@ -439,19 +444,26 @@ export default function ZodiacMapPage() {
             style={{ width: '100%', height: '100%', position: 'absolute', inset: 0 }}
           >
             {/* Starfield */}
-            {STARS.map(star => (
-              <motion.circle
-                key={star.id}
-                cx={star.x} cy={star.y} r={star.r}
-                fill="white"
-                animate={{
-                  opacity: [star.o, Math.min(1, star.o + 0.25), star.o],
-                  cx: [star.x, star.x + star.driftX * star.amp, star.x],
-                  cy: [star.y, star.y + star.driftY * star.amp, star.y],
-                }}
-                transition={{ duration: star.dur, delay: star.delay, repeat: Infinity, ease: 'easeInOut' }}
-              />
-            ))}
+            {STARS.map(star => {
+              return (
+                <motion.g
+                  key={star.id}
+                  animate={{
+                    opacity: [star.o, Math.min(1, star.o + 0.25), star.o],
+                    x: [0, star.driftX * star.amp, 0],
+                    y: [0, star.driftY * star.amp, 0],
+                  }}
+                  transition={{ duration: star.dur, delay: star.delay, repeat: Infinity, ease: 'easeInOut' }}
+                >
+                  <circle
+                    cx={star.x}
+                    cy={star.y}
+                    r={star.r}
+                    fill="white"
+                  />
+                </motion.g>
+              )
+            })}
 
             {/* Outer ring */}
             <circle
@@ -468,6 +480,7 @@ export default function ZodiacMapPage() {
             {/* Zodiac nodes */}
             {ZODIAC_BOSSES.map((boss, i) => {
               const p   = positions[i]
+              if (!p || typeof p.x !== 'number' || typeof p.y !== 'number') return null
               const done = !!progress[`zodiac_${boss.id}_completed`]
               const isSel = selected === boss.id
               const isCameraTarget = !selected && cameraTargetId === boss.id
@@ -485,8 +498,9 @@ export default function ZodiacMapPage() {
                     cx={p.x} cy={p.y} r={done ? 4.8 : 3.8}
                     fill={boss.color}
                     opacity={isCameraTarget ? 0.24 : (done ? 0.18 : 0.08)}
-                    animate={{ r: [done ? 4.8 : 3.8, isCameraTarget ? 6.6 : (done ? 6 : 5), done ? 4.8 : 3.8] }}
+                    animate={{ scale: [1, isCameraTarget ? 1.7 : (done ? 1.25 : 1.32), 1] }}
                     transition={{ duration: 2.4 + (i % 5) * 0.4, repeat: Infinity, ease: 'easeInOut' }}
+                    style={{ transformOrigin: `${p.x}px ${p.y}px` }}
                   />
                   {/* Node circle */}
                   <circle
@@ -550,8 +564,9 @@ export default function ZodiacMapPage() {
                 cx="50" cy="50" r="7.5"
                 fill="#00ff99"
                 opacity={0.07}
-                animate={{ r: [7.5, 10, 7.5] }}
+                animate={{ scale: [1, 1.33, 1] }}
                 transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                style={{ transformOrigin: '50px 50px' }}
               />
               {/* Center circle */}
               <circle
@@ -595,7 +610,7 @@ export default function ZodiacMapPage() {
                   boss={selectedBoss}
                   completed={!!progress[`zodiac_${selectedBoss.id}_completed`]}
                   onClose={() => setSelected(null)}
-                  onPlay={() => navigate(`/zodiac/${selectedBoss.id}`)}
+                  onPlay={() => navigate(`/s2/${selectedBoss.id}`)}
                 />
               )}
             </AnimatePresence>
@@ -661,5 +676,6 @@ export default function ZodiacMapPage() {
         </div>
       )}
     </div>
+    </StoryMapHUD>
   )
 }
