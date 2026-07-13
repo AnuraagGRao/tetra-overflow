@@ -10,6 +10,7 @@ import settingsIconUrl from '../icons/settings-button.png'
 import soundIconUrl from '../icons/sound-button.png'
 import storyIconUrl from '../icons/story-button.png'
 import storeIconUrl from '../icons/store-button.png'
+import { GAME_CONFIG_KEY as CONFIG_KEY, readGameConfig as loadConfig } from '../logic/gameConfig'
 
 // ─── Falling tetromino background ─────────────────────────────────────────────
 const BG_SHAPES = [
@@ -84,13 +85,6 @@ const MENU_ITEMS = [
   { label: 'SOUNDTRACK', sub: 'VOTE TRACKS',   iconSrc: soundIconUrl,    path: '/artwork',     color: '#ec4899', public: true },
   { label: 'SETTINGS', sub: 'CONTROLS · AUDIO', iconSrc: settingsIconUrl, action: 'settings', color: '#94a3b8', public: true },
 ]
-
-const CONFIG_KEY = 'tetris-config'
-const DEFAULT_CONFIG = { sfxEnabled: true, hapticEnabled: true, musicVolume: 1.0, sfxVolume: 2.0, das: 110, arr: 25, showOnScreenControls: false, renderQuality: 'balanced', screenShakeMultiplier: 1.0 }
-const loadConfig = () => {
-  try { return { ...DEFAULT_CONFIG, ...JSON.parse(localStorage.getItem(CONFIG_KEY) ?? '{}') } }
-  catch { return { ...DEFAULT_CONFIG } }
-}
 
 // ─── Components ───────────────────────────────────────────────────────────────
 function MenuCard({ item, index, onClick }) {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
@@ -6,7 +6,6 @@ import { getStoryProgress } from '../firebase/db'
 import { SEASON4_SECTORS, isSectorUnlocked, isS4LevelUnlocked, isS4Complete, isS4Unlocked } from '../logic/storyData_s4'
 import { playTap, playBack } from '../audio/uiSfx'
 import StoryMapHUD from '../components/StoryMapHUD'
-import homeIconUrl from '../icons/home-button.png'
 
 // ── Pseudo-random helpers ────────────────────────────────────────────────────
 const pseudo = (n) => {
@@ -65,7 +64,7 @@ function GenesisLines({ sectors }) {
   )
 }
 
-function LevelItem({ sector, level, levelIdx, progress, sectorUnlocked, onPlay }) {
+function LevelItem({ sector, level, levelIdx: _levelIdx, progress, sectorUnlocked, onPlay }) {
   const key = `s4_${sector.id}_${level.id}`
   const completed = !!progress[`${key}_completed`]
   const bestLines = progress[`${key}_lines`] || 0
@@ -267,13 +266,13 @@ export default function Season4MapPage() {
   }
 
   // ── Zoom/pan helpers ─────────────────────────────────────────────────────
-  const clamp = (v, min, max) => Math.max(min, Math.min(max, v))
-  const clampZoom = (z) => Math.max(0.8, Math.min(2.2, z))
-  const clampPanByZoom = (pan, zoom) => {
+  const clamp = useCallback((value, min, max) => Math.max(min, Math.min(max, value)), [])
+  const clampZoom = useCallback(value => Math.max(0.8, Math.min(2.2, value)), [])
+  const clampPanByZoom = useCallback((pan, zoom) => {
     const maxX = Math.max(0, (zoom - 1) * 50)
     const maxY = Math.max(0, (zoom - 1) * 60)
     return { x: clamp(pan.x, -maxX, maxX), y: clamp(pan.y, -maxY, maxY) }
-  }
+  }, [clamp])
   const zoomIn = () => setMapZoom(z => clampZoom(z + 0.1))
   const zoomOut = () => setMapZoom(z => clampZoom(z - 0.1))
   const resetZoom = () => {
@@ -284,7 +283,7 @@ export default function Season4MapPage() {
 
   useEffect(() => {
     setUserPan(p => clampPanByZoom(p, mapZoom))
-  }, [mapZoom])
+  }, [clampPanByZoom, mapZoom])
 
   // ── Gesture handlers ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -343,7 +342,7 @@ export default function Season4MapPage() {
       el.removeEventListener('pointerup', onPointerUp)
       el.removeEventListener('pointercancel', onPointerUp)
     }
-  }, [mapZoom])
+  }, [clampPanByZoom, clampZoom, mapZoom])
 
   const handleWheel = (e) => {
     e.preventDefault()
@@ -415,11 +414,11 @@ export default function Season4MapPage() {
   return (
     <StoryMapHUD
       // Navigation
-      onHome={() => { playBack(); navigate('/s1') }}
+      onHome={() => { playBack(); navigate('/seasons') }}
       onPreviousSeason={() => { playBack(); navigate('/s3') }}
-      onNextSeason={null}
+      onNextSeason={s4Complete ? () => { playBack(); navigate('/s5') } : null}
       previousSeasonName="S3"
-      nextSeasonName=""
+      nextSeasonName="S5"
       
       // Header content
       seasonTitle="THE GENESIS PROTOCOL"

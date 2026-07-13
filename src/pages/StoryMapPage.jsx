@@ -6,7 +6,6 @@ import { getStoryProgress, resetStoryProgress } from '../firebase/db'
 import { STORY_CHAPTERS } from '../logic/storyData'
 import { playTap, playZoomIn, playZoomOut, playBack } from '../audio/uiSfx'
 import StoryMapHUD from '../components/StoryMapHUD'
-import homeIconUrl from '../icons/home-button.png'
 import { isDevMode } from '../logic/devMode'
 
 // Season 2 unlock: ch8 l1 must be completed
@@ -97,7 +96,7 @@ export default function StoryMapPage() {
   const [selected, setSelected] = useState(null) // chIdx
   const [loading, setLoading] = useState(true)
   const [userPan, setUserPan] = useState({ x: 0, y: 0 })
-  const [mapZoom, setMapZoom] = useState(0.38) // Manual zoom level (0.3 - 2.0 = 30% - 200%)
+  const [mapZoom, setMapZoom] = useState(0.88) // Manual zoom level (0.3 - 2.0 = 30% - 200%)
   const gestureRef = useRef({ mode: 'none', lastX: 0, lastY: 0 })
   const mapViewportRef = useRef(null)
 
@@ -156,7 +155,6 @@ export default function StoryMapPage() {
   ), [])
 
   const selectedPoint = selected !== null ? mapPoints[selected] : null
-  const isPortrait = window.innerWidth < window.innerHeight
   
   // Combine manual zoom with responsive base scale
   const zoomScale = selectedPoint ? mapZoom * 1.5 : mapZoom
@@ -168,7 +166,7 @@ export default function StoryMapPage() {
   const clampZoom = (z) => Math.max(0.3, Math.min(2.0, z))
   const zoomIn = () => { playZoomIn(); setMapZoom(z => clampZoom(z + 0.15)) }
   const zoomOut = () => { playZoomOut(); setMapZoom(z => clampZoom(z - 0.15)) }
-  const resetZoom = () => { setSelected(null); setMapZoom(0.38); setUserPan({ x: 0, y: 0 }) }
+  const resetZoom = () => { setSelected(null); setMapZoom(0.88); setUserPan({ x: 0, y: 0 }) }
 
   // How many chapters unlocked
   const _unlockedChapters = STORY_CHAPTERS.filter((_, i) => isLevelUnlocked(i, 0, progress))
@@ -248,7 +246,7 @@ export default function StoryMapPage() {
       el.removeEventListener('pointerup', onPointerUp)
       el.removeEventListener('pointercancel', onPointerUp)
     }
-  }, [selected])
+  }, [mapZoom, selected])
 
   // Mouse wheel zoom
   const handleWheel = (e) => {
@@ -260,9 +258,9 @@ export default function StoryMapPage() {
   return (
     <StoryMapHUD
       // Navigation
-      onHome={() => { playBack(); navigate('/') }}
+      onHome={() => { playBack(); navigate('/seasons') }}
       onPreviousSeason={null}
-      onNextSeason={() => { playBack(); navigate('/s2') }}
+      onNextSeason={isS2Unlocked(progress) ? () => { playBack(); navigate('/s2') } : null}
       nextSeasonName="S2"
       
       // Header content
@@ -336,7 +334,6 @@ export default function StoryMapPage() {
                   const titleX = p.x
                   const titleY = p.y + 8.5  // Below the node (8.5 units down in SVG coords)
                   const titleAnchor = 'middle'
-                  const titleDY = 0
                   return (
                     <motion.g
                       key={ch.id}

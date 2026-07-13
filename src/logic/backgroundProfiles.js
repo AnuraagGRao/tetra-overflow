@@ -1,5 +1,3 @@
-import { pre } from "framer-motion/client";
-
 export const BACKGROUND_THEME_PROFILES = {
   quake: {
     category: 'aggressive',

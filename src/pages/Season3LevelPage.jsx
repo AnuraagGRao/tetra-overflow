@@ -2,19 +2,21 @@ import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
-import { saveStoryProgress, saveGameResult, markEasyModePlayed, setActiveBadge, getStoryProgress } from '../firebase/db'
+import { saveStoryProgress, saveGameResult, markEasyModePlayed, setActiveBadge } from '../firebase/db'
 import SettingsPage from '../components/SettingsPage'
 import { findS3Level, getNextS3Level, isS3LevelUnlocked, isS3Unlocked, SEASON3_EPOCHS } from '../logic/storyData_s3'
-import { PIECES, BOARD_WIDTH, BOARD_HEIGHT } from '../logic/tetrominoes'
+import { BOARD_WIDTH, BOARD_HEIGHT } from '../logic/tetrominoes'
 import { TetrisEngine, GAME_MODE, ZONE_MIN_METER, ZONE_DURATION_MS } from '../logic/gameEngine'
 import { setSfxVolume, setSfxDuck, playMoveSFX, playRotateSFX, playHoldSFX, playSoftDropSFX, playHardDropSFX, playLockSFX, playLineClearSFX, playTetrisSFX, playZoneActivateSFX } from '../audio/gameSfx'
-import GameCanvas, { PIECE_COLOR_MAPS } from '../components/GameCanvas'
+import GameCanvas from '../components/GameCanvas'
+import PieceMini from '../components/TetrominoMini'
 import TouchControls from '../components/TouchControls'
 import BackgroundCanvas from '../components/BackgroundCanvas'
 import SynesthesiaMotionLayer from '../components/SynesthesiaMotionLayer'
 import { Season3MusicManager } from '../audio/season3MusicManager'
 import { emitSynesthesia, SYNESTHESIA_EVENT } from '../logic/synesthesiaBus'
-import { hardResetAndReload } from '../logic/hardReset'
+import { GAME_CONFIG_KEY as CONFIG_KEY, readGameConfig as loadConfig } from '../logic/gameConfig'
+import { useStoryProgress } from '../hooks/useStoryProgress'
 import { BG_TYPE_TO_PIECE_THEME } from '../logic/themeMappings'
 import { useResponsiveHUD } from '../hooks/useResponsiveHUD'
 import LandscapeGameLayout from '../components/LandscapeGameLayout'
@@ -58,41 +60,6 @@ const KEY_BINDINGS = {
 
 const PHASE = { STORY: 'story', LOADING: 'loading', GAME: 'game', COMPLETE: 'complete', FAIL: 'fail' }
 
-// ─── Mini piece preview ────────────────────────────────────────────────────────
-function getPieceColor(type, theme) {
-  return (PIECE_COLOR_MAPS[theme]?.[type]) ?? PIECES[type]?.color ?? '#888888'
-}
-
-function PieceMini({ type, pieceTheme, size = 11 }) {
-  const canvasRef = useRef(null)
-  const color     = type ? getPieceColor(type, pieceTheme) : '#333'
-  const piece     = type ? PIECES[type] : null
-  useEffect(() => {
-    const canvas = canvasRef.current; if (!canvas) return
-    const ctx    = canvas.getContext('2d')
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-    if (!piece) return
-    const { matrix } = piece
-    const filled = matrix.filter(r => r.some(Boolean))
-    if (!filled.length) return
-    const colMin = Math.min(...filled.map(r => r.findIndex(Boolean)))
-    const colMax = Math.max(...filled.map(r => r.length - 1 - [...r].reverse().findIndex(Boolean)))
-    const tw = colMax - colMin + 1, th = filled.length
-    const canvCols = Math.round(canvas.width / size)
-    const canvRows = Math.round(canvas.height / size)
-    const ox = Math.floor((canvCols - tw) / 2) * size
-    const oy = Math.floor((canvRows - th) / 2) * size
-    ctx.fillStyle = color; ctx.shadowColor = color; ctx.shadowBlur = 5
-    filled.forEach((row, ry) => {
-      for (let cx = colMin; cx <= colMax; cx++) {
-        if (!row[cx]) continue
-        ctx.fillRect(ox + (cx - colMin) * size + 1, oy + ry * size + 1, size - 2, size - 2)
-      }
-    })
-  }, [type, color, size, piece])
-  return <canvas ref={canvasRef} width={4 * size} height={2 * size} style={{ display: 'block' }} />
-}
-
 // ─── Rewind Gauge ─────────────────────────────────────────────────────────────
 // Visual component for the rewind gauge
 function RewindGauge({ fill, ready, onActivate }) {
@@ -128,7 +95,7 @@ function RewindGauge({ fill, ready, onActivate }) {
 }
 
 // ─── S3 mechanics hook ─────────────────────────────────────────────────────────
-function useS3Mechanics({ level, epoch, engine, state, linesThisLevel, isActive, zoneActive }) {
+function useS3Mechanics({ level, epoch: _epoch, engine, state, linesThisLevel, isActive, zoneActive }) {
   const mechanic = level?.mechanic ?? null
   const ability  = level?.ability  ?? null
 
@@ -178,12 +145,13 @@ function useS3Mechanics({ level, epoch, engine, state, linesThisLevel, isActive,
 
   // ── Cleanup on unmount / level change ──────────────────────────────────────
   useEffect(() => {
+    const lagTimers = lagTimerRef.current
     return () => {
       clearInterval(hoverTimerRef.current)
       clearInterval(petrifyTimerRef.current)
       clearInterval(shrinkTimerRef.current)
       clearTimeout(phantomTimerRef.current)
-      lagTimerRef.current.forEach(t => clearTimeout(t))
+      lagTimers.forEach(t => clearTimeout(t))
     }
   }, [level?.id])
 
@@ -271,6 +239,7 @@ function useS3Mechanics({ level, epoch, engine, state, linesThisLevel, isActive,
 
   // ── Time-dilation: gravity override based on piece row ─────────────────────
   const engineLevelSavedRef = useRef(null)
+  const currentPieceY = state.current?.y
   useEffect(() => {
     if (!hasDilation || !isActive || dilationRows.length === 0) return
 
@@ -286,7 +255,7 @@ function useS3Mechanics({ level, epoch, engine, state, linesThisLevel, isActive,
       return
     }
 
-    const curY = state.current?.y
+    const curY = currentPieceY
     if (curY == null) return
 
     // Visible row = curY - 2 (subtract hidden rows)
@@ -313,7 +282,7 @@ function useS3Mechanics({ level, epoch, engine, state, linesThisLevel, isActive,
       engineLevelSavedRef.current = null
       dilationOverrideRef.current = null
     }
-  }, [hasDilation, isActive, zoneActive, state.current?.y, dilationRows, engine])
+  }, [currentPieceY, dilationRows, engine, hasDilation, isActive, zoneActive])
 
   // ── Phantom blocks: spawn new phantom every N seconds ─────────────────────
   useEffect(() => {
@@ -743,7 +712,6 @@ export default function Season3LevelPage() {
   const [showSettings, setShowSettings] = useState(false)
   const [easyMode,   setEasyMode]   = useState(() => { try { return localStorage.getItem('story-easy') === '1' } catch { return false } })
   const [focus,      setFocus]      = useState(() => { try { return localStorage.getItem('focus-mode') === '1' } catch { return false } })
-  const [isMobile,   setIsMobile]   = useState(() => window.innerWidth < 768)
   const [isLandscape, setIsLandscape] = useState(() => {
     return window.innerWidth > window.innerHeight
   })
@@ -756,6 +724,19 @@ export default function Season3LevelPage() {
     // Clamp to 0.5–2.0 (50%–200%)
     return saved >= 0.5 && saved <= 2.0 ? saved : 1
   })
+  const [zoomInputOpen, setZoomInputOpen] = useState(false)
+  const [zoomInput, setZoomInput] = useState('')
+  const handleZoomInput = useCallback(event => {
+    event.preventDefault()
+    const nextZoom = Number.parseFloat(zoomInput) / 100
+    if (Number.isFinite(nextZoom)) {
+      const clamped = Math.max(0.5, Math.min(2, nextZoom))
+      setZoom(clamped)
+      localStorage.setItem('tetris-zoom', String(clamped))
+    }
+    setZoomInputOpen(false)
+    setZoomInput('')
+  }, [zoomInput])
   const engine = useMemo(() => new TetrisEngine(), [])
 
   const levelStartLinesRef = useRef(0)
@@ -764,28 +745,12 @@ export default function Season3LevelPage() {
   const beatRef            = useRef(0)
   const stickyDelayRef     = useRef(0)
 
-  const [progress, setProgress] = useState({})
-  const [progressLoading, setProgressLoading] = useState(true)
-  useEffect(() => {
-    if (!user?.uid) {
-      setProgress({})
-      setProgressLoading(false)
-      return
-    }
-    setProgressLoading(true)
-    getStoryProgress(user.uid)
-      .then(p => setProgress(p || {}))
-      .catch(() => setProgress({}))
-      .finally(() => setProgressLoading(false))
-  }, [user])
+  const { progress, loading: progressLoading } = useStoryProgress(user?.uid)
 
   const s3Unlocked = useMemo(() => isS3Unlocked(progress), [progress])
   const levelUnlocked = useMemo(() => isS3LevelUnlocked(epochId, levelId, progress), [epochId, levelId, progress])
   const bypassUnlock = !!(location.state && location.state.fromS3Complete)
 
-  const CONFIG_KEY = 'tetris-config'
-  const DEFAULT_CONFIG = { sfxEnabled: true, hapticEnabled: true, musicVolume: 1.0, sfxVolume: 2.0, das: 110, arr: 25, showOnScreenControls: false, renderQuality: 'balanced', screenShakeMultiplier: 1.0 }
-  const loadConfig = () => { try { return { ...DEFAULT_CONFIG, ...JSON.parse(localStorage.getItem(CONFIG_KEY) ?? '{}') } } catch { return { ...DEFAULT_CONFIG } } }
   const [config, setConfig] = useState(loadConfig)
 
   const epoch = levelData?.epoch
@@ -802,7 +767,6 @@ export default function Season3LevelPage() {
 
   useEffect(() => {
     const onResize = () => {
-      setIsMobile(window.innerWidth < 768)
       setIsLandscape(window.innerWidth > window.innerHeight)
     }
     window.addEventListener('resize', onResize)
@@ -985,8 +949,6 @@ export default function Season3LevelPage() {
     }
     prevStateRef.current = state
   }, [state, config.sfxEnabled, phase, pieceTheme])
-
-  const handleHardRefresh = useCallback(() => hardResetAndReload(), [])
 
   const handleDragBegin = useCallback((dir) => {
     if (dir === 'left' || dir === 'right') {
@@ -1268,7 +1230,7 @@ export default function Season3LevelPage() {
                   style={{ background: 'none', border: '1px solid rgba(255,255,255,0.2)', color: '#aaa', cursor: 'pointer', fontSize: '0.6rem', padding: '3px 8px', borderRadius: 4, fontFamily: 'inherit' }}>
                   {paused ? '▶' : '⏸'}
                 </button>
-                {false && (
+                {!isLandscape && (
                   <div>
                     <button onClick={() => setZoomInputOpen(true)}
                       style={{ background: 'none', border: '1px solid rgba(255,255,255,0.2)', color: '#aaa', cursor: 'pointer', fontSize: '0.6rem', padding: '3px 8px', borderRadius: 4, fontFamily: 'inherit' }}>
@@ -1346,7 +1308,7 @@ export default function Season3LevelPage() {
               bossHpPct={Math.max(0, Math.min(100, 100 - (linesThisLevel / effectiveTargetLines) * 100))}
               epochColor={epochColor}
               onPause={togglePause}
-              onZoom={() => setZoomInputOpen(true)}
+              onZoom={() => {}}
               onSettings={() => setShowSettings(true)}
             >
               <SynesthesiaMotionLayer
@@ -1749,7 +1711,7 @@ export default function Season3LevelPage() {
         {showSettings && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             style={{ position: 'absolute', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <SettingsPage config={config} onConfigChange={setConfig} onClose={() => setShowSettings(false)} />
+            <SettingsPage config={config} onConfig={setConfig} onClose={() => setShowSettings(false)} />
           </motion.div>
         )}
       </AnimatePresence>

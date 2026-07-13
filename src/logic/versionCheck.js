@@ -24,7 +24,7 @@ export function startVersionWatcher({ onMismatch } = {}) {
         if (typeof onMismatch === 'function') onMismatch({ current, remote })
         await hardResetAndReload()
       }
-    } catch (e) {
+    } catch {
       // Silently ignore network failures
     }
   }

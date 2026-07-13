@@ -1931,51 +1931,6 @@ export default function BackgroundCanvas({ bgType = 'stars', style, beatRef: _be
     const burst = clearBurstRef.current
     const s = synRef.current
     switch (evt.type) {
-        case 'clouds': {
-          // Sky blue base
-          ctx.fillStyle = '#acd0ff';
-          ctx.fillRect(0, 0, w, h);
-
-          // Big sun pulse upper right
-          const sunX = w * 0.78, sunY = h * 0.19;
-          const sunR = h * (0.12 + 0.06 * Math.sin(t*0.0007));
-          const gSun = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, sunR);
-          gSun.addColorStop(0, 'rgba(255,255,224,0.41)');
-          gSun.addColorStop(0.56, 'rgba(255,255,206,0.16)');
-          gSun.addColorStop(1, 'rgba(255,255,255,0)');
-          ctx.globalAlpha = 0.85;
-          ctx.fillStyle = gSun; ctx.fillRect(sunX-sunR, sunY-sunR, 2*sunR, 2*sunR);
-          ctx.globalAlpha = 1;
-
-          // White fluffy layered clouds
-          for (let c = 0; c < 5; ++c) {
-            const baseX = w * (0.19 + 0.17*c) + Math.sin(t*0.00041+c*42)*w*0.04;
-            const cloudY = h * (0.14 + c*0.12) + Math.cos(t*0.00021+c*1.3)*h*0.02;
-            ctx.save();
-            ctx.beginPath();
-            for (let k = 0; k < 22; ++k) {
-              const ang = (Math.PI*2) * (k/21);
-              const rad = 43 + 13*Math.sin(ang*3+c*3)+14*Math.cos(ang*1.4+c*2);
-              ctx.lineTo(baseX + Math.cos(ang)*rad, cloudY + Math.sin(ang)*rad*0.56);
-            }
-            ctx.closePath();
-            ctx.fillStyle = c%2==0 ? 'rgba(255,255,255,0.7)' : 'rgba(240,244,255, 0.62)';
-            ctx.shadowColor = '#f7fbff'; ctx.shadowBlur = 22;
-            ctx.fill();
-            ctx.restore();
-          }
-
-          // Sun ray sparkles
-          ctx.save(); ctx.globalAlpha = 0.52;
-          for (let s=0; s<28; ++s) {
-            const sx = w*(0.12 + 0.75*Math.random());
-            const sy = h*0.08+Math.sin(t*0.0019+s*23)*h*0.035;
-            ctx.beginPath(); ctx.arc(sx,sy,1.3+Math.sin(t*0.002+s),0,Math.PI*2);
-            ctx.fillStyle = 'rgba(255,255,255,0.43)'; ctx.fill();
-          }
-          ctx.restore();
-          break;
-        }
       case SYNESTHESIA_EVENT.LINE_CLEAR:
         s.clear = clamp(s.clear + 0.5, 0, 1.8)
         s.impact = clamp(s.impact + 0.16, 0, 1.9)

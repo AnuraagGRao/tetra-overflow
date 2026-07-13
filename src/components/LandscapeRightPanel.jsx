@@ -9,53 +9,11 @@
  */
 
 import { motion } from 'framer-motion'
-import { PIECES } from '../logic/tetrominoes'
-import { PIECE_COLOR_MAPS } from './GameCanvas'
 import { useTheme } from '../contexts/ThemeContext'
-import { useRef, useEffect } from 'react'
-
-// Mini piece preview component
-function PieceMini({ type, pieceTheme, size = 12 }) {
-  const canvasRef = useRef(null)
-  const color = type ? (PIECE_COLOR_MAPS[pieceTheme]?.[type] ?? PIECES[type]?.color ?? '#888888') : '#333'
-  const piece = type ? PIECES[type] : null
-
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-    if (!piece) return
-
-    const { matrix } = piece
-    const filled = matrix.filter(r => r.some(Boolean))
-    if (!filled.length) return
-
-    const colMin = Math.min(...filled.map(r => r.findIndex(Boolean)))
-    const colMax = Math.max(...filled.map(r => r.length - 1 - [...r].reverse().findIndex(Boolean)))
-    const tw = colMax - colMin + 1
-    const th = filled.length
-    const canvCols = Math.round(canvas.width / size)
-    const canvRows = Math.round(canvas.height / size)
-    const ox = Math.floor((canvCols - tw) / 2) * size
-    const oy = Math.floor((canvRows - th) / 2) * size
-
-    ctx.fillStyle = color
-    ctx.shadowColor = color
-    ctx.shadowBlur = 5
-    filled.forEach((row, ry) => {
-      for (let cx = colMin; cx <= colMax; cx++) {
-        if (!row[cx]) continue
-        ctx.fillRect(ox + (cx - colMin) * size + 1, oy + ry * size + 1, size - 2, size - 2)
-      }
-    })
-  }, [type, color, size, piece])
-
-  return <canvas ref={canvasRef} width={4 * size} height={2 * size} style={{ display: 'block' }} />
-}
+import PieceMini from './TetrominoMini'
 
 // Boss HP Bar component (Story mode only)
-function BossHPBar({ bossHpPct, epochColor, levelTitle }) {
+function BossHPBar({ bossHpPct, epochColor }) {
   const safeHp = Math.max(0, Math.min(100, bossHpPct))
   const hpColor = safeHp > 60 ? epochColor : safeHp > 30 ? '#f59e0b' : '#ef4444'
 
@@ -96,7 +54,6 @@ function BossHPBar({ bossHpPct, epochColor, levelTitle }) {
 }
 
 export default function LandscapeRightPanel({
-  hudSizing = {},
   state = {},
   epochColor = '#ff0000',
   currentLevel = null,

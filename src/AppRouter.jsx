@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom'
 import { useAuth } from './contexts/AuthContext'
 import { useState, useEffect, useRef } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -9,6 +9,7 @@ import StatsPage from './pages/StatsPage'
 import StorePage from './pages/StorePage'
 import StoryMapPage from './pages/StoryMapPage'
 import StoryLevelPage from './pages/StoryLevelPage'
+import StorySeasonSelectPage, { StoryEntryRedirect } from './pages/StorySeasonSelectPage'
 import MultiplayerPage from './pages/MultiplayerPage'
 import ThemePage from './pages/ThemePage'
 import ArtworkPage from './pages/ArtworkPage'
@@ -20,6 +21,8 @@ import Season3MapPage from './pages/Season3MapPage'
 import Season3LevelPage from './pages/Season3LevelPage'
 import Season4MapPage from './pages/Season4MapPage'
 import Season4LevelPage from './pages/Season4LevelPage'
+import PantheonMapPage from './pages/PantheonMapPage'
+import PantheonLevelPage from './pages/PantheonLevelPage'
 import DownloadPage from './pages/DownloadPage'
 
 function NowPlayingToast() {
@@ -93,6 +96,21 @@ function AuthRoute({ children }) {
   return children
 }
 
+function LegacyStoryLevelRedirect() {
+  const { chapterId, levelId } = useParams()
+  return <Navigate to={`/s1/${chapterId}/${levelId}`} replace />
+}
+
+function LegacyZodiacLevelRedirect() {
+  const { bossId } = useParams()
+  return <Navigate to={`/s2/${bossId}`} replace />
+}
+
+function LegacyPantheonLevelRedirect() {
+  const { bossId } = useParams()
+  return <Navigate to={`/s5/${bossId}`} replace />
+}
+
 function OfflineBanner() {
   const [offline, setOffline] = useState(false)
   const [justCameBack, setJustCameBack] = useState(false)
@@ -152,8 +170,9 @@ export default function AppRouter() {
         <Route path="/play" element={<CasualGamePage />} />
         <Route path="/s1" element={<AuthRoute><StoryMapPage /></AuthRoute>} />
         <Route path="/s1/:chapterId/:levelId" element={<AuthRoute><StoryLevelPage /></AuthRoute>} />
-        <Route path="/story" element={<Navigate to="/s1" replace />} />
-        <Route path="/story/:chapterId/:levelId" element={<AuthRoute><StoryLevelPage /></AuthRoute>} />
+        <Route path="/story" element={<AuthRoute><StoryEntryRedirect /></AuthRoute>} />
+        <Route path="/seasons" element={<AuthRoute><StorySeasonSelectPage /></AuthRoute>} />
+        <Route path="/story/:chapterId/:levelId" element={<LegacyStoryLevelRedirect />} />
         <Route path="/stats" element={<AuthRoute><StatsPage /></AuthRoute>} />
         <Route path="/store" element={<AuthRoute><StorePage /></AuthRoute>} />
         <Route path="/multiplayer" element={<AuthRoute><MultiplayerPage /></AuthRoute>} />
@@ -162,11 +181,15 @@ export default function AppRouter() {
         <Route path="/s2" element={<AuthRoute><ZodiacMapPage /></AuthRoute>} />
         <Route path="/s2/:bossId" element={<AuthRoute><ZodiacLevelPage /></AuthRoute>} />
         <Route path="/zodiac" element={<Navigate to="/s2" replace />} />
-        <Route path="/zodiac/:bossId" element={<AuthRoute><ZodiacLevelPage /></AuthRoute>} />
+        <Route path="/zodiac/:bossId" element={<LegacyZodiacLevelRedirect />} />
         <Route path="/s3" element={<AuthRoute><Season3MapPage /></AuthRoute>} />
         <Route path="/s3/:epochId/:levelId" element={<AuthRoute><Season3LevelPage /></AuthRoute>} />
         <Route path="/s4" element={<AuthRoute><Season4MapPage /></AuthRoute>} />
         <Route path="/s4/:sectorId/:levelId" element={<AuthRoute><Season4LevelPage /></AuthRoute>} />
+        <Route path="/s5" element={<AuthRoute><PantheonMapPage /></AuthRoute>} />
+        <Route path="/s5/:bossId" element={<AuthRoute><PantheonLevelPage /></AuthRoute>} />
+        <Route path="/pantheon" element={<Navigate to="/s5" replace />} />
+        <Route path="/pantheon/:bossId" element={<LegacyPantheonLevelRedirect />} />
         <Route path="/artwork" element={<ArtworkPage />} />
         <Route path="/info" element={<InfoPage />} />
         <Route path="/download" element={<DownloadPage />} />

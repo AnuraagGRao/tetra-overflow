@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import BackgroundCanvas from '../components/BackgroundCanvas'
 import { STORY_CHAPTERS } from '../logic/storyData'
-import { ZODIAC_BOSSES, OPHIUCHUS, allZodiacBeaten, ophiuchusBeaten } from '../logic/storyData_s2'
+import { ZODIAC_BOSSES, OPHIUCHUS, ophiuchusBeaten } from '../logic/storyData_s2'
 import { SEASON3_EPOCHS } from '../logic/storyData_s3'
-import { SEASON4_SECTORS, isS4Complete } from '../logic/storyData_s4'
+import { SEASON4_SECTORS } from '../logic/storyData_s4'
+import { PANTHEON_BOSSES, isS5Complete } from '../logic/storyData_s5'
 import { useAuth } from '../contexts/AuthContext'
 import { getStoryProgress } from '../firebase/db'
 import homeIconUrl from '../icons/home-button.png'
@@ -85,7 +86,7 @@ export default function StoryLorePage() {
         visible.push({
           id: 'zodiac',
           title: 'SEASON 2',
-          subtitle: allZodiacBeaten(progress) ? 'The Zodiac Arc — Complete' : 'The Zodiac Arc — Defeated Boss Lore',
+          subtitle: ophiuchusBeaten(progress) ? 'The Zodiac Arc — Complete' : 'The Zodiac Arc — Defeated Boss Lore',
           color: '#a855f7',
           glowColor: '#c084fc',
           levels: zodiacLevels,
@@ -164,6 +165,35 @@ export default function StoryLorePage() {
           sectionLabel: `S4 · SECTOR ${secIdx + 1}`,
           levels: completedLevels,
         })
+      })
+    }
+
+    const completedPantheon = PANTHEON_BOSSES
+      .filter(boss => !!progress[`pantheon_${boss.id}_completed`])
+      .map(boss => ({
+        id: boss.id,
+        title: boss.name,
+        subtitle: boss.subtitle,
+        glyph: boss.glyph,
+        bgType: boss.bgType,
+        bpm: boss.bpm,
+        gravityMult: boss.gravityMult,
+        targetLines: boss.targetLines,
+        easyTargetLines: boss.easyTargetLines,
+        abilityLabel: boss.abilityLabel,
+        abilityDesc: boss.abilityDesc,
+        storyBefore: boss.storyBefore,
+        storyAfter: boss.storyAfter,
+      }))
+    if (completedPantheon.length > 0) {
+      visible.push({
+        id: 'pantheon',
+        title: 'SEASON 5',
+        subtitle: isS5Complete(progress) ? 'The Pantheon Arc — Complete' : 'The Pantheon Arc — Fallen Gods',
+        color: '#f0c96a',
+        glowColor: '#ffe7a6',
+        sectionLabel: 'S5 · DIVINE BOSS RUSH',
+        levels: completedPantheon,
       })
     }
 

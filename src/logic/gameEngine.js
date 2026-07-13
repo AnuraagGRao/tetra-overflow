@@ -464,6 +464,12 @@ export class TetrisEngine {
 
   lockPiece() {
     this.pieceLocked = true
+    const lockedPiece = {
+      type: this.current.type,
+      x: this.current.x,
+      y: this.current.y,
+      matrix: this.current.matrix.map(row => [...row]),
+    }
     // Detect spin type BEFORE merging the piece
     // S and Z are excluded from allSpin — they can't achieve meaningful spins under SRS
     const ALL_SPIN_PIECES = new Set(['I', 'J', 'L'])
@@ -481,6 +487,7 @@ export class TetrisEngine {
 
     this.lockFlash = true
     mergePiece(this.board, this.current)
+    this.storyEncounterHooks?.afterMerge?.({ engine: this, board: this.board, piece: lockedPiece })
 
     let rows
     if (this.zoneActive) {
@@ -725,6 +732,8 @@ export class TetrisEngine {
       this._applyGarbage(this.pendingGarbage)
       this.pendingGarbage = 0
     }
+
+    this.storyEncounterHooks?.afterLock?.({ engine: this, board: this.board, piece: lockedPiece, clearedRows: rows })
 
     if (collides(this.board, this.current, this.current.x, this.current.y)) {
       if (this.mode === GAME_MODE.ZEN && this._topOutHandler) {

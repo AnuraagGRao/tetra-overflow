@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
@@ -6,7 +6,6 @@ import { getStoryProgress } from '../firebase/db'
 import { ZODIAC_BOSSES, OPHIUCHUS, allZodiacBeaten, ophiuchusBeaten, getZodiacPositions } from '../logic/storyData_s2'
 import { playTap, playZoomIn, playBack } from '../audio/uiSfx'
 import StoryMapHUD from '../components/StoryMapHUD'
-import homeIconUrl from '../icons/home-button.png'
 
 // Stars for the background (uniformly distributed across the full map)
 const pseudo = (n) => {
@@ -252,7 +251,7 @@ export default function ZodiacMapPage() {
     return { x: 50, y: 50 }
   }, [cameraTargetId, positions])
 
-  const clamp = (v, min, max) => Math.max(min, Math.min(max, v))
+  const clamp = useCallback((value, min, max) => Math.max(min, Math.min(max, value)), [])
   const cameraShiftX = clamp((50 - cameraPos.x) * 0.55, -18, 18)
   const cameraShiftY = clamp((50 - cameraPos.y) * 0.65, -22, 22)
 
@@ -266,18 +265,18 @@ export default function ZodiacMapPage() {
     setUserPan({ x: 0, y: 0 })
   }
 
-  const clampPanByZoom = (pan, zoom) => {
+  const clampPanByZoom = useCallback((pan, zoom) => {
     const maxX = Math.max(0, (zoom - 1) * 45)
     const maxY = Math.max(0, (zoom - 1) * 55)
     return {
       x: clamp(pan.x, -maxX, maxX),
       y: clamp(pan.y, -maxY, maxY),
     }
-  }
+  }, [clamp])
 
   useEffect(() => {
     setUserPan((p) => clampPanByZoom(p, mapZoom))
-  }, [mapZoom])
+  }, [clampPanByZoom, mapZoom])
 
   const selectedBoss = selected
     ? (selected === 'ophiuchus' ? OPHIUCHUS : ZODIAC_BOSSES.find(b => b.id === selected))
@@ -290,9 +289,9 @@ export default function ZodiacMapPage() {
   return (
     <StoryMapHUD
       // Navigation
-      onHome={() => { playBack(); navigate('/s1') }}
+      onHome={() => { playBack(); navigate('/seasons') }}
       onPreviousSeason={() => { playBack(); navigate('/s1') }}
-      onNextSeason={() => { playBack(); navigate('/s3') }}
+      onNextSeason={ophiuchus13 ? () => { playBack(); navigate('/s3') } : null}
       previousSeasonName="S1"
       nextSeasonName="S3"
       

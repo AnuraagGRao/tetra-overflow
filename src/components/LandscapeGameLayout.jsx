@@ -9,7 +9,7 @@
  * focus routing and touch bounding boxes.
  */
 
-import { motion, AnimatePresence } from 'framer-motion'
+import { AnimatePresence } from 'framer-motion'
 import LandscapeLeftPanel from './LandscapeLeftPanel'
 import LandscapeRightPanel from './LandscapeRightPanel'
 
@@ -20,8 +20,6 @@ export default function LandscapeGameLayout({
   
   // Game state
   state = {},
-  paused = false,
-  phase = 'game', // 'game', 'pause', 'complete', 'fail'
   
   // HUD sizing
   hudSizing = {},
@@ -62,7 +60,6 @@ export default function LandscapeGameLayout({
 
   const panelWidthVw = 'clamp(90px, 12vw, 140px)'
   const contentGap = 'clamp(8px, 1.5vw, 16px)'
-  const safeMargin = 'clamp(12px, 2vh, 20px)'
 
   return (
     <div

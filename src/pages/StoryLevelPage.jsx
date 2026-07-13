@@ -5,11 +5,11 @@ import { useAuth } from '../contexts/AuthContext'
 import { saveStoryProgress, unlockItem, saveGameResult, markEasyModePlayed, setActiveBadge, awardStoryChapterMilestone } from '../firebase/db'
 import SettingsPage from '../components/SettingsPage'
 import { findLevel, getNextLevel } from '../logic/storyData'
-import { PIECES } from '../logic/tetrominoes'
 import { TetrisEngine, GAME_MODE, ZONE_MIN_METER, ZONE_DURATION_MS } from '../logic/gameEngine'
 import { setSfxVolume, setSfxDuck, playMoveSFX, playRotateSFX, playHoldSFX, playSoftDropSFX, playHardDropSFX, playLockSFX, playLineClearSFX, playTetrisSFX, playZoneActivateSFX } from '../audio/gameSfx'
-import GameCanvas, { PIECE_COLOR_MAPS } from '../components/GameCanvas'
-import FocusHud from '../components/FocusHud'
+import GameCanvas from '../components/GameCanvas'
+import PieceMini from '../components/TetrominoMini'
+import FocusMiniHud from '../components/FocusMiniHud'
 import { BG_TYPE_TO_PIECE_THEME } from '../logic/themeMappings'
 import TouchControls from '../components/TouchControls'
 import BackgroundCanvas from '../components/BackgroundCanvas'
@@ -18,16 +18,12 @@ import LandscapeGameLayout from '../components/LandscapeGameLayout'
 import ZoomControl from '../components/ZoomControl'
 import { StoryMusicManager } from '../audio/storyMusicManager'
 import { emitSynesthesia, SYNESTHESIA_EVENT } from '../logic/synesthesiaBus'
+import { GAME_CONFIG_KEY as CONFIG_KEY, readGameConfig as loadConfig } from '../logic/gameConfig'
 import { hardResetAndReload } from '../logic/hardReset'
 import GlitchOverlay from '../components/GlitchOverlay'
 import { useResponsiveHUD, SOLO_HUD_DEFAULTS } from '../hooks/useResponsiveHUD'
 
 // Uses shared mapping in logic/themeMappings.js
-
-// Get piece color for a given type + piece theme
-function getPieceColor(type, theme) {
-  return (PIECE_COLOR_MAPS[theme]?.[type]) ?? PIECES[type]?.color ?? '#888888'
-}
 
 // (SFX volume is managed inside the component via config effects)
 
@@ -45,42 +41,6 @@ const KEY_BINDINGS = {
 }
 
 const MAX_FRAME_MS = 34
-
-// ─── Mini piece preview canvas ────────────────────────────────────────────────
-function PieceMini({ type, pieceTheme, size = 11 }) {
-  const canvasRef = useRef(null)
-  const color = type ? getPieceColor(type, pieceTheme) : '#333'
-  const piece = type ? PIECES[type] : null
-
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-    if (!piece) return
-    const { matrix } = piece
-    const filled = matrix.filter(r => r.some(Boolean))
-    if (!filled.length) return
-    const colMin = Math.min(...filled.map(r => r.findIndex(Boolean)))
-    const colMax = Math.max(...filled.map(r => r.length - 1 - [...r].reverse().findIndex(Boolean)))
-    const tw = colMax - colMin + 1, th = filled.length
-    const canvCols = Math.round(canvas.width / size)
-    const canvRows = Math.round(canvas.height / size)
-    const ox = Math.floor((canvCols - tw) / 2) * size
-    const oy = Math.floor((canvRows - th) / 2) * size
-    ctx.fillStyle = color
-    ctx.shadowColor = color
-    ctx.shadowBlur = 5
-    filled.forEach((row, ry) => {
-      for (let cx = colMin; cx <= colMax; cx++) {
-        if (!row[cx]) continue
-        ctx.fillRect(ox + (cx - colMin) * size + 1, oy + ry * size + 1, size - 2, size - 2)
-      }
-    })
-  }, [type, color, size, piece])
-
-  return <canvas ref={canvasRef} width={4 * size} height={2 * size} style={{ display: 'block' }} />
-}
 
 // ─── Minimal game loop hook ────────────────────────────────────────────────────
 // levelStartLinesRef: ref to the engine line count when this level started
@@ -350,6 +310,19 @@ export default function StoryLevelPage() {
     // Clamp to 0.5–2.0 (50%–200%)
     return saved >= 0.5 && saved <= 2.0 ? saved : 1
   })
+  const [zoomInputOpen, setZoomInputOpen] = useState(false)
+  const [zoomInput, setZoomInput] = useState('')
+  const handleZoomInput = useCallback(event => {
+    event.preventDefault()
+    const nextZoom = Number.parseFloat(zoomInput) / 100
+    if (Number.isFinite(nextZoom)) {
+      const clamped = Math.max(0.5, Math.min(2, nextZoom))
+      setZoom(clamped)
+      localStorage.setItem('tetris-zoom', String(clamped))
+    }
+    setZoomInputOpen(false)
+    setZoomInput('')
+  }, [zoomInput])
   // Engine persists across seamless level transitions — never reset between levels
   const engine = useMemo(() => new TetrisEngine(), [])  
 
@@ -366,9 +339,6 @@ export default function StoryLevelPage() {
   const [showSettings, setShowSettings] = useState(false)
   const finalClearSavedRef = useRef(false)
   const isFinalConvergence = currentChapterId === 'ch7' && currentLevelId === 'l5'
-  const CONFIG_KEY = 'tetris-config'
-  const DEFAULT_CONFIG = { sfxEnabled: true, hapticEnabled: true, musicVolume: 1.0, sfxVolume: 2.0, das: 110, arr: 25, showOnScreenControls: false, renderQuality: 'balanced', screenShakeMultiplier: 1.0 }
-  const loadConfig = () => { try { return { ...DEFAULT_CONFIG, ...JSON.parse(localStorage.getItem(CONFIG_KEY) ?? '{}') } } catch { return { ...DEFAULT_CONFIG } } }
   const [config, setConfig] = useState(loadConfig)
 
   // Persist + apply settings
@@ -488,20 +458,19 @@ export default function StoryLevelPage() {
     const doAdvance = () => {
       const nextFound = findLevel(next.chapterId, next.levelId)
       const gm = nextFound?.level?.gravityMult ?? 1.0
-        const gravFactor = easyMode ? 0.6 : 1.0
-        const targetLevel = Math.max(1, Math.round(gm * gravFactor * 5 + 1))
-        engine.level = targetLevel
-        engine.storyLevelOffset = targetLevel
-        engine.storyLinesOffset = engine.getState().lines
+      const gravFactor = easyMode ? 0.6 : 1.0
+      const targetLevel = Math.max(1, Math.round(gm * gravFactor * 5 + 1))
+      engine.level = targetLevel
+      engine.storyLevelOffset = targetLevel
+      engine.storyLinesOffset = engine.getState().lines
       levelStartLinesRef.current = engine.getState().lines
       levelStartScoreRef.current = engine.getState().score
-      engine.togglePause()  // resume
+      engine.togglePause()
       setCurrentChapterId(next.chapterId)
       setCurrentLevelId(next.levelId)
       setPhase(PHASE.GAME)
     }
 
-    // Store so CONTINUE button can call it immediately
     transitionAdvanceRef.current = doAdvance
 
     const id = setInterval(() => {
@@ -755,12 +724,12 @@ export default function StoryLevelPage() {
       }
     }
     prevStateRef.current = state
-  }, [state, config.sfxEnabled])
+  }, [state, config.sfxEnabled, pieceTheme])
 
   if (!found) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100dvh', background: '#0a0a14', color: '#f87171', fontFamily: 'monospace', fontSize: '0.9rem', letterSpacing: '0.15em' }}>
-        LEVEL NOT FOUND — <button onClick={() => navigate('/story')} style={{ background: 'none', border: 'none', color: '#00d4ff', cursor: 'pointer', marginLeft: 8 }}>← Back</button>
+        LEVEL NOT FOUND — <button onClick={() => navigate('/s1')} style={{ background: 'none', border: 'none', color: '#00d4ff', cursor: 'pointer', marginLeft: 8 }}>← Back</button>
       </div>
     )
   }
@@ -839,7 +808,7 @@ export default function StoryLevelPage() {
                 >
                   {storyCountdown !== null && storyCountdown > 0 ? `BEGIN (${storyCountdown}s)` : 'BEGIN'}
                 </motion.button>
-                <button onClick={() => navigate('/story', { replace: true })} style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: '0.65rem', letterSpacing: '0.12em', fontFamily: 'inherit', marginTop: 4 }}>
+                <button onClick={() => navigate('/s1', { replace: true })} style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: '0.65rem', letterSpacing: '0.12em', fontFamily: 'inherit', marginTop: 4 }}>
                   ← Back to map
                 </button>
               </div>
@@ -926,7 +895,7 @@ export default function StoryLevelPage() {
                 >
                   {paused ? '▶' : '⏸'}
                 </button>
-                {false && (
+                {!isLandscape && (
                   <div>
                     <button
                       onClick={() => setZoomInputOpen(true)}
@@ -1041,7 +1010,7 @@ export default function StoryLevelPage() {
               abilityLabel={''}
               epochColor={chapter.color}
               onPause={togglePause}
-              onZoom={() => setZoomInputOpen(true)}
+              onZoom={() => {}}
               onSettings={() => setShowSettings(true)}
             >
               <SynesthesiaMotionLayer
@@ -1090,29 +1059,17 @@ export default function StoryLevelPage() {
                 >
                   {focus ? '▲' : '▼'}
                 </button>
-                {focus && (() => {
-                  const zoneReady = state.zoneMeter >= ZONE_MIN_METER && !state.zoneActive
-                  const zoneFillPct = Math.max(0, Math.min(100, state.zoneActive
-                    ? (state.zoneTimer / Math.max(1, state.zoneDuration || ZONE_DURATION_MS)) * 100
-                    : (state.zoneMeter || 0)))
-                  return (
-                    <div className="fullscreen-mini-hud" style={{ right: 0 }}>
-                      <div className="fmh-hold">
-                        <div className="fmh-label">Hold</div>
-                        <PieceMini type={state.hold} pieceTheme={pieceTheme} size={8} />
-                      </div>
-                      <div className="fmh-zone-wrap">
-                        <div className={`fmh-zone-bar${state.zoneActive ? ' zone-active' : ''}${zoneReady && !state.zoneActive ? ' zone-ready' : ''}`} style={{ height: `${zoneFillPct}%` }} />
-                      </div>
-                      <div className="fmh-next">
-                        <div className="fmh-label">Next</div>
-                        {(state.queue ?? []).slice(0, 3).map((t, i) => (
-                          <PieceMini key={i} type={t} pieceTheme={pieceTheme} size={7} />
-                        ))}
-                      </div>
-                    </div>
-                  )
-                })()}  
+                {focus && (
+                  <FocusMiniHud
+                    hold={state.hold}
+                    queue={state.queue}
+                    pieceTheme={pieceTheme}
+                    zoneMeter={state.zoneMeter}
+                    zoneActive={state.zoneActive}
+                    zoneTimer={state.zoneTimer}
+                    zoneDuration={state.zoneDuration}
+                  />
+                )}
                 {/* Pause overlay */}
                 {paused && (
                   <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.82)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12 }}>
@@ -1167,7 +1124,7 @@ export default function StoryLevelPage() {
                       ▶ RESUME
                     </motion.button>
                     <button
-                      onClick={() => navigate('/story', { replace: true })}
+                      onClick={() => navigate('/s1', { replace: true })}
                       style={{ background: 'none', border: '1px solid rgba(255,255,255,0.18)', color: '#bbb', borderRadius: 6, padding: '7px 18px', cursor: 'pointer', fontSize: '0.72rem', letterSpacing: '0.12em', fontFamily: 'inherit' }}
                     >
                       ← WORLD MAP
@@ -1233,29 +1190,17 @@ export default function StoryLevelPage() {
                 >
                   {focus ? '▲' : '▼'}
                 </button>
-                {focus && (() => {
-                  const zoneReady = state.zoneMeter >= ZONE_MIN_METER && !state.zoneActive
-                  const zoneFillPct = Math.max(0, Math.min(100, state.zoneActive
-                    ? (state.zoneTimer / Math.max(1, state.zoneDuration || ZONE_DURATION_MS)) * 100
-                    : (state.zoneMeter || 0)))
-                  return (
-                    <div className="fullscreen-mini-hud" style={{ right: 0 }}>
-                      <div className="fmh-hold">
-                        <div className="fmh-label">Hold</div>
-                        <PieceMini type={state.hold} pieceTheme={pieceTheme} size={8} />
-                      </div>
-                      <div className="fmh-zone-wrap">
-                        <div className={`fmh-zone-bar${state.zoneActive ? ' zone-active' : ''}${zoneReady && !state.zoneActive ? ' zone-ready' : ''}`} style={{ height: `${zoneFillPct}%` }} />
-                      </div>
-                      <div className="fmh-next">
-                        <div className="fmh-label">Next</div>
-                        {(state.queue ?? []).slice(0, 3).map((t, i) => (
-                          <PieceMini key={i} type={t} pieceTheme={pieceTheme} size={7} />
-                        ))}
-                      </div>
-                    </div>
-                  )
-                })()}
+                {focus && (
+                  <FocusMiniHud
+                    hold={state.hold}
+                    queue={state.queue}
+                    pieceTheme={pieceTheme}
+                    zoneMeter={state.zoneMeter}
+                    zoneActive={state.zoneActive}
+                    zoneTimer={state.zoneTimer}
+                    zoneDuration={state.zoneDuration}
+                  />
+                )}
                 {/* Pause overlay */}
                 {paused && (
                   <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.82)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12 }}>
@@ -1310,7 +1255,7 @@ export default function StoryLevelPage() {
                       ▶ RESUME
                     </motion.button>
                     <button
-                      onClick={() => navigate('/story', { replace: true })}
+                      onClick={() => navigate('/s1', { replace: true })}
                       style={{ background: 'none', border: '1px solid rgba(255,255,255,0.18)', color: '#bbb', borderRadius: 6, padding: '7px 18px', cursor: 'pointer', fontSize: '0.72rem', letterSpacing: '0.12em', fontFamily: 'inherit' }}
                     >
                       ← WORLD MAP
@@ -1548,7 +1493,7 @@ export default function StoryLevelPage() {
                   </button>
                 )}
                 <button
-                  onClick={() => navigate('/story', { replace: true })}
+                  onClick={() => navigate('/s1', { replace: true })}
                   style={{ background: phase === PHASE.COMPLETE ? chapter.color : 'none', border: phase === PHASE.COMPLETE ? 'none' : '1px solid rgba(255,255,255,0.1)', color: phase === PHASE.COMPLETE ? '#000' : '#888', borderRadius: 8, padding: '9px 18px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: phase === PHASE.COMPLETE ? 700 : 400, letterSpacing: '0.12em', fontFamily: 'inherit' }}
                 >
                   {phase === PHASE.COMPLETE ? 'WORLD MAP' : 'MAP'}
@@ -1654,7 +1599,7 @@ export default function StoryLevelPage() {
                 )}
                 <motion.button
                   whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
-                  onClick={() => navigate('/story', { replace: true })}
+                  onClick={() => navigate('/s1', { replace: true })}
                   style={{ background: '#ffd700', border: 'none', color: '#000', borderRadius: 8, padding: '11px 28px', fontSize: '0.82rem', fontWeight: 900, letterSpacing: '0.18em', cursor: 'pointer', fontFamily: 'inherit', textTransform: 'uppercase' }}
                 >
                   ★ WORLD MAP
@@ -1770,7 +1715,7 @@ export default function StoryLevelPage() {
               >
                 <motion.button
                   whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
-                  onClick={() => navigate('/story', { replace: true })}
+                  onClick={() => navigate('/s1', { replace: true })}
                   style={{ background: '#00ff41', border: 'none', color: '#000', borderRadius: 8, padding: '11px 28px', fontSize: '0.82rem', fontWeight: 900, letterSpacing: '0.18em', cursor: 'pointer', fontFamily: 'inherit', textTransform: 'uppercase' }}
                 >
                   ◈ WORLD MAP

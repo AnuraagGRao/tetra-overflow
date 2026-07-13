@@ -88,7 +88,7 @@ export class Season3MusicManager {
   }
 
   _loadAll() {
-    EPOCH_TRACK_DEFS.forEach(({ gain }, i) => {
+    EPOCH_TRACK_DEFS.forEach((_, i) => {
       const url = TRACK_URLS[i]
       fetch(url)
         .then(r => { if (!r.ok) throw new Error('not found'); return r.arrayBuffer() })
@@ -160,7 +160,7 @@ export class Season3MusicManager {
     }, (buf.duration - Math.min(this._xfadeSec, buf.duration * 0.15)) * 1000)
   }
 
-  _advance(crossfade) {
+  _advance(_crossfade) {
     this._playlistPos = (this._playlistPos + 1) % this._playlist.length
     this._currentIdx  = this._playlist[this._playlistPos]
     if (this._playing) this._playCurrent()

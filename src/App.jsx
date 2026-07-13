@@ -62,7 +62,8 @@ import { hardResetAndReload } from './logic/hardReset'
 import { useTheme } from './contexts/ThemeContext'
 import { useAuth } from './contexts/AuthContext'
 import { MusicManager } from './audio/musicManager'
-import { Howler } from 'howler'
+import { Howl, Howler } from 'howler'
+import { GAME_CONFIG_KEY as CONFIG_KEY, readGameConfig as loadConfig } from './logic/gameConfig'
 import { saveGameResult, addCoinsWithLedger } from './firebase/db'
 import { emitSynesthesia, SYNESTHESIA_EVENT } from './logic/synesthesiaBus'
 import catImageUrl from './meme/oiia_cat_assets_by_awesomeconsoles7_djwlgwe-fullview.png'
@@ -1115,13 +1116,6 @@ const playCountdownTickSFX = (second, theme = 'classic') => {
 };
 
 // ─── Config / settings storage ───────────────────────────────────────────────
-const CONFIG_KEY = 'tetris-config'
-const DEFAULT_CONFIG = { sfxEnabled: true, hapticEnabled: true, musicVolume: 1.0, sfxVolume: 2.0, das: 110, arr: 25, showOnScreenControls: false, renderQuality: 'balanced' }
-const loadConfig = () => {
-  try { return { ...DEFAULT_CONFIG, ...JSON.parse(localStorage.getItem(CONFIG_KEY) ?? '{}') } }
-  catch (e) { console.warn('Failed to load config:', e); return { ...DEFAULT_CONFIG } }
-}
-
 // ─── High-score storage ───────────────────────────────────────────────────────
 const HS_KEY = 'tetris-highs'
 const loadHighScores = () => {
@@ -1674,7 +1668,7 @@ export default function App() {
               stopEerie()
               const a = arr[Math.floor(Math.random() * arr.length)]
               // Howler.js Howl objects use .play() which returns sound ID, and .volume() to set volume
-              const soundId = a.play()
+              a.play()
               a.volume(0.5)
               eerieCurrentRef.current = a
               // Auto fade-out and stop towards the end of the visual flash
@@ -2506,7 +2500,7 @@ export default function App() {
   )
 
   // ─── Desktop render ─────────────────────────────────────────────────────────
-  const renderDesktop = () => (
+  const _renderDesktop = () => (
     <>
       <header className="site-header">
         <div className="site-logo">TETRA <span className="logo-overflow">OVERFLOW</span><sup className="logo-ultra">Ultra</sup></div>

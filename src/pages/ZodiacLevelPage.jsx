@@ -2,13 +2,13 @@ import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
-import { saveStoryProgress, saveGameResult, markEasyModePlayed, setActiveBadge, getStoryProgress } from '../firebase/db'
+import { saveStoryProgress, saveGameResult, markEasyModePlayed, setActiveBadge } from '../firebase/db'
 import SettingsPage from '../components/SettingsPage'
 import { findZodiacBoss, ZODIAC_BOSSES, allZodiacBeaten, ophiuchusBeaten } from '../logic/storyData_s2'
-import { PIECES } from '../logic/tetrominoes'
 import { TetrisEngine, GAME_MODE, ZONE_MIN_METER, ZONE_DURATION_MS } from '../logic/gameEngine'
 import { setSfxVolume, setSfxDuck, playMoveSFX, playRotateSFX, playHoldSFX, playSoftDropSFX, playHardDropSFX, playLockSFX, playLineClearSFX, playTetrisSFX, playZoneActivateSFX } from '../audio/gameSfx'
-import GameCanvas, { PIECE_COLOR_MAPS } from '../components/GameCanvas'
+import GameCanvas from '../components/GameCanvas'
+import PieceMini from '../components/TetrominoMini'
 import TouchControls from '../components/TouchControls'
 import BackgroundCanvas from '../components/BackgroundCanvas'
 import SynesthesiaMotionLayer from '../components/SynesthesiaMotionLayer'
@@ -16,6 +16,8 @@ import LandscapeGameLayout from '../components/LandscapeGameLayout'
 import ZoomControl from '../components/ZoomControl'
 import { Season2MusicManager } from '../audio/season2MusicManager'
 import { emitSynesthesia, SYNESTHESIA_EVENT } from '../logic/synesthesiaBus'
+import { GAME_CONFIG_KEY as CONFIG_KEY, readGameConfig as loadConfig } from '../logic/gameConfig'
+import { useStoryProgress } from '../hooks/useStoryProgress'
 import { hardResetAndReload } from '../logic/hardReset'
 import { BG_TYPE_TO_PIECE_THEME } from '../logic/themeMappings'
 import { useResponsiveHUD } from '../hooks/useResponsiveHUD'
@@ -37,41 +39,6 @@ const KEY_BINDINGS = {
 
 const PHASE = { STORY: 'story', LOADING: 'loading', GAME: 'game', COMPLETE: 'complete', FAIL: 'fail' }
 
-// ─── Mini piece preview ────────────────────────────────────────────────────────
-function getPieceColor(type, theme) {
-  return (PIECE_COLOR_MAPS[theme]?.[type]) ?? PIECES[type]?.color ?? '#888888'
-}
-
-function PieceMini({ type, pieceTheme, size = 11 }) {
-  const canvasRef = useRef(null)
-  const color     = type ? getPieceColor(type, pieceTheme) : '#333'
-  const piece     = type ? PIECES[type] : null
-  useEffect(() => {
-    const canvas = canvasRef.current; if (!canvas) return
-    const ctx    = canvas.getContext('2d')
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-    if (!piece) return
-    const { matrix } = piece
-    const filled = matrix.filter(r => r.some(Boolean))
-    if (!filled.length) return
-    const colMin = Math.min(...filled.map(r => r.findIndex(Boolean)))
-    const colMax = Math.max(...filled.map(r => r.length - 1 - [...r].reverse().findIndex(Boolean)))
-    const tw = colMax - colMin + 1, th = filled.length
-    const canvCols = Math.round(canvas.width / size)
-    const canvRows = Math.round(canvas.height / size)
-    const ox = Math.floor((canvCols - tw) / 2) * size
-    const oy = Math.floor((canvRows - th) / 2) * size
-    ctx.fillStyle = color; ctx.shadowColor = color; ctx.shadowBlur = 5
-    filled.forEach((row, ry) => {
-      for (let cx = colMin; cx <= colMax; cx++) {
-        if (!row[cx]) continue
-        ctx.fillRect(ox + (cx - colMin) * size + 1, oy + ry * size + 1, size - 2, size - 2)
-      }
-    })
-  }, [type, color, size, piece])
-  return <canvas ref={canvasRef} width={4 * size} height={2 * size} style={{ display: 'block' }} />
-}
-
 // ─── Boss ability hook ─────────────────────────────────────────────────────────
 /**
  * Manages all per-boss mechanic side-effects. Returns:
@@ -90,7 +57,7 @@ function useBossAbility({ bossId, engine, state, linesThisLevel, isActive }) {
   const [hideNextCount,    setHideNextCount]     = useState(0)
   const [rotationLocked,   setRotationLocked]    = useState(false)
   const [fogRows,          setFogRows]           = useState(false)
-  const [colorShift,       setColorShift]        = useState(0)
+  const [,                 setColorShift]        = useState(0)
   const [constrictionCols, setConstrictionCols]  = useState(0)
   const [abilityActive,    setAbilityActive]     = useState(false)
   const [abilityLabel,     setAbilityLabel]      = useState('')
@@ -481,9 +448,7 @@ function useBossAbility({ bossId, engine, state, linesThisLevel, isActive }) {
     hideNextCount,
     rotationLocked,
     fogRows,
-    colorShift,
     constrictionCols,
-    poisonSet,
     speedBoostActive,
     abilityActive,
     abilityLabel,
@@ -568,7 +533,7 @@ function useZodiacGameLoop(engine, targetLines, levelStartLinesRef, levelKey, on
     window.addEventListener('keydown', down)
     window.addEventListener('keyup', up)
     return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up) }
-  }, [togglePause]) // mirrorRef + rotLockRef are stable refs — always read .current
+  }, [mirrorRef, rotLockRef, togglePause])
 
   // Gamepad
   useEffect(() => {
@@ -700,11 +665,7 @@ export default function ZodiacLevelPage() {
   const beatRef            = useRef(0)
 
   // Progress state (to enable "Next Boss" convenience after a clear)
-  const [progress, setProgress] = useState({})
-  useEffect(() => {
-    if (!user?.uid) { setProgress({}); return }
-    getStoryProgress(user.uid).then(p => setProgress(p || {})).catch(() => setProgress({}))
-  }, [user])
+  const { progress } = useStoryProgress(user?.uid)
 
   const effectiveProgress = useMemo(() => (
     phase === PHASE.COMPLETE
@@ -726,9 +687,6 @@ export default function ZodiacLevelPage() {
     } catch { return null }
   }, [bossId, effectiveProgress])
 
-  const CONFIG_KEY = 'tetris-config'
-  const DEFAULT_CONFIG = { sfxEnabled: true, hapticEnabled: true, musicVolume: 1.0, sfxVolume: 2.0, das: 110, arr: 25, showOnScreenControls: false, renderQuality: 'balanced', screenShakeMultiplier: 1.0 }
-  const loadConfig = () => { try { return { ...DEFAULT_CONFIG, ...JSON.parse(localStorage.getItem(CONFIG_KEY) ?? '{}') } } catch { return { ...DEFAULT_CONFIG } } }
   const [config, setConfig] = useState(loadConfig)
 
   const pieceTheme = useMemo(() => BG_TYPE_TO_PIECE_THEME[boss?.bgType] ?? 'classic', [boss])
@@ -882,9 +840,7 @@ export default function ZodiacLevelPage() {
     hideNextCount,
     rotationLocked,
     fogRows,
-    colorShift,
     constrictionCols,
-    poisonSet,
     speedBoostActive,
     abilityActive,
     abilityLabel,
@@ -1002,7 +958,7 @@ export default function ZodiacLevelPage() {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100dvh', background: '#0a0a14', color: '#f87171', fontFamily: 'monospace', fontSize: '0.9rem', letterSpacing: '0.15em' }}>
         BOSS NOT FOUND —
-        <button onClick={() => navigate('/zodiac')} style={{ background: 'none', border: 'none', color: '#00d4ff', cursor: 'pointer', marginLeft: 8 }}>← Back</button>
+        <button onClick={() => navigate('/s2')} style={{ background: 'none', border: 'none', color: '#00d4ff', cursor: 'pointer', marginLeft: 8 }}>← Back</button>
       </div>
     )
   }
@@ -1113,7 +1069,7 @@ export default function ZodiacLevelPage() {
                 </motion.button>
 
                 <button
-                  onClick={() => navigate('/zodiac', { replace: true })}
+                  onClick={() => navigate('/s2', { replace: true })}
                   style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: '0.65rem', letterSpacing: '0.12em', fontFamily: 'inherit', marginTop: 4 }}
                 >
                   ← Zodiac Map
@@ -1201,43 +1157,6 @@ export default function ZodiacLevelPage() {
                 >
                   {paused ? '▶' : '⏸'}
                 </button>
-                {false && (
-                  <div>
-                    <button
-                      onClick={() => setZoomInputOpen(true)}
-                      style={{ background: 'none', border: '1px solid rgba(255,255,255,0.2)', color: '#aaa', cursor: 'pointer', fontSize: '0.6rem', padding: '3px 8px', borderRadius: 4, fontFamily: 'inherit' }}
-                      title="Click to set custom zoom"
-                    >
-                      🔍 {Math.round(zoom * 100)}%
-                    </button>
-                    {zoomInputOpen && (
-                      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => { setZoomInputOpen(false); setZoomInput(''); }}>
-                        <form onSubmit={handleZoomInput} onClick={e => e.stopPropagation()} style={{ background: 'rgba(20,20,30,0.95)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8, padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: 12, minWidth: 200, backdropFilter: 'blur(8px)' }}>
-                          <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#ccc' }}>Set Zoom Level</div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <input
-                              type="number"
-                              min="50"
-                              max="200"
-                              step="1"
-                              value={zoomInput || Math.round(zoom * 100)}
-                              onChange={e => setZoomInput(e.target.value)}
-                              autoFocus
-                              onFocus={e => e.target.select()}
-                              style={{ flex: 1, padding: '6px 8px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 4, color: '#fff', fontFamily: 'inherit', fontSize: '0.95rem' }}
-                            />
-                            <span style={{ color: '#888' }}>%</span>
-                          </div>
-                          <div style={{ fontSize: '0.75rem', color: '#666' }}>Range: 50% — 200%</div>
-                          <div style={{ display: 'flex', gap: 8 }}>
-                            <button type="submit" style={{ flex: 1, background: 'rgba(100, 200, 255, 0.2)', border: '1px solid rgba(100, 200, 255, 0.4)', color: '#64c8ff', borderRadius: 4, padding: '6px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Apply</button>
-                            <button type="button" onClick={() => { setZoomInputOpen(false); setZoomInput(''); }} style={{ flex: 1, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)', color: '#aaa', borderRadius: 4, padding: '6px', cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-                          </div>
-                        </form>
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             </div>
           )}
@@ -1365,13 +1284,13 @@ export default function ZodiacLevelPage() {
                     zoneTimerMs={state.zoneTimer || 0}
                     onActivateZone={() => triggerAction('activateZone')}
                     currentLevel={boss}
-                    targetLines={boss?.targetLines || 0}
+                    targetLines={effectiveTargetLines}
                     linesThisLevel={linesThisLevel}
                     abilityActive={abilityActive}
                     abilityLabel={abilityLabel}
                     epochColor={boss?.color || '#ff0000'}
                     onPause={togglePause}
-                    onZoom={() => setZoomInputOpen(true)}
+                    onZoom={() => {}}
                     onSettings={() => setShowSettings(true)}
                   >
                     {canvasElement}
@@ -1500,13 +1419,13 @@ export default function ZodiacLevelPage() {
                     zoneTimerMs={state.zoneTimer || 0}
                     onActivateZone={() => triggerAction('activateZone')}
                     currentLevel={boss}
-                    targetLines={boss?.targetLines || 0}
+                    targetLines={effectiveTargetLines}
                     linesThisLevel={linesThisLevel}
                     abilityActive={abilityActive}
                     abilityLabel={abilityLabel}
                     epochColor={boss?.color || '#ff0000'}
                     onPause={togglePause}
-                    onZoom={() => setZoomInputOpen(true)}
+                    onZoom={() => {}}
                     onSettings={() => setShowSettings(true)}
                   >
                     {canvasElement}
@@ -1728,7 +1647,7 @@ export default function ZodiacLevelPage() {
                       style={{ background: 'none', border: `1px solid ${boss.color}`, color: boss.color, borderRadius: 6, padding: '8px 22px', cursor: 'pointer', fontSize: '0.8rem', letterSpacing: '0.16em', fontFamily: 'inherit', fontWeight: 700 }}>
                       ▶ RESUME
                     </motion.button>
-                    <button onClick={() => navigate('/zodiac', { replace: true })}
+                    <button onClick={() => navigate('/s2', { replace: true })}
                       style={{ background: 'none', border: '1px solid rgba(255,255,255,0.18)', color: '#bbb', borderRadius: 6, padding: '7px 18px', cursor: 'pointer', fontSize: '0.72rem', letterSpacing: '0.12em', fontFamily: 'inherit' }}>
                       ← ZODIAC MAP
                     </button>
@@ -1827,7 +1746,7 @@ export default function ZodiacLevelPage() {
                       </button>
                     )}
                     <button
-                      onClick={() => navigate('/zodiac', { replace: true })}
+                      onClick={() => navigate('/s2', { replace: true })}
                       style={{ background: boss.color, border: 'none', color: '#000', borderRadius: 8, padding: '9px 18px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.12em', fontFamily: 'inherit' }}
                     >
                       ZODIAC MAP
@@ -1855,7 +1774,7 @@ export default function ZodiacLevelPage() {
                       RETRY
                     </button>
                     <button
-                      onClick={() => navigate('/zodiac', { replace: true })}
+                      onClick={() => navigate('/s2', { replace: true })}
                       style={{ background: 'none', border: '1px solid rgba(255,255,255,0.1)', color: '#888', borderRadius: 8, padding: '9px 18px', cursor: 'pointer', fontSize: '0.75rem', letterSpacing: '0.12em', fontFamily: 'inherit' }}
                     >
                       MAP

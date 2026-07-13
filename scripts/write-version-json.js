@@ -2,6 +2,7 @@
 // Also bumps CACHE_NAME in public/sw.js to invalidate old caches
 import { mkdirSync, writeFileSync, readFileSync } from 'fs'
 import { dirname } from 'path'
+import process from 'node:process'
 
 try {
   const pkg = JSON.parse(readFileSync('./package.json', 'utf-8'))
@@ -19,7 +20,11 @@ try {
   try {
     const swPath = 'public/sw.js'
     const swSrc = readFileSync(swPath, 'utf-8')
-    const nextCacheName = `tetra-overflow-v${version}`
+    const versionCacheName = `tetra-overflow-v${version}`
+    const currentCacheName = swSrc.match(/const\s+CACHE_NAME\s*=\s*['"]([^'"]+)['"]/)?.[1]
+    const nextCacheName = currentCacheName?.startsWith(versionCacheName)
+      ? currentCacheName
+      : versionCacheName
     const updated = swSrc.replace(/const\s+CACHE_NAME\s*=\s*['"][^'"]+['"]/,
       `const CACHE_NAME = '${nextCacheName}'`)
     if (updated !== swSrc) writeFileSync(swPath, updated, 'utf-8')

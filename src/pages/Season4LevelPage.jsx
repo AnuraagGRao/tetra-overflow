@@ -6,23 +6,25 @@ import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
-import { saveStoryProgress, saveGameResult, getStoryProgress } from '../firebase/db'
+import { saveStoryProgress } from '../firebase/db'
 import SettingsPage from '../components/SettingsPage'
 import { findS4Level, getNextS4Level, isS4LevelUnlocked, isS4Unlocked, SEASON4_SECTORS } from '../logic/storyData_s4'
-import { PIECES, BOARD_WIDTH, BOARD_HEIGHT } from '../logic/tetrominoes'
+import { BOARD_WIDTH, BOARD_HEIGHT } from '../logic/tetrominoes'
 import { TetrisEngine, GAME_MODE, ZONE_MIN_METER, ZONE_DURATION_MS } from '../logic/gameEngine'
-import { setSfxVolume, setSfxDuck, playMoveSFX, playRotateSFX, playHoldSFX, playSoftDropSFX, playHardDropSFX, playLockSFX, playLineClearSFX, playTetrisSFX, playZoneActivateSFX } from '../audio/gameSfx'
-import GameCanvas, { PIECE_COLOR_MAPS } from '../components/GameCanvas'
+import { setSfxVolume, playRotateSFX, playHoldSFX, playHardDropSFX, playZoneActivateSFX } from '../audio/gameSfx'
+import GameCanvas from '../components/GameCanvas'
+import PieceMini from '../components/TetrominoMini'
 import TouchControls from '../components/TouchControls'
 import BackgroundCanvas from '../components/BackgroundCanvas'
 import SynesthesiaMotionLayer from '../components/SynesthesiaMotionLayer'
 import { Season4MusicManager } from '../audio/season4MusicManager'
-import { emitSynesthesia, SYNESTHESIA_EVENT } from '../logic/synesthesiaBus'
-import { hardResetAndReload } from '../logic/hardReset'
 import { BG_TYPE_TO_PIECE_THEME } from '../logic/themeMappings'
 import { useResponsiveHUD } from '../hooks/useResponsiveHUD'
 import LandscapeGameLayout from '../components/LandscapeGameLayout'
 import ZoomControl from '../components/ZoomControl'
+import FocusMiniHud from '../components/FocusMiniHud'
+import { GAME_CONFIG_KEY as CONFIG_KEY, readGameConfig as loadConfig } from '../logic/gameConfig'
+import { useStoryProgress } from '../hooks/useStoryProgress'
 
 const MAX_FRAME_MS = 34
 const VISIBLE_ROWS = BOARD_HEIGHT - 2
@@ -58,45 +60,6 @@ const KEY_BINDINGS = {
 
 const PHASE = { STORY: 'story', LOADING: 'loading', GAME: 'game', COMPLETE: 'complete', FAIL: 'fail' }
 
-// ─── Mini piece preview ────────────────────────────────────────────────────────
-function getPieceColor(type, theme) {
-  return (PIECE_COLOR_MAPS[theme]?.[type]) ?? PIECES[type]?.color ?? '#888888'
-}
-
-function PieceMini({ type, pieceTheme, size = 11 }) {
-  const canvasRef = useRef(null)
-  const color = type ? getPieceColor(type, pieceTheme) : '#333'
-  const piece = type ? PIECES[type] : null
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-    if (!piece) return
-    const { matrix } = piece
-    const filled = matrix.filter(r => r.some(Boolean))
-    if (!filled.length) return
-    const colMin = Math.min(...filled.map(r => r.findIndex(Boolean)))
-    const colMax = Math.max(...filled.map(r => r.length - 1 - [...r].reverse().findIndex(Boolean)))
-    const tw = colMax - colMin + 1,
-      th = filled.length
-    const canvCols = Math.round(canvas.width / size)
-    const canvRows = Math.round(canvas.height / size)
-    const ox = Math.floor((canvCols - tw) / 2) * size
-    const oy = Math.floor((canvRows - th) / 2) * size
-    ctx.fillStyle = color
-    ctx.shadowColor = color
-    ctx.shadowBlur = 5
-    filled.forEach((row, ry) => {
-      for (let cx = colMin; cx <= colMax; cx++) {
-        if (!row[cx]) continue
-        ctx.fillRect(ox + (cx - colMin) * size + 1, oy + ry * size + 1, size - 2, size - 2)
-      }
-    })
-  }, [type, color, size, piece])
-  return <canvas ref={canvasRef} width={4 * size} height={2 * size} style={{ display: 'block' }} />
-}
-
 export default function Season4LevelPage() {
   const { sectorId, levelId } = useParams()
   const navigate = useNavigate()
@@ -108,80 +71,31 @@ export default function Season4LevelPage() {
   const { sector, level } = levelData || {}
   const sectorColor = sector?.color ?? '#ffffff'
   const pieceTheme = useMemo(() => BG_TYPE_TO_PIECE_THEME[S4_BG_FALLBACKS[level?.bgType] ?? 'classic'] ?? 'classic', [level?.bgType])
-  const [progress, setProgress] = useState({})
-  const [progressLoading, setProgressLoading] = useState(true)
-
-  useEffect(() => {
-    if (!user?.uid) {
-      setProgress({})
-      setProgressLoading(false)
-      return
-    }
-    getStoryProgress(user.uid)
-      .then(p => setProgress(p || {}))
-      .catch(() => setProgress({}))
-      .finally(() => setProgressLoading(false))
-  }, [user])
+  const { progress, loading: progressLoading } = useStoryProgress(user?.uid)
 
   const s4Unlocked = useMemo(() => isS4Unlocked(progress), [progress])
   const levelUnlocked = useMemo(() => isS4LevelUnlocked(sectorId, levelId, progress), [sectorId, levelId, progress])
   const bypassUnlock = !!(location.state && location.state.fromS4Complete)
 
   // ── Config & Game State ────────────────────────────────────────────────────
-  const CONFIG_KEY = 'tetris-config'
-  const DEFAULT_CONFIG = { sfxEnabled: true, hapticEnabled: true, musicVolume: 1.0, sfxVolume: 2.0, das: 110, arr: 25, showOnScreenControls: false, renderQuality: 'balanced', screenShakeMultiplier: 1.0 }
-  const loadConfig = () => {
-    try {
-      return { ...DEFAULT_CONFIG, ...JSON.parse(localStorage.getItem(CONFIG_KEY) ?? '{}') }
-    } catch {
-      return { ...DEFAULT_CONFIG }
-    }
-  }
   const [config, setConfig] = useState(loadConfig)
 
   const [zoom, setZoom] = useState(() => {
     const saved = Number(localStorage.getItem('tetris-zoom') || 1)
     return saved >= 0.5 && saved <= 2.0 ? saved : 1
   })
-  const [zoomInputOpen, setZoomInputOpen] = useState(false)
-  const [zoomInput, setZoomInput] = useState('')
-
-  const cycleZoom = useCallback(() => {
-    setZoom(z => {
-      const next = Math.round((z + 0.05) * 100) / 100
-      const clamped = Math.max(0.5, Math.min(2.0, next > 2.0 ? 0.5 : next))
-      localStorage.setItem('tetris-zoom', clamped)
-      return clamped
-    })
-  }, [])
-
-  const handleZoomInput = useCallback(
-    e => {
-      e.preventDefault()
-      const val = parseFloat(zoomInput) / 100
-      if (!isNaN(val)) {
-        const clamped = Math.max(0.5, Math.min(2.0, val))
-        setZoom(clamped)
-        localStorage.setItem('tetris-zoom', clamped)
-      }
-      setZoomInputOpen(false)
-      setZoomInput('')
-    },
-    [zoomInput]
-  )
 
   const engine = useMemo(() => new TetrisEngine(), [])
   const [phase, setPhase] = useState(PHASE.STORY)
   const [paused, setPaused] = useState(false)
   const [state, setState] = useState(engine.getState())
-  const [abilityActive, setAbilityActive] = useState(false)
-  const [abilityLabel, setAbilityLabel] = useState('')
   const [linesThisLevel, setLinesThisLevel] = useState(0)
-  const [easyMode, setEasyMode] = useState(false)
+  const [easyMode] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
-  const [focus, setFocus] = useState(false)
+  const [focus, setFocus] = useState(() => {
+    try { return localStorage.getItem('focus-mode') === '1' } catch { return false }
+  })
   const [isLandscape, setIsLandscape] = useState(window.innerWidth > window.innerHeight)
-  const [isMobile, setIsMobile] = useState(true)
   const hudSizing = useResponsiveHUD(isLandscape)
 
   const levelStartLinesRef = useRef(0)
@@ -209,11 +123,22 @@ export default function Season4LevelPage() {
     } catch {}
   }, [config.sfxVolume])
 
+  useEffect(() => {
+    try { localStorage.setItem('focus-mode', focus ? '1' : '0') } catch {}
+  }, [focus])
+
+  useEffect(() => {
+    const onKeyDown = event => {
+      if (event.code === 'KeyF') setFocus(value => !value)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
   // ── Responsive Layout ──────────────────────────────────────────────────────
   useEffect(() => {
     const onResize = () => {
       setIsLandscape(window.innerWidth > window.innerHeight)
-      setIsMobile(true)
     }
     onResize()
     window.addEventListener('resize', onResize)
@@ -261,7 +186,6 @@ export default function Season4LevelPage() {
   useEffect(() => {
     if (phase !== PHASE.GAME || !level) return
     let lastTime = Date.now()
-    let frameCount = 0
     const gameLoop = setInterval(() => {
       const now = Date.now()
       const delta = Math.min(now - lastTime, MAX_FRAME_MS)
@@ -272,7 +196,6 @@ export default function Season4LevelPage() {
       engine.update(delta, heldRef.current, actions)
       setState(engine.getState())
       setLinesThisLevel(Math.max(0, engine.lines - levelStartLinesRef.current))
-      frameCount++
       const effectiveTarget = easyMode ? (level.easyTargetLines || level.targetLines) : level.targetLines
       if (engine.lines - levelStartLinesRef.current >= effectiveTarget) {
         setPhase(PHASE.COMPLETE)
@@ -285,7 +208,7 @@ export default function Season4LevelPage() {
 
   // ── Input Handlers ────────────────────────────────────────────────────────
   const triggerAction = useCallback(
-    (name, param) => {
+    name => {
       if (name === 'pause') {
         const nextPaused = !paused
         setPaused(nextPaused)
@@ -413,22 +336,17 @@ export default function Season4LevelPage() {
   }
 
   // ── Navigation ─────────────────────────────────────────────────────────────
-  const handleComplete = async () => {
+  const handleComplete = () => {
     if (!user?.uid || !level) return
     const nextLevel = getNextS4Level(sectorId, levelId)
     const finalScore = state.score
     const finalLines = linesThisLevel
-    try {
-      await saveStoryProgress(user.uid, `s4_${sectorId}_${levelId}_completed`, true)
-      await saveStoryProgress(user.uid, `s4_${sectorId}_${levelId}_score`, finalScore)
-      await saveStoryProgress(user.uid, `s4_${sectorId}_${levelId}_lines`, finalLines)
-      if (nextLevel) {
-        navigate(`/s4/${nextLevel.sectorId}/${nextLevel.levelId}`, { state: { fromS4Complete: true } })
-      } else {
-        navigate('/s4', { state: { completed: true } })
-      }
-    } catch (e) {
-      console.error('Failed to save progress:', e)
+    saveStoryProgress(user.uid, `s4_${sectorId}`, levelId, finalScore, finalLines)
+      .catch(e => console.error('Failed to save progress:', e))
+    if (nextLevel) {
+      navigate(`/s4/${nextLevel.sectorId}/${nextLevel.levelId}`, { state: { fromS4Complete: true } })
+    } else {
+      navigate('/s4', { state: { completed: true } })
     }
   }
 
@@ -488,6 +406,37 @@ export default function Season4LevelPage() {
       <div style={{ display: 'flex', flexDirection: 'column', width: '100vw', height: '100dvh', background: '#000', color: '#fff', overflow: 'hidden', position: 'relative' }}>
         {isLandscape && <ZoomControl zoom={zoom} onChange={setZoom} />}
         <BackgroundCanvas bgType={S4_BG_FALLBACKS[level?.bgType] ?? 'pure_white_grid'} />
+
+        {/* Story status — portrait mode only */}
+        {!focus && !isLandscape && (
+          <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: hudSizing.hudPadding, background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: '0.85rem', letterSpacing: '0.1em', flexShrink: 0, backdropFilter: 'blur(6px)', gap: 8, flexWrap: 'nowrap', minHeight: hudSizing.hudMinHeight }}>
+            <span style={{ fontSize: hudSizing.statsLabel, color: sectorColor, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{level?.title}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+              <button
+                onClick={() => triggerAction('activateZone')}
+                disabled={state.zoneMeter < ZONE_MIN_METER || state.zoneActive}
+                style={{ background: state.zoneActive ? 'rgba(0,229,255,0.18)' : state.zoneMeter >= ZONE_MIN_METER ? 'rgba(0,229,255,0.12)' : 'rgba(255,255,255,0.04)', border: `1px solid ${state.zoneActive ? '#00e5ff' : state.zoneMeter >= ZONE_MIN_METER ? '#22d3ee' : 'rgba(255,255,255,0.1)'}`, color: state.zoneActive ? '#00e5ff' : state.zoneMeter >= ZONE_MIN_METER ? '#80eaff' : '#555', cursor: state.zoneMeter >= ZONE_MIN_METER && !state.zoneActive ? 'pointer' : 'default', fontSize: '0.6rem', padding: '2px 7px', borderRadius: 6, fontFamily: 'inherit' }}
+              >
+                {state.zoneActive ? `ZONE ${Math.ceil(state.zoneTimer / 1000)}s` : 'ZONE'}
+              </button>
+              <span style={{ color: '#555', fontSize: '0.62rem' }}>{Math.min(linesThisLevel, effectiveTarget)}/{effectiveTarget}</span>
+              <button onClick={togglePause} aria-label="Pause" style={{ background: 'none', border: '1px solid rgba(255,255,255,0.2)', color: '#aaa', cursor: 'pointer', fontSize: '0.6rem', padding: '3px 8px', borderRadius: 4, fontFamily: 'inherit' }}>⏸</button>
+            </div>
+          </div>
+        )}
+
+        {!isLandscape && (() => {
+          const progressPct = Math.max(0, Math.min(100, 100 - (linesThisLevel / effectiveTarget) * 100))
+          const progressColor = progressPct > 60 ? sectorColor : progressPct > 30 ? '#f59e0b' : '#ef4444'
+          return (
+            <div style={{ height: 5, background: 'rgba(255,255,255,0.06)', flexShrink: 0, position: 'relative', overflow: 'hidden' }}>
+              {[25, 50, 75].map(percent => (
+                <div key={percent} style={{ position: 'absolute', top: 0, bottom: 0, left: `${percent}%`, width: 1, background: 'rgba(0,0,0,0.4)', zIndex: 2 }} />
+              ))}
+              <motion.div style={{ position: 'absolute', inset: '0 auto 0 0', background: progressColor, boxShadow: `0 0 6px ${progressColor}88` }} animate={{ width: `${progressPct}%`, background: progressColor }} transition={{ duration: 0.4, ease: 'easeOut' }} />
+            </div>
+          )
+        })()}
 
         {/* Portrait HUD bar */}
         {!focus && !isLandscape && (
@@ -579,7 +528,7 @@ export default function Season4LevelPage() {
         )}
 
         {!isLandscape && (
-          <SynesthesiaMotionLayer className="mobile-canvas-wrap" style={{ background: 'transparent', flex: 1, minWidth: 0, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+          <SynesthesiaMotionLayer className="mobile-canvas-wrap" style={{ background: 'transparent', flex: 1, minWidth: 0, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', paddingBottom: focus && config.showOnScreenControls ? 'calc(4.5rem + env(safe-area-inset-bottom, 0px))' : 0 }}>
             <div style={{ transform: `scale(${zoom})`, transformOrigin: 'center center', maxWidth: '100%', maxHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <GameCanvas
                 state={state}
@@ -596,12 +545,42 @@ export default function Season4LevelPage() {
                 screenShakeMultiplier={config.screenShakeMultiplier ?? 1.0}
               />
             </div>
+
+            <button onClick={() => setFocus(value => !value)} className="ui-toggle-tab" title={focus ? 'Exit Focus' : 'Enter Focus'} aria-label={focus ? 'Exit Focus' : 'Enter Focus'} style={{ right: 0 }}>
+              {focus ? '▲' : '▼'}
+            </button>
+
+            {focus && (
+              <FocusMiniHud
+                hold={state.hold}
+                queue={state.queue}
+                pieceTheme={pieceTheme}
+                zoneMeter={state.zoneMeter}
+                zoneActive={state.zoneActive}
+                zoneTimer={state.zoneTimer}
+                zoneDuration={state.zoneDuration}
+                accentColor={sectorColor}
+                header={(
+                  <div style={{ width: '100%', padding: '4px 5px 0', boxSizing: 'border-box' }}>
+                    <div style={{ fontSize: '0.38rem', color: '#555', letterSpacing: '0.1em', marginBottom: 2, textAlign: 'center' }}>PROGRESS</div>
+                    <div style={{ height: 4, background: 'rgba(255,255,255,0.07)', borderRadius: 2, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${Math.max(0, 100 - Math.min(100, (linesThisLevel / effectiveTarget) * 100))}%`, background: sectorColor, borderRadius: 2 }} />
+                    </div>
+                  </div>
+                )}
+              />
+            )}
           </SynesthesiaMotionLayer>
         )}
 
         {/* Touch controls */}
         {config.showOnScreenControls && !focus && (
           <TouchControls onPress={handlePress} onRelease={handleRelease} onHardDrop={handleHardDrop} haptic={config.hapticEnabled} />
+        )}
+        {config.showOnScreenControls && focus && !isLandscape && (
+          <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 60, pointerEvents: 'auto' }}>
+            <TouchControls onPress={handlePress} onRelease={handleRelease} onHardDrop={handleHardDrop} haptic={config.hapticEnabled} />
+          </div>
         )}
 
         {/* Pause overlay */}

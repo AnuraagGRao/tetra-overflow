@@ -262,7 +262,6 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
 
     const drawCell = (ctx, x, y, rawColor, alpha = 1, blur = 12, pieceKey = null) => {
       const color = (isCustomTheme && pieceKey) ? (colorMap[pieceKey] ?? rawColor) : rawColor
-      const effectiveBlur = blur * qualityMultiplier  // Scale shadow blur based on quality
       ctx.save()
       ctx.globalAlpha = alpha
       switch (theme) {
