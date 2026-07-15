@@ -12,7 +12,7 @@ import { saveStoryProgress } from '../firebase/db'
 import { GAME_MODE, TetrisEngine, ZONE_DURATION_MS, ZONE_MIN_METER } from '../logic/gameEngine'
 import { BOARD_HEIGHT, BOARD_WIDTH, PIECES } from '../logic/tetrominoes'
 import { findPantheonBoss, getNextPantheonBoss, isPantheonLevelUnlocked, isPantheonUnlocked } from '../logic/storyData_s5'
-import { playHardDropSFX, playHoldSFX, playLineClearSFX, playLockSFX, playRotateSFX, playTetrisSFX, playZoneActivateSFX, setSfxVolume } from '../audio/gameSfx'
+import { setSfxVolume, setSfxDuck, playMoveSFX, playRotateSFX, playHoldSFX, playSoftDropSFX, playHardDropSFX, playLockSFX, playLineClearSFX, playTetrisSFX, playZoneActivateSFX } from '../audio/gameSfx'
 import { Season5MusicManager } from '../audio/season5MusicManager'
 import { GAME_CONFIG_KEY as CONFIG_KEY, readGameConfig as loadConfig } from '../logic/gameConfig'
 import { useStoryProgress } from '../hooks/useStoryProgress'
@@ -580,6 +580,38 @@ export default function PantheonLevelPage() {
     return () => cancelAnimationFrame(frameId)
   }, [queueAction, releaseAction, togglePause])
 
+  // ── SFX ────────────────────────────────────────────────────────────────────
+  const prevStateRef = useRef(null)
+  useEffect(() => {
+    if (phase !== PHASE.GAME) { prevStateRef.current = state; return }
+    const prev = prevStateRef.current
+    if (prev) {
+      const th = pieceTheme || 'classic'
+      if (state.hardDropped) playHardDropSFX(th)
+      else if (state.pieceLocked) playLockSFX(th)
+      if (state.lastClear?.lines > 0) {
+        if (state.lastClear.lines >= 4) playTetrisSFX(th)
+        else playLineClearSFX(th, state.combo ?? 0)
+      }
+      if (state.pieceHeld) playHoldSFX(th)
+      if (prev.zoneActive !== state.zoneActive) {
+        if (state.zoneActive) {
+          playZoneActivateSFX(th)
+          setSfxDuck(1.5)
+          try { musicRef.current?.setZoneFx?.(true) } catch {}
+        } else {
+          setSfxDuck(1.0)
+          try { musicRef.current?.setZoneFx?.(false) } catch {}
+        }
+      }
+      if (prev.current?.type === state.current?.type) {
+        if (state.current?.x !== prev.current?.x) playMoveSFX(th)
+        else if (state.current?.rotation !== prev.current?.rotation) playRotateSFX(th)
+      }
+    }
+    prevStateRef.current = state
+  }, [state, phase, pieceTheme])
+
   useEffect(() => {
     if (phase !== PHASE.GAME || paused || !boss) return
     let lastTime = performance.now()
@@ -592,13 +624,6 @@ export default function PantheonLevelPage() {
       engine.update(delta, heldRef.current, actions)
       const nextState = engine.getState()
       setState(nextState)
-
-      if (nextState.lastClear?.lines > 0 && config.sfxEnabled) {
-        if (nextState.lastClear.lines >= 4) playTetrisSFX(pieceTheme)
-        else playLineClearSFX(nextState.lastClear.lines, pieceTheme)
-      } else if (nextState.pieceLocked && config.sfxEnabled) {
-        playLockSFX(pieceTheme)
-      }
 
       if (engine.lines >= targetLines && !completionHandledRef.current) {
         completionHandledRef.current = true
@@ -614,7 +639,20 @@ export default function PantheonLevelPage() {
       }
     }, FRAME_MS)
     return () => clearInterval(loop)
-  }, [boss, config.sfxEnabled, engine, paused, phase, pieceTheme, progress, setProgress, targetLines, user?.uid])
+  }, [boss, engine, paused, phase, progress, setProgress, targetLines, user?.uid])
+
+  const handleDragBegin = useCallback((direction) => {
+    if (direction === 'left' || direction === 'right') {
+      if (!paused) try { playMoveSFX(pieceTheme || 'classic') } catch {}
+      queueAction(direction, direction)
+    } else if (direction === 'down') {
+      if (!paused) try { playSoftDropSFX(pieceTheme || 'classic') } catch {}
+      queueAction('softDrop', 'softDrop')
+    } else if (direction === 'up') {
+      if (!paused) try { playHoldSFX(pieceTheme || 'classic') } catch {}
+      queueAction('hold')
+    }
+  }, [paused, pieceTheme, queueAction])
 
   const handleTouchPress = (button, isHeld) => {
     if (isHeld) queueAction(button, button)
@@ -749,10 +787,7 @@ export default function PantheonLevelPage() {
               state={renderState}
               onTap={() => queueAction('rotateCW')}
               onTwoFingerTap={() => queueAction('activateZone')}
-              onDragBegin={direction => {
-                if (direction === 'up') queueAction('hold')
-                else queueAction(direction === 'down' ? 'softDrop' : direction, direction)
-              }}
+              onDragBegin={handleDragBegin}
               onDragEnd={direction => releaseAction(direction === 'down' ? 'softDrop' : direction)}
               onHardDrop={() => queueAction('hardDrop')}
               themeOverride={pieceTheme}

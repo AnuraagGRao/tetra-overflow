@@ -11,7 +11,7 @@ import SettingsPage from '../components/SettingsPage'
 import { findS4Level, getNextS4Level, isS4LevelUnlocked, isS4Unlocked, SEASON4_SECTORS } from '../logic/storyData_s4'
 import { BOARD_WIDTH, BOARD_HEIGHT } from '../logic/tetrominoes'
 import { TetrisEngine, GAME_MODE, ZONE_MIN_METER, ZONE_DURATION_MS } from '../logic/gameEngine'
-import { setSfxVolume, playRotateSFX, playHoldSFX, playHardDropSFX, playZoneActivateSFX } from '../audio/gameSfx'
+import { setSfxVolume, setSfxDuck, playMoveSFX, playRotateSFX, playHoldSFX, playSoftDropSFX, playHardDropSFX, playLockSFX, playLineClearSFX, playTetrisSFX, playZoneActivateSFX } from '../audio/gameSfx'
 import GameCanvas from '../components/GameCanvas'
 import PieceMini from '../components/TetrominoMini'
 import TouchControls from '../components/TouchControls'
@@ -134,6 +134,13 @@ export default function Season4LevelPage() {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
+
+  // Reset on level change
+  useEffect(() => {
+    pendingResetRef.current = true
+    levelStartLinesRef.current = 0
+    setPhase(PHASE.STORY)
+  }, [sectorId, levelId])
 
   // ── Responsive Layout ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -334,6 +341,38 @@ export default function Season4LevelPage() {
     if (nextPaused) musicRef.current?.pause?.()
     else musicRef.current?.resume?.()
   }
+
+  // ── SFX ────────────────────────────────────────────────────────────────────
+  const prevStateRef = useRef(null)
+  useEffect(() => {
+    if (phase !== PHASE.GAME) { prevStateRef.current = state; return }
+    const prev = prevStateRef.current
+    if (prev) {
+      const th = pieceTheme || 'classic'
+      if (state.hardDropped) playHardDropSFX(th)
+      else if (state.pieceLocked) playLockSFX(th)
+      if (state.lastClear?.lines > 0) {
+        if (state.lastClear.lines >= 4) playTetrisSFX(th)
+        else playLineClearSFX(th, state.combo ?? 0)
+      }
+      if (state.pieceHeld) playHoldSFX(th)
+      if (prev.zoneActive !== state.zoneActive) {
+        if (state.zoneActive) {
+          playZoneActivateSFX(th)
+          setSfxDuck(1.5)
+          try { musicRef.current?.setZoneFx?.(true) } catch {}
+        } else {
+          setSfxDuck(1.0)
+          try { musicRef.current?.setZoneFx?.(false) } catch {}
+        }
+      }
+      if (prev.current?.type === state.current?.type) {
+        if (state.current?.x !== prev.current?.x) playMoveSFX(th)
+        else if (state.current?.rotation !== prev.current?.rotation) playRotateSFX(th)
+      }
+    }
+    prevStateRef.current = state
+  }, [state, phase, pieceTheme])
 
   // ── Navigation ─────────────────────────────────────────────────────────────
   const handleComplete = () => {

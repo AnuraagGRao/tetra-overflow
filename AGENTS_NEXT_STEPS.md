@@ -156,14 +156,21 @@ Wrap each season map's children with StoryMapHUD:
 
 ## 🚀 How to Add a New Feature
 
-### Adding a New Season 5
-1. Create [src/logic/storyData_s5.js](src/logic/storyData_s5.js) with sectors/levels (copy S4 as template)
-2. Create [src/pages/Season5MapPage.jsx](src/pages/Season5MapPage.jsx) (copy Season4MapPage)
-3. Create [src/pages/Season5LevelPage.jsx](src/pages/Season5LevelPage.jsx) (copy Season4LevelPage)
-4. Create [src/audio/season5MusicManager.js](src/audio/season5MusicManager.js) (copy season3/4 template)
-5. Update [src/AppRouter.jsx](src/AppRouter.jsx): add imports + routes `/s5` and `/s5/:sectorId/:levelId`
-6. Update [src/pages/StoryLorePage.jsx](src/pages/StoryLorePage.jsx): add S5 import + useMemo block
-7. Update unlock condition in storyData_s5.js (require s4 final boss completion)
+### Adding a New Traditional Season (Season 6+)
+1. Create [src/logic/storyData_s6.js](src/logic/storyData_s6.js) with sectors/levels (copy S4 as template)
+2. Create [src/pages/Season6MapPage.jsx](src/pages/Season6MapPage.jsx) (copy Season4MapPage)
+3. Create [src/pages/Season6LevelPage.jsx](src/pages/Season6LevelPage.jsx) (copy Season4LevelPage, with all SFX fixes from Season 4)
+4. Create [src/audio/season6MusicManager.js](src/audio/season6MusicManager.js) (copy season3/4 template)
+5. Update [src/AppRouter.jsx](src/AppRouter.jsx): add imports + routes `/s6` and `/s6/:sectorId/:levelId`
+6. Update [src/pages/StoryLorePage.jsx](src/pages/StoryLorePage.jsx): add S6 import + useMemo block
+7. Update unlock condition in storyData_s6.js (require s5 pantheon completion)
+
+### About Season 5 (Pantheon Arc)
+Season 5 uses a **boss-encounter structure** (not traditional level/sector):
+- [src/logic/storyData_s5.js](src/logic/storyData_s5.js) - 11 deity bosses with unique mechanics
+- [src/pages/PantheonLevelPage.jsx](src/pages/PantheonLevelPage.jsx) - Single game page for all bosses
+- [src/pages/PantheonMapPage.jsx](src/pages/PantheonMapPage.jsx) - Boss roster/progression
+- [src/audio/season5MusicManager.js](src/audio/season5MusicManager.js) - Music management
 
 ### Adding a New Game Mechanic to Season 4
 1. Define mechanic type in [src/logic/storyData_s4.js](src/logic/storyData_s4.js) (add to `mechanic` tags array)
