@@ -19,8 +19,8 @@ import { useStoryProgress } from '../hooks/useStoryProgress'
 
 const FRAME_MS = 34
 const ANOMALY_GRACE_MS = 6000
-const ANOMALY_ACTIVE_MS = 7000
-const ANOMALY_RESPITE_MS = 9000
+const ANOMALY_ACTIVE_MS = 4000
+const ANOMALY_RESPITE_MS = 11000
 const PHASE = { INTRO: 'intro', GAME: 'game', COMPLETE: 'complete', FAIL: 'fail' }
 const ACTION_ALIASES = { left: 'moveLeft', right: 'moveRight', softDrop: 'softDrop' }
 const HELD_ACTIONS = new Set(['moveLeft', 'moveRight', 'softDrop'])
