@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useMemo } from 'react'
 import { BOARD_HEIGHT, BOARD_WIDTH, PIECES } from '../logic/tetrominoes'
 import { ZONE_DURATION_MS, GAME_MODE } from '../logic/gameEngine'
 import { useTheme } from '../contexts/ThemeContext'
@@ -101,6 +101,15 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
   const { theme: contextTheme, colorMode, bgTheme } = useTheme()
   // Solo/Casual: allow mixing — use explicit theme unless an override is passed
   const theme = themeOverride ?? contextTheme
+  
+  // Memoize theme-related calculations to avoid recalculating on every render
+  const themeConfig = useMemo(() => ({
+    isCustomTheme: theme in PIECE_COLOR_MAPS,
+    colorMap: PIECE_COLOR_MAPS[theme] ?? {},
+    isLightTheme: theme === 'bauhaus',
+    gridColor: THEME_GRID[theme] ?? 'rgba(255,255,255,0.05)',
+    bgColor: (colorMode === 'light' ? CANVAS_BG_LIGHT[theme] : CANVAS_BG_DARK[theme]) ?? '#1e2230'
+  }), [theme, colorMode])
   
   // Responsive cell size based on container
   const [cellSize, setCellSize] = useState(CELL_SIZE_DEFAULT)

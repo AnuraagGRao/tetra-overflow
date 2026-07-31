@@ -24,6 +24,7 @@ import Season4LevelPage from './pages/Season4LevelPage'
 import PantheonMapPage from './pages/PantheonMapPage'
 import PantheonLevelPage from './pages/PantheonLevelPage'
 import DownloadPage from './pages/DownloadPage'
+import ErrorBoundary from './components/ErrorBoundary'
 
 function NowPlayingToast() {
   const [toast, setToast] = useState(null)
@@ -161,40 +162,42 @@ function OfflineBanner() {
 
 export default function AppRouter() {
   return (
-    <BrowserRouter basename={import.meta.env.BASE_URL}>
-      <NowPlayingToast />
-      <OfflineBanner />
-      <Routes>
-        <Route path="/" element={<MainMenuPage />} />
-        <Route path="/auth" element={<AuthPage />} />
-        <Route path="/play" element={<CasualGamePage />} />
-        <Route path="/s1" element={<AuthRoute><StoryMapPage /></AuthRoute>} />
-        <Route path="/s1/:chapterId/:levelId" element={<AuthRoute><StoryLevelPage /></AuthRoute>} />
-        <Route path="/story" element={<AuthRoute><StoryEntryRedirect /></AuthRoute>} />
-        <Route path="/seasons" element={<AuthRoute><StorySeasonSelectPage /></AuthRoute>} />
-        <Route path="/story/:chapterId/:levelId" element={<LegacyStoryLevelRedirect />} />
-        <Route path="/stats" element={<AuthRoute><StatsPage /></AuthRoute>} />
-        <Route path="/store" element={<AuthRoute><StorePage /></AuthRoute>} />
-        <Route path="/multiplayer" element={<AuthRoute><MultiplayerPage /></AuthRoute>} />
-        <Route path="/themes" element={<AuthRoute><ThemePage /></AuthRoute>} />
-        <Route path="/lore" element={<AuthRoute><StoryLorePage /></AuthRoute>} />
-        <Route path="/s2" element={<AuthRoute><ZodiacMapPage /></AuthRoute>} />
-        <Route path="/s2/:bossId" element={<AuthRoute><ZodiacLevelPage /></AuthRoute>} />
-        <Route path="/zodiac" element={<Navigate to="/s2" replace />} />
-        <Route path="/zodiac/:bossId" element={<LegacyZodiacLevelRedirect />} />
-        <Route path="/s3" element={<AuthRoute><Season3MapPage /></AuthRoute>} />
-        <Route path="/s3/:epochId/:levelId" element={<AuthRoute><Season3LevelPage /></AuthRoute>} />
-        <Route path="/s4" element={<AuthRoute><Season4MapPage /></AuthRoute>} />
-        <Route path="/s4/:sectorId/:levelId" element={<AuthRoute><Season4LevelPage /></AuthRoute>} />
-        <Route path="/s5" element={<AuthRoute><PantheonMapPage /></AuthRoute>} />
-        <Route path="/s5/:bossId" element={<AuthRoute><PantheonLevelPage /></AuthRoute>} />
-        <Route path="/pantheon" element={<Navigate to="/s5" replace />} />
-        <Route path="/pantheon/:bossId" element={<LegacyPantheonLevelRedirect />} />
-        <Route path="/artwork" element={<ArtworkPage />} />
-        <Route path="/info" element={<InfoPage />} />
-        <Route path="/download" element={<DownloadPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter basename={import.meta.env.BASE_URL}>
+        <NowPlayingToast />
+        <OfflineBanner />
+        <Routes>
+          <Route path="/" element={<MainMenuPage />} />
+          <Route path="/auth" element={<AuthPage />} />
+          <Route path="/play" element={<CasualGamePage />} />
+          <Route path="/s1" element={<AuthRoute><StoryMapPage /></AuthRoute>} />
+          <Route path="/s1/:chapterId/:levelId" element={<AuthRoute><StoryLevelPage /></AuthRoute>} />
+          <Route path="/story" element={<AuthRoute><StoryEntryRedirect /></AuthRoute>} />
+          <Route path="/seasons" element={<AuthRoute><StorySeasonSelectPage /></AuthRoute>} />
+          <Route path="/story/:chapterId/:levelId" element={<LegacyStoryLevelRedirect />} />
+          <Route path="/stats" element={<AuthRoute><StatsPage /></AuthRoute>} />
+          <Route path="/store" element={<AuthRoute><StorePage /></AuthRoute>} />
+          <Route path="/multiplayer" element={<AuthRoute><MultiplayerPage /></AuthRoute>} />
+          <Route path="/themes" element={<AuthRoute><ThemePage /></AuthRoute>} />
+          <Route path="/lore" element={<AuthRoute><StoryLorePage /></AuthRoute>} />
+          <Route path="/s2" element={<AuthRoute><ZodiacMapPage /></AuthRoute>} />
+          <Route path="/s2/:bossId" element={<AuthRoute><ZodiacLevelPage /></AuthRoute>} />
+          <Route path="/zodiac" element={<Navigate to="/s2" replace />} />
+          <Route path="/zodiac/:bossId" element={<LegacyZodiacLevelRedirect />} />
+          <Route path="/s3" element={<AuthRoute><Season3MapPage /></AuthRoute>} />
+          <Route path="/s3/:epochId/:levelId" element={<AuthRoute><Season3LevelPage /></AuthRoute>} />
+          <Route path="/s4" element={<AuthRoute><Season4MapPage /></AuthRoute>} />
+          <Route path="/s4/:sectorId/:levelId" element={<AuthRoute><Season4LevelPage /></AuthRoute>} />
+          <Route path="/s5" element={<AuthRoute><PantheonMapPage /></AuthRoute>} />
+          <Route path="/s5/:bossId" element={<AuthRoute><PantheonLevelPage /></AuthRoute>} />
+          <Route path="/pantheon" element={<Navigate to="/s5" replace />} />
+          <Route path="/pantheon/:bossId" element={<LegacyPantheonLevelRedirect />} />
+          <Route path="/artwork" element={<ArtworkPage />} />
+          <Route path="/info" element={<InfoPage />} />
+          <Route path="/download" element={<DownloadPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </ErrorBoundary>
   )
 }

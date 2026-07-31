@@ -64,6 +64,42 @@ body {
 button { cursor: pointer; font-family: inherit; }
 button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
 
+/* ── Enhanced keyboard focus indicators ────────────────────────────────────── */
+.control-button:focus-visible {
+  outline: 3px solid var(--c-accent);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 5px rgba(0, 229, 255, 0.2);
+}
+
+a:focus-visible,
+.menu-card:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 3px;
+}
+
+/* Skip to main content link for accessibility */
+.skip-to-main {
+  position: fixed;
+  top: -100px;
+  left: 0;
+  z-index: 10000;
+  padding: 0.75rem 1.5rem;
+  background: var(--c-accent);
+  color: var(--c-bg);
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: 0 0 8px 0;
+  transition: top 0.3s ease;
+}
+
+.skip-to-main:focus {
+  top: 0;
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+}
+
+html { scroll-behavior: smooth; }
+
 /* ═══════════════════════════════════════════════════════════════════════════
    DESKTOP LAYOUT
    ═══════════════════════════════════════════════════════════════════════════ */

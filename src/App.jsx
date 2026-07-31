@@ -22,6 +22,8 @@ if (typeof window !== 'undefined') {
     }
   } catch {}
 }
+import { logger } from './utils/logger'
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import pauseIconUrl from './icons/pause-button.png'
 import playIconUrl from './icons/play-button.png'
@@ -123,7 +125,7 @@ const _sfxGate = {}
 const sfxLog = (name, status = 'play') => {
   try {
     if (typeof window !== 'undefined' && window.__sfxDebug) {
-      console.log(`[SFX] ${name} ${status} @ ${Math.round(performance.now())}`)
+      logger.debug('__sfxDebug', `[SFX] ${name} ${status} @ ${Math.round(performance.now())}`)
     }
   } catch {}
 }

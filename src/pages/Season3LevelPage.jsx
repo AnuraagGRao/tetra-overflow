@@ -234,7 +234,8 @@ function useS3Mechanics({ level, epoch: _epoch, engine, state, linesThisLevel, i
     } catch {}
     setRewindGauge(0)
     setRewindActive(true)
-    setTimeout(() => setRewindActive(false), 400)
+    const timer = setTimeout(() => setRewindActive(false), 400)
+    return () => clearTimeout(timer)
   }, [rewindGauge, engine])
 
   // ── Time-dilation: gravity override based on piece row ─────────────────────
@@ -338,10 +339,12 @@ function useS3Mechanics({ level, epoch: _epoch, engine, state, linesThisLevel, i
     } catch {}
   }, [engine])
 
+  const toastTimerRef = useRef(null)
   const showToast = useCallback((text) => {
     setAbilityToast(text)
     setToastId(n => n + 1)
-    setTimeout(() => setAbilityToast(null), 2000)
+    clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = setTimeout(() => setAbilityToast(null), 2000)
   }, [])
 
   useEffect(() => {
@@ -356,7 +359,10 @@ function useS3Mechanics({ level, epoch: _epoch, engine, state, linesThisLevel, i
       showToast('⚠ INCOMING')
       setTimeout(() => { setAbilityActive(false); setAbilityLabel('') }, 1500)
     }, 12000)
-    return () => clearInterval(hoverTimerRef.current)
+    return () => {
+      clearInterval(hoverTimerRef.current)
+      clearTimeout(toastTimerRef.current)
+    }
   }, [ability, isActive, zoneActive, queueGarbage, showToast])
 
   // Solidify hover garbage
@@ -395,7 +401,8 @@ function useS3Mechanics({ level, epoch: _epoch, engine, state, linesThisLevel, i
         queueGarbage(cur.lines)
         setAbilityActive(true); setAbilityLabel('FALSE CLEAR')
         showToast('⚠ ROLLBACK')
-        setTimeout(() => { setAbilityActive(false); setAbilityLabel('') }, 1500)
+        const timer = setTimeout(() => { setAbilityActive(false); setAbilityLabel('') }, 1500)
+        return () => clearTimeout(timer)
       }
     }
   }, [ability, isActive, state.lastClear, queueGarbage, showToast])
@@ -484,7 +491,10 @@ function useS3Mechanics({ level, epoch: _epoch, engine, state, linesThisLevel, i
         setTimeout(() => { setAbilityActive(false); setAbilityLabel('') }, 1500)
       } catch {}
     }, 15000)
-    return () => clearInterval(petrifyTimerRef.current)
+    return () => {
+      clearInterval(petrifyTimerRef.current)
+      clearTimeout(toastTimerRef.current)
+    }
   }, [ability, isActive, engine, showToast]) // eslint-disable-line
 
   // When Zone activates during petrification, cleanse

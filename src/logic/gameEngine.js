@@ -2,6 +2,21 @@ import { createBag } from './randomBag'
 import { I_KICKS, JLSTZ_KICKS } from './srs'
 import { BOARD_HEIGHT, BOARD_WIDTH, PIECES } from './tetrominoes'
 
+// ── Particle Pool for reduced GC ──────────────────────────────────────────────
+const PARTICLE_POOL_SIZE = 500
+const particlePool = []
+for (let i = 0; i < PARTICLE_POOL_SIZE; i++) {
+  particlePool.push({ x: 0, y: 0, vx: 0, vy: 0, ttl: 0, maxTtl: 0, color: '', size: 0, gy: 0 })
+}
+let poolIndex = 0
+
+const createParticle = (props) => {
+  const particle = particlePool[poolIndex]
+  poolIndex = (poolIndex + 1) % PARTICLE_POOL_SIZE
+  Object.assign(particle, props)
+  return particle
+}
+
 export const GAME_MODE = { NORMAL: 'normal', SPRINT: 'sprint', BLITZ: 'blitz', MASTER: 'master', PURIFY: 'purify', VERSUS: 'versus', ZEN: 'zen', ULTIMATE: 'ultimate', EASY: 'easy' /*, TOWER: 'tower' — merged into ULTIMATE */ }
 export const PURIFY_DURATION_MS = 180000
 export const BLITZ_DURATION_MS  = 120000
@@ -757,7 +772,7 @@ export class TetrisEngine {
         const cellType = boardSnapshot[row][x]
         const color = cellType ? PIECES[cellType].color : '#ffffff'
         for (let p = 0; p < PARTICLES_PER_CELL; p += 1) {
-          this.particles.push({
+          this.particles.push(createParticle({
             x: x + 0.5 + (Math.random() - 0.5) * 0.8,
             y: row + 0.5 + (Math.random() - 0.5) * 0.8,
             ttl: 300 + Math.random() * 300,
@@ -767,7 +782,7 @@ export class TetrisEngine {
             color,
             size: 3 + Math.random() * 4,
             gy: 0.0002 + Math.random() * 0.0001,
-          })
+          }))
         }
       }
     }

@@ -2087,7 +2087,7 @@ export default function BackgroundCanvas({ bgType = 'stars', style, beatRef: _be
       contextLost = false
       try {
         ctx = canvas.getContext('2d', { alpha: true, willReadFrequently: false })
-        console.log('[BackgroundCanvas] Canvas context restored')
+        logger.warn('[BackgroundCanvas] Canvas context restored')
       } catch (e) {
         console.warn('[BackgroundCanvas] Failed to restore context:', e)
       }

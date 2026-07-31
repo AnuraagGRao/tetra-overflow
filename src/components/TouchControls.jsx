@@ -1,17 +1,17 @@
 // Left panel: movement (D-pad style) — hardDrop at top, then left/down/right
 const LEFT_BTNS = [
-  { key: 'hardDrop', label: '⤓',   hold: false },
-  { key: 'left',     label: '◀',    hold: true  },
-  { key: 'softDrop', label: '▼',    hold: true  },
-  { key: 'right',    label: '▶',    hold: true  },
+  { key: 'hardDrop', label: '⤓',   hold: false, ariaLabel: 'Hard drop piece' },
+  { key: 'left',     label: '◀',    hold: true,  ariaLabel: 'Move piece left' },
+  { key: 'softDrop', label: '▼',    hold: true,  ariaLabel: 'Soft drop piece' },
+  { key: 'right',    label: '▶',    hold: true,  ariaLabel: 'Move piece right' },
 ]
 
 // Right panel: rotation + hold
 const RIGHT_BTNS = [
-  { key: 'rotateCCW', label: '↺',    hold: false },
-  { key: 'rotateCW',  label: '↻',    hold: false },
-  { key: 'rotate180', label: '↕',    hold: false },
-  { key: 'hold',      label: 'HOLD', hold: false },
+  { key: 'rotateCCW', label: '↺',    hold: false, ariaLabel: 'Rotate counter-clockwise' },
+  { key: 'rotateCW',  label: '↻',    hold: false, ariaLabel: 'Rotate clockwise' },
+  { key: 'rotate180', label: '↕',    hold: false, ariaLabel: 'Rotate 180 degrees' },
+  { key: 'hold',      label: 'HOLD', hold: false, ariaLabel: 'Hold piece' },
 ]
 
 function ControlBtn({ btn, onPress, onRelease }) {
@@ -19,6 +19,7 @@ function ControlBtn({ btn, onPress, onRelease }) {
     <button
       type="button"
       className="control-button"
+      aria-label={btn.ariaLabel}
       onPointerDown={(e) => {
         e.preventDefault()
         e.currentTarget.setPointerCapture(e.pointerId)
