@@ -19,8 +19,8 @@ import { useStoryProgress } from '../hooks/useStoryProgress'
 
 const FRAME_MS = 34
 const ANOMALY_GRACE_MS = 6000
-const ANOMALY_ACTIVE_MS = 4000
-const ANOMALY_RESPITE_MS = 11000
+const ANOMALY_ACTIVE_MS = 3000
+const ANOMALY_RESPITE_MS = 12000
 const PHASE = { INTRO: 'intro', GAME: 'game', COMPLETE: 'complete', FAIL: 'fail' }
 const ACTION_ALIASES = { left: 'moveLeft', right: 'moveRight', softDrop: 'softDrop' }
 const HELD_ACTIONS = new Set(['moveLeft', 'moveRight', 'softDrop'])
@@ -493,7 +493,7 @@ export default function PantheonLevelPage() {
 
     const delayed = activeMechanics.has('sticky_inputs') && !engine.zoneActive
     if (delayed) {
-      const timer = setTimeout(apply, 110)
+      const timer = setTimeout(apply, 35)
       actionTimersRef.current.add(timer)
     } else {
       apply()
