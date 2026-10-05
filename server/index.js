@@ -32,9 +32,9 @@ let currentBuild = {
 app.post('/api/build-apk', async (req, res) => {
   const { buildType = 'release', apiKey } = req.body;
 
-  // Basic API key check (set BUILD_API_KEY in .env)
-  if (process.env.BUILD_API_KEY && apiKey !== process.env.BUILD_API_KEY) {
-    return res.status(403).json({ error: 'Unauthorized' });
+  // Strict API key check (must be configured and matched)
+  if (!process.env.BUILD_API_KEY || apiKey !== process.env.BUILD_API_KEY) {
+    return res.status(403).json({ error: 'Unauthorized: invalid or missing build API key' });
   }
 
   if (currentBuild.inProgress) {
@@ -136,8 +136,8 @@ app.get('/api/health', (req, res) => {
 app.post('/api/clear-builds', (req, res) => {
   const { apiKey } = req.body;
   
-  if (process.env.BUILD_API_KEY && apiKey !== process.env.BUILD_API_KEY) {
-    return res.status(403).json({ error: 'Unauthorized' });
+  if (!process.env.BUILD_API_KEY || apiKey !== process.env.BUILD_API_KEY) {
+    return res.status(403).json({ error: 'Unauthorized: invalid or missing build API key' });
   }
 
   currentBuild = {
