@@ -103,7 +103,7 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
   const theme = themeOverride ?? contextTheme
   
   // Memoize theme-related calculations to avoid recalculating on every render
-  const themeConfig = useMemo(() => ({
+  const _themeConfig = useMemo(() => ({
     isCustomTheme: theme in PIECE_COLOR_MAPS,
     colorMap: PIECE_COLOR_MAPS[theme] ?? {},
     isLightTheme: theme === 'bauhaus',
