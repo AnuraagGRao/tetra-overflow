@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { saveStoryProgress, saveGameResult, markEasyModePlayed, setActiveBadge } from '../firebase/db'
 import { findS3Level, getNextS3Level, isS3LevelUnlocked, isS3Unlocked } from '../logic/storyData_s3'
+import { TetrisEngine } from '../logic/gameEngine'
 import { Season3MusicManager } from '../audio/season3MusicManager'
 import { BG_TYPE_TO_PIECE_THEME } from '../logic/themeMappings'
 import { useStoryProgress } from '../hooks/useStoryProgress'
@@ -48,6 +49,7 @@ export default function Season3LevelPage() {
   const { user } = useAuth()
 
   const levelData = useMemo(() => findS3Level(epochId, levelId), [epochId, levelId])
+  const engine = useMemo(() => new TetrisEngine(), [])
   const { epoch, level } = levelData || {}
   const epochColor = epoch?.color ?? '#ff0000'
   const pieceTheme = useMemo(
@@ -110,6 +112,7 @@ export default function Season3LevelPage() {
 
   // ── Headless Game Hook ─────────────────────────────────────────────────────
   const game = useTetrisGame({
+    existingEngine: engine,
     targetLines: effectiveTarget,
     pieceTheme,
     active: phase === PHASE.GAME,
@@ -125,7 +128,7 @@ export default function Season3LevelPage() {
   // ── Season 3 Mechanics Hook ────────────────────────────────────────────────
   const s3 = useS3Mechanics({
     level,
-    engine: game.engine,
+    engine,
     state: game.state,
     linesThisLevel: game.linesThisLevel,
     isActive: phase === PHASE.GAME,

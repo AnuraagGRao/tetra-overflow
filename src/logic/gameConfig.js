@@ -12,15 +12,27 @@ export const DEFAULT_GAME_CONFIG = Object.freeze({
   screenShakeMultiplier: 1,
 })
 
+export function isTouchDevice() {
+  if (typeof window === 'undefined') return false
+  return (
+    'ontouchstart' in window ||
+    navigator.maxTouchPoints > 0 ||
+    window.matchMedia?.('(pointer: coarse)')?.matches === true
+  )
+}
+
 export function readGameConfig() {
-  if (typeof localStorage === 'undefined') return { ...DEFAULT_GAME_CONFIG }
+  const isTouch = isTouchDevice()
+  if (typeof localStorage === 'undefined') return { ...DEFAULT_GAME_CONFIG, showOnScreenControls: isTouch }
   try {
+    const saved = JSON.parse(localStorage.getItem(GAME_CONFIG_KEY) || '{}')
     return {
       ...DEFAULT_GAME_CONFIG,
-      ...JSON.parse(localStorage.getItem(GAME_CONFIG_KEY) || '{}'),
+      showOnScreenControls: saved.showOnScreenControls ?? isTouch,
+      ...saved,
     }
   } catch {
-    return { ...DEFAULT_GAME_CONFIG }
+    return { ...DEFAULT_GAME_CONFIG, showOnScreenControls: isTouch }
   }
 }
 

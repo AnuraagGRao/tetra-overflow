@@ -6,6 +6,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { saveStoryProgress } from '../firebase/db'
 import { findS4Level, getNextS4Level, isS4LevelUnlocked, isS4Unlocked } from '../logic/storyData_s4'
+import { TetrisEngine } from '../logic/gameEngine'
 import { Season4MusicManager } from '../audio/season4MusicManager'
 import { BG_TYPE_TO_PIECE_THEME } from '../logic/themeMappings'
 import { useStoryProgress } from '../hooks/useStoryProgress'
@@ -72,8 +73,11 @@ export default function Season4LevelPage() {
     setPhase(PHASE.FAIL)
   }, [])
 
+  const engine = useMemo(() => new TetrisEngine(), [])
+
   // ── Headless Tetris Game Hook ──────────────────────────────────────────────
   const game = useTetrisGame({
+    existingEngine: engine,
     targetLines: effectiveTarget,
     pieceTheme,
     active: phase === PHASE.GAME,

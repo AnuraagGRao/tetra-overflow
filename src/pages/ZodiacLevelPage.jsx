@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { saveStoryProgress, saveGameResult, markEasyModePlayed, setActiveBadge } from '../firebase/db'
 import { findZodiacBoss, ZODIAC_BOSSES } from '../logic/storyData_s2'
+import { TetrisEngine } from '../logic/gameEngine'
 import { BG_TYPE_TO_PIECE_THEME } from '../logic/themeMappings'
 import { Season2MusicManager } from '../audio/season2MusicManager'
 import { useStoryProgress } from '../hooks/useStoryProgress'
@@ -28,6 +29,7 @@ export default function ZodiacLevelPage() {
   const { user } = useAuth()
 
   const boss = useMemo(() => findZodiacBoss(bossId), [bossId])
+  const engine = useMemo(() => new TetrisEngine(), [])
   const pieceTheme = useMemo(() => BG_TYPE_TO_PIECE_THEME[boss?.bgType] || 'classic', [boss?.bgType])
 
   useStoryProgress(user?.uid)
@@ -90,6 +92,7 @@ export default function ZodiacLevelPage() {
 
   // ── Headless Tetris Game Hook ──────────────────────────────────────────────
   const game = useTetrisGame({
+    existingEngine: engine,
     targetLines: effectiveTargetLines,
     pieceTheme,
     active: phase === PHASE.GAME,
@@ -101,7 +104,7 @@ export default function ZodiacLevelPage() {
   // ── Boss Ability Hook (Decoupled & Legal Top-Level Hook) ───────────────────
   const bossAbility = useBossAbility({
     bossId,
-    engine: game.engine,
+    engine,
     state: game.state,
     linesThisLevel: game.linesThisLevel,
     isActive: phase === PHASE.GAME,

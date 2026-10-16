@@ -1318,6 +1318,7 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
       y: event.clientY,
       t: performance.now(),
       dir: null,
+      lastStepX: event.clientX,
     }
   }
 
@@ -1347,15 +1348,51 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
       tf.lastX = event.clientX; tf.lastY = event.clientY
     }
     const start = touchRef.current
-    if (!start || start.dir !== null) return   // not tracking, or already committed
-    const dx = event.clientX - start.x
-    const dy = event.clientY - start.y
-    const absX = Math.abs(dx)
-    const absY = Math.abs(dy)
-    if (Math.max(absX, absY) < DRAG_START_PX) return
-    const dir = absX > absY ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up')
-    start.dir = dir
-    onDragBegin(dir)
+    if (!start) return
+
+    const totalDx = event.clientX - start.x
+    const totalDy = event.clientY - start.y
+
+    // If locked to vertical gesture (soft drop or hold)
+    if (start.dir === 'down' || start.dir === 'up') return
+
+    // Decide initial gesture direction once threshold is crossed
+    if (start.dir === null) {
+      const absX = Math.abs(totalDx)
+      const absY = Math.abs(totalDy)
+      if (Math.max(absX, absY) < DRAG_START_PX) return
+
+      if (absY > absX) {
+        const dir = totalDy > 0 ? 'down' : 'up'
+        start.dir = dir
+        onDragBegin(dir)
+        return
+      }
+
+      // Horizontal gesture initiated
+      start.dir = 'horizontal'
+      start.lastStepX = event.clientX
+      const initialDir = totalDx > 0 ? 'right' : 'left'
+      onDragBegin(initialDir)
+      onDragEnd(initialDir)
+      return
+    }
+
+    // Continuous column-by-column dragging when moving horizontally
+    if (start.dir === 'horizontal') {
+      const colStepPx = Math.max(16, cellSize * 0.75)
+      const deltaX = event.clientX - start.lastStepX
+      if (Math.abs(deltaX) >= colStepPx) {
+        const steps = Math.trunc(deltaX / colStepPx)
+        const dir = steps > 0 ? 'right' : 'left'
+        const count = Math.min(4, Math.abs(steps))
+        for (let i = 0; i < count; i++) {
+          onDragBegin(dir)
+          onDragEnd(dir)
+        }
+        start.lastStepX += steps * colStepPx
+      }
+    }
   }
 
   const handlePointerUp = (event) => {
@@ -1374,7 +1411,7 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
       const dy = event.clientY - start.y
       if (Math.abs(dx) < TAP_MAX_PX && Math.abs(dy) < TAP_MAX_PX) {
         onTap?.()
-        }
+      }
       return
     }
 
@@ -1392,6 +1429,12 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
 
     if (start.dir === 'up') return   // up swipe: action was fired in onDragBegin, nothing to release
 
+    if (start.dir === 'horizontal') {
+      onDragEnd('left')
+      onDragEnd('right')
+      return
+    }
+
     onDragEnd(start.dir)   // left / right released
   }
 
@@ -1401,6 +1444,11 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
     const start = touchRef.current
     touchRef.current = null
     if (!start || start.dir === null || start.dir === 'up') return
+    if (start.dir === 'horizontal') {
+      onDragEnd('left')
+      onDragEnd('right')
+      return
+    }
     onDragEnd(start.dir)
   }
 

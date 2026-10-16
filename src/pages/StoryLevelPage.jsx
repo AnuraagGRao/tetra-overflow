@@ -14,6 +14,7 @@ import {
   awardStoryChapterMilestone,
 } from '../firebase/db'
 import { findLevel, getNextLevel } from '../logic/storyData'
+import { TetrisEngine } from '../logic/gameEngine'
 import { BG_TYPE_TO_PIECE_THEME } from '../logic/themeMappings'
 import { StoryMusicManager } from '../audio/storyMusicManager'
 import GlitchOverlay from '../components/GlitchOverlay'
@@ -166,6 +167,12 @@ export default function StoryLevelPage() {
   const [currentChapterId, setCurrentChapterId] = useState(chapterId)
   const [currentLevelId, setCurrentLevelId] = useState(levelId)
 
+  useEffect(() => {
+    setCurrentChapterId(chapterId)
+    setCurrentLevelId(levelId)
+  }, [chapterId, levelId])
+
+  const engine = useMemo(() => new TetrisEngine(), [])
   const found = useMemo(() => findLevel(currentChapterId, currentLevelId), [currentChapterId, currentLevelId])
   const { chapter, level } = found || {}
   const pieceTheme = BG_TYPE_TO_PIECE_THEME[level?.bgType] || 'classic'
@@ -193,6 +200,7 @@ export default function StoryLevelPage() {
   const storyMusicRef = useRef(null)
   const transitionAdvanceRef = useRef(null)
   const levelStartScoreRef = useRef(0)
+  const startLevelGameRef = useRef(null)
 
   const effectiveTargetLines = useMemo(() => {
     const tl = level?.targetLines || 0
@@ -305,6 +313,7 @@ export default function StoryLevelPage() {
 
   // ── Headless Tetris Game Hook ──────────────────────────────────────────────
   const game = useTetrisGame({
+    existingEngine: engine,
     targetLines: loopTargetLines,
     pieceTheme,
     active: phase === PHASE.GAME,
@@ -334,10 +343,11 @@ export default function StoryLevelPage() {
   const startLevelGame = useCallback(() => {
     const gm = found?.level?.gravityMult ?? 1.0
     const gravFactor = easyMode ? 0.6 : 1.0
-    levelStartScoreRef.current = game.state.score
+    levelStartScoreRef.current = engine.score
     game.resetGame({ gravityMult: gm * gravFactor })
     setPhase(PHASE.GAME)
-  }, [found, easyMode, game])
+  }, [found, easyMode, engine, game.resetGame])
+  startLevelGameRef.current = startLevelGame
 
   const restartLevel = useCallback(() => {
     if (game.paused) game.togglePause()
@@ -357,11 +367,11 @@ export default function StoryLevelPage() {
       setStoryCountdown(remaining)
       if (remaining <= 0) {
         clearInterval(id)
-        startLevelGame()
+        startLevelGameRef.current?.()
       }
     }, 1000)
     return () => clearInterval(id)
-  }, [phase, currentChapterId, currentLevelId, startLevelGame])
+  }, [phase, currentChapterId, currentLevelId])
 
   // Seamless transition timer
   useEffect(() => {
@@ -381,9 +391,9 @@ export default function StoryLevelPage() {
       const nextFound = findLevel(next.chapterId, next.levelId)
       const gm = nextFound?.level?.gravityMult ?? 1.0
       const gravFactor = easyMode ? 0.6 : 1.0
-      levelStartScoreRef.current = game.state.score
-      game.levelStartLinesRef.current = game.state.lines
-      game.resetGame({ gravityMult: gm * gravFactor, linesOffset: game.state.lines })
+      levelStartScoreRef.current = engine.score
+      game.levelStartLinesRef.current = engine.lines
+      game.resetGame({ gravityMult: gm * gravFactor, linesOffset: engine.lines })
       setCurrentChapterId(next.chapterId)
       setCurrentLevelId(next.levelId)
       setPhase(PHASE.GAME)
@@ -403,7 +413,7 @@ export default function StoryLevelPage() {
       clearInterval(id)
       transitionAdvanceRef.current = null
     }
-  }, [phase, currentChapterId, currentLevelId, found, easyMode, game])
+  }, [phase, currentChapterId, currentLevelId, found, easyMode, engine, game.resetGame])
 
   // Matrix ascent countdown (6s)
   useEffect(() => {

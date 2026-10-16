@@ -55,6 +55,15 @@ export default function GameShell({
   const effectiveTitle = levelTitle || level?.title || 'TETRIS'
   const effectiveTarget = targetLines || level?.targetLines || 0
 
+  const isTouch = useMemo(() => {
+    if (typeof window === 'undefined') return false
+    return (
+      'ontouchstart' in window ||
+      navigator.maxTouchPoints > 0 ||
+      window.matchMedia?.('(pointer: coarse)')?.matches === true
+    )
+  }, [])
+
   return (
     <div
       style={{
@@ -142,6 +151,36 @@ export default function GameShell({
               <span style={{ color: '#666', fontSize: '0.62rem', fontFamily: 'monospace' }}>
                 {Math.min(linesThisLevel, effectiveTarget)}/{effectiveTarget}
               </span>
+            )}
+
+            {isTouch && (
+              <button
+                type="button"
+                onClick={() => {
+                  const nextVal = !(config.showOnScreenControls ?? isTouch)
+                  try {
+                    const saved = JSON.parse(localStorage.getItem('tetris-config') || '{}')
+                    localStorage.setItem('tetris-config', JSON.stringify({ ...saved, showOnScreenControls: nextVal }))
+                  } catch {}
+                  if (config) config.showOnScreenControls = nextVal
+                  window.dispatchEvent(new CustomEvent('tetris-config-change', { detail: { showOnScreenControls: nextVal } }))
+                }}
+                title="Toggle On-Screen D-Pad"
+                aria-label="Toggle On-Screen D-Pad"
+                style={{
+                  background: (config.showOnScreenControls ?? isTouch) ? 'rgba(0,229,255,0.18)' : 'none',
+                  border: `1px solid ${(config.showOnScreenControls ?? isTouch) ? '#00e5ff' : 'rgba(255,255,255,0.2)'}`,
+                  color: (config.showOnScreenControls ?? isTouch) ? '#00e5ff' : '#aaa',
+                  cursor: 'pointer',
+                  fontSize: '0.62rem',
+                  padding: '3px 7px',
+                  borderRadius: 4,
+                  fontFamily: 'inherit',
+                  fontWeight: 700,
+                }}
+              >
+                🎮
+              </button>
             )}
 
             <button
@@ -472,10 +511,10 @@ export default function GameShell({
       )}
 
       {/* Touch controls */}
-      {config.showOnScreenControls && !focus && (
+      {(config.showOnScreenControls ?? isTouch) && !focus && (
         <TouchControls onPress={handlePress} onRelease={handleRelease} />
       )}
-      {config.showOnScreenControls && focus && !isLandscape && (
+      {(config.showOnScreenControls ?? isTouch) && focus && !isLandscape && (
         <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 60, pointerEvents: 'auto' }}>
           <TouchControls onPress={handlePress} onRelease={handleRelease} />
         </div>
