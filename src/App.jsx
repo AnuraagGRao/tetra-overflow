@@ -1178,6 +1178,7 @@ export default function App() {
   const heldRef   = useRef({ left: false, right: false, softDrop: false })
   const gpHeldRef  = useRef({ left: false, right: false, softDrop: false })
   const actionRef  = useRef({})
+  const lastHardDropTimeRef = useRef(0)
   const prevGameOverRef  = useRef(false)
   const prevLevelRef      = useRef(1)
   const prevBackToBackRef = useRef(false)
@@ -1352,8 +1353,8 @@ export default function App() {
   // Persist UI visibility state
   useEffect(() => { localStorage.setItem('tetris-ui-hidden', String(isUiHidden)) }, [isUiHidden])
 
-  // Sync engine DAS/ARR from config
-  useEffect(() => { engine.setSettings({ das: config.das, arr: config.arr }) },  [engine, config.das, config.arr])
+  // Sync engine DAS/ARR/SDF from config
+  useEffect(() => { engine.setSettings({ das: config.das, arr: config.arr, sdf: config.sdf }) },  [engine, config.das, config.arr, config.sdf])
 
   // ─── Floating event popups ─────────────────────────────────────────────────
   const spawnPopup = useCallback((text, color = '#fff') => {
@@ -1877,6 +1878,11 @@ export default function App() {
       }
       if (b.action) {
         if (countdownActiveRef.current && b.action !== 'pause') return
+        if (b.action === 'hardDrop') {
+          const now = performance.now()
+          if (now - lastHardDropTimeRef.current < 110) return
+          lastHardDropTimeRef.current = now
+        }
         actionRef.current[b.action] = true
         if ((b.action === 'rotateCW' || b.action === 'rotateCCW' || b.action === 'rotate180') && sfxOn) playRotateSFX(theme)
         if (b.action === 'rotateCW' || b.action === 'rotateCCW' || b.action === 'rotate180') emitSynesthesia(SYNESTHESIA_EVENT.ROTATE, { intensity: 1.02, source: 'keyboard' })
@@ -1964,6 +1970,9 @@ export default function App() {
   }
   const handleHardDrop = () => {
     if (!countdownActiveRef.current) {
+      const now = performance.now()
+      if (now - lastHardDropTimeRef.current < 110) return
+      lastHardDropTimeRef.current = now
       heldRef.current.softDrop = false
       actionRef.current.hardDrop = true
       emitSynesthesia(SYNESTHESIA_EVENT.HARD_DROP, { intensity: 1.25, source: 'gesture' })
@@ -2058,6 +2067,11 @@ export default function App() {
                   if (musicOnRef.current) musicManager?.resume()
                 }
               } else if (!countdownActiveRef.current) {
+                if (action === 'hardDrop') {
+                  const now = performance.now()
+                  if (now - lastHardDropTimeRef.current < 110) return
+                  lastHardDropTimeRef.current = now
+                }
                 actionRef.current[action] = true
                 const sfxOn = configRef.current.sfxEnabled
                 if (action === 'rotateCW' || action === 'rotateCCW' || action === 'rotate180') {
@@ -2302,8 +2316,27 @@ export default function App() {
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.35 }}>
+          {s.zoneEndResult.name && (
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0, y: -8 }}
+              animate={{ scale: 1.06, opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, type: 'spring' }}
+              style={{
+                fontSize: '1.25rem',
+                fontWeight: 900,
+                letterSpacing: '0.22em',
+                textTransform: 'uppercase',
+                background: 'linear-gradient(135deg, #ffd700, #ff8c00, #00ffff)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                filter: 'drop-shadow(0 0 16px rgba(255, 215, 0, 0.75))',
+                marginBottom: 4,
+              }}>
+              {s.zoneEndResult.name}
+            </motion.div>
+          )}
           <div className="zone-end-number">{s.zoneEndResult.lines}</div>
-          <div className="zone-end-label">ZONE LINES!</div>
+          <div className="zone-end-label">{s.zoneEndResult.lines >= 20 ? 'ULTIMATRIS CLEAR!' : 'ZONE LINES!'}</div>
           <div className="zone-end-bonus">+{s.zoneEndResult.bonus.toLocaleString()}</div>
           <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', gap: 4, padding: '10% 18%', pointerEvents: 'none' }}>
             {Array.from({ length: Math.min(12, s.zoneEndResult.lines || 0) }).map((_, i) => (

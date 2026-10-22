@@ -5,6 +5,15 @@ import { useTheme } from '../contexts/ThemeContext'
 import { BG_TYPE_TO_PIECE_THEME } from '../logic/themeMappings'
 import catImageUrl from '../meme/oiia_cat_assets_by_awesomeconsoles7_djwlgwe-fullview.png'
 
+let _cachedCatImg = null
+function getCatImg() {
+  if (!_cachedCatImg && typeof Image !== 'undefined') {
+    _cachedCatImg = new Image()
+    _cachedCatImg.src = catImageUrl
+  }
+  return _cachedCatImg
+}
+
 const INFECTED_COLOR = PIECES.INF.color
 const ZONE_COLOR     = PIECES.ZONE.color
 const GBG_COLOR      = PIECES.GBG.color
@@ -256,9 +265,8 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
     ctx.imageSmoothingEnabled = renderQuality !== 'performance'
     ctx.imageSmoothingQuality = renderQuality === 'ultra' ? 'high' : 'medium'
 
-    // Cat texture for meme blocks
-    const catImg = new Image()
-    catImg.src = catImageUrl
+    // Cat texture for meme blocks (cached)
+    const catImg = getCatImg()
 
 
     pulseRef.current += 0.05

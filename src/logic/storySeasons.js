@@ -53,12 +53,12 @@ const SEASON_METADATA = [
   {
     id: 's6',
     number: 6,
-    title: 'CLASSIFIED',
-    subtitle: 'A signal is forming beyond the Pantheon',
-    glyph: '△',
-    color: '#7dd3fc',
-    route: null,
-    comingSoon: true,
+    title: 'THE ZENITH PROTOCOL',
+    subtitle: 'Ascend the infinite monolith',
+    glyph: '⏏',
+    color: '#38bdf8',
+    route: '/s6',
+    comingSoon: false,
   },
 ]
 
@@ -70,7 +70,7 @@ export function getStorySeasons(progress = {}) {
     s3: { unlocked: isS3Unlocked(progress), complete: isS3Complete(progress) },
     s4: { unlocked: isS4Unlocked(progress), complete: isS4Complete(progress) },
     s5: { unlocked: isPantheonUnlocked(progress), complete: isS5Complete(progress) },
-    s6: { unlocked: isS5Complete(progress), complete: false },
+    s6: { unlocked: isDevMode() || isS5Complete(progress) || !!progress.ch8_l1_completed, complete: false },
   }
 
   return SEASON_METADATA.map(season => ({ ...season, ...states[season.id] }))

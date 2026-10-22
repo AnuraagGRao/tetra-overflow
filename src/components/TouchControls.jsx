@@ -22,15 +22,17 @@ function ControlBtn({ btn, onPress, onRelease }) {
       aria-label={btn.ariaLabel}
       onPointerDown={(e) => {
         e.preventDefault()
-        e.currentTarget.setPointerCapture(e.pointerId)
+        try { e.currentTarget.setPointerCapture(e.pointerId) } catch {}
         onPress(btn.key, btn.hold)
       }}
       onPointerUp={(e) => {
         e.preventDefault()
+        try { e.currentTarget.releasePointerCapture(e.pointerId) } catch {}
         onRelease(btn.key, btn.hold)
       }}
       onPointerCancel={(e) => {
         e.preventDefault()
+        try { e.currentTarget.releasePointerCapture(e.pointerId) } catch {}
         onRelease(btn.key, btn.hold)
       }}
     >

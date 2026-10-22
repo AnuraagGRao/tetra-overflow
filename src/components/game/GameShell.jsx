@@ -1,3 +1,4 @@
+import React, { useMemo } from 'react'
 import { motion } from 'framer-motion'
 import BackgroundCanvas from '../BackgroundCanvas'
 import LandscapeGameLayout from '../LandscapeGameLayout'
@@ -29,6 +30,7 @@ export default function GameShell({
   focus = false,
   setFocus = () => {},
   config = {},
+  setConfig = () => {},
 
   // Inputs
   triggerAction = () => {},
@@ -55,6 +57,12 @@ export default function GameShell({
   const effectiveTitle = levelTitle || level?.title || 'TETRIS'
   const effectiveTarget = targetLines || level?.targetLines || 0
 
+  React.useEffect(() => {
+    try {
+      window.focus()
+    } catch {}
+  }, [])
+
   const isTouch = useMemo(() => {
     if (typeof window === 'undefined') return false
     return (
@@ -78,7 +86,13 @@ export default function GameShell({
       }}
     >
       {/* Background Canvas */}
-      <BackgroundCanvas bgType={bgType} />
+      <BackgroundCanvas
+        bgType={bgType}
+        renderQuality={config.renderQuality || 'balanced'}
+        comboStreak={state.combo || 0}
+        bpm={130}
+        synesthesiaEnabled={config.synesthesiaEnabled ?? true}
+      />
 
       {/* Landscape Zoom Control */}
       {isLandscape && <ZoomControl zoom={zoom} onChange={setZoom} />}
@@ -153,35 +167,34 @@ export default function GameShell({
               </span>
             )}
 
-            {isTouch && (
-              <button
-                type="button"
-                onClick={() => {
-                  const nextVal = !(config.showOnScreenControls ?? isTouch)
-                  try {
-                    const saved = JSON.parse(localStorage.getItem('tetris-config') || '{}')
-                    localStorage.setItem('tetris-config', JSON.stringify({ ...saved, showOnScreenControls: nextVal }))
-                  } catch {}
-                  if (config) config.showOnScreenControls = nextVal
-                  window.dispatchEvent(new CustomEvent('tetris-config-change', { detail: { showOnScreenControls: nextVal } }))
-                }}
-                title="Toggle On-Screen D-Pad"
-                aria-label="Toggle On-Screen D-Pad"
-                style={{
-                  background: (config.showOnScreenControls ?? isTouch) ? 'rgba(0,229,255,0.18)' : 'none',
-                  border: `1px solid ${(config.showOnScreenControls ?? isTouch) ? '#00e5ff' : 'rgba(255,255,255,0.2)'}`,
-                  color: (config.showOnScreenControls ?? isTouch) ? '#00e5ff' : '#aaa',
-                  cursor: 'pointer',
-                  fontSize: '0.62rem',
-                  padding: '3px 7px',
-                  borderRadius: 4,
-                  fontFamily: 'inherit',
-                  fontWeight: 700,
-                }}
-              >
-                🎮
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => {
+                const currentShow = config.showOnScreenControls ?? isTouch
+                const nextVal = !currentShow
+                try {
+                  const saved = JSON.parse(localStorage.getItem('tetris-config') || '{}')
+                  localStorage.setItem('tetris-config', JSON.stringify({ ...saved, showOnScreenControls: nextVal }))
+                } catch {}
+                setConfig(prev => ({ ...prev, showOnScreenControls: nextVal }))
+                window.dispatchEvent(new CustomEvent('tetris-config-change', { detail: { showOnScreenControls: nextVal } }))
+              }}
+              title="Toggle On-Screen Controls"
+              aria-label="Toggle On-Screen Controls"
+              style={{
+                background: (config.showOnScreenControls ?? isTouch) ? 'rgba(0,229,255,0.18)' : 'none',
+                border: `1px solid ${(config.showOnScreenControls ?? isTouch) ? '#00e5ff' : 'rgba(255,255,255,0.2)'}`,
+                color: (config.showOnScreenControls ?? isTouch) ? '#00e5ff' : '#aaa',
+                cursor: 'pointer',
+                fontSize: '0.62rem',
+                padding: '3px 7px',
+                borderRadius: 4,
+                fontFamily: 'inherit',
+                fontWeight: 700,
+              }}
+            >
+              🎮
+            </button>
 
             <button
               type="button"
@@ -400,14 +413,20 @@ export default function GameShell({
                 onTwoFingerTap={() => triggerAction('activateZone')}
                 onDragBegin={direction => {
                   if (direction === 'up') triggerAction('hold')
-                  else if (direction === 'left' || direction === 'right' || direction === 'down') {
-                    handlePress(direction === 'down' ? 'softDrop' : direction, true)
+                  else if (direction === 'left' || direction === 'right') {
+                    handlePress(direction, false)
+                  } else if (direction === 'down') {
+                    handlePress('softDrop', true)
                   }
                 }}
-                onDragEnd={direction => handleRelease(direction === 'down' ? 'softDrop' : direction, direction !== 'up')}
+                onDragEnd={direction => {
+                  if (direction === 'down') handleRelease('softDrop', true)
+                }}
                 onHardDrop={handleHardDrop}
                 onZoomGesture={scale => setZoom(val => Math.max(0.5, Math.min(2, val * scale)))}
                 themeOverride={pieceTheme}
+                renderQuality={config.renderQuality || 'balanced'}
+                boardAlpha={0.35}
                 screenShakeMultiplier={config.screenShakeMultiplier ?? 1.0}
               />
             </div>
@@ -448,14 +467,20 @@ export default function GameShell({
               onTwoFingerTap={() => triggerAction('activateZone')}
               onDragBegin={direction => {
                 if (direction === 'up') triggerAction('hold')
-                else if (direction === 'left' || direction === 'right' || direction === 'down') {
-                  handlePress(direction === 'down' ? 'softDrop' : direction, true)
+                else if (direction === 'left' || direction === 'right') {
+                  handlePress(direction, false)
+                } else if (direction === 'down') {
+                  handlePress('softDrop', true)
                 }
               }}
-              onDragEnd={direction => handleRelease(direction === 'down' ? 'softDrop' : direction, direction !== 'up')}
+              onDragEnd={direction => {
+                if (direction === 'down') handleRelease('softDrop', true)
+              }}
               onHardDrop={handleHardDrop}
               onZoomGesture={scale => setZoom(val => Math.max(0.5, Math.min(2, val * scale)))}
               themeOverride={pieceTheme}
+              renderQuality={config.renderQuality || 'balanced'}
+              boardAlpha={0.35}
               screenShakeMultiplier={config.screenShakeMultiplier ?? 1.0}
             />
           </div>

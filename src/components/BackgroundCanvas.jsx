@@ -883,13 +883,9 @@ const detectLowEndDevice = () => {
   if (typeof navigator === 'undefined') return false
   const hc = Number(navigator.hardwareConcurrency || 0)
   const dm = Number(navigator.deviceMemory || 0)
-  const coarsePointer = typeof matchMedia === 'function' ? matchMedia('(pointer: coarse)').matches : false
-  const smallViewport = typeof window !== 'undefined' ? (window.innerWidth <= 900 || window.innerHeight <= 700) : false
   const saveData = Boolean(navigator.connection?.saveData)
-  const slowConnection = navigator.connection?.effectiveType === '2g' || navigator.connection?.effectiveType === '3g'
-  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
-  const lowGPU = typeof navigator !== 'undefined' && navigator.gpu === undefined
-  return saveData || (hc > 0 && hc <= 4) || (dm > 0 && dm <= 4) || (coarsePointer && smallViewport) || (isMobile && slowConnection) || (isMobile && lowGPU)
+  const slowConnection = navigator.connection?.effectiveType === '2g'
+  return saveData || (hc > 0 && hc <= 2) || (dm > 0 && dm <= 2) || slowConnection
 }
 
 // ── Particle update — returns true if dead (should respawn) ──────────────────
@@ -1760,7 +1756,18 @@ const lerpHex = (from, to, t) => {
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export default function BackgroundCanvas({ bgType = 'stars', style, beatRef: _beatRef = null, bpm = 120, comboStreak = 0, useVanta = false, vantaType = null, vantaOptions = null, synesthesiaEnabled = true }) {
+export default function BackgroundCanvas({
+  bgType = 'stars',
+  style,
+  beatRef: _beatRef = null,
+  bpm = 120,
+  comboStreak = 0,
+  useVanta = false,
+  vantaType = null,
+  vantaOptions = null,
+  synesthesiaEnabled = true,
+  renderQuality: propRenderQuality = null,
+}) {
   const canvasRef = useRef(null)
   const vantaElRef = useRef(null)
   const vantaInstRef = useRef(null)
@@ -1773,7 +1780,7 @@ export default function BackgroundCanvas({ bgType = 'stars', style, beatRef: _be
   const customImgRef = useRef(null)
   const lastUrlRef = useRef('')
   const nyanImgRef = useRef(null)
-  const [renderQuality, setRenderQuality] = useState(() => readRenderQuality())
+  const [renderQuality, setRenderQuality] = useState(() => propRenderQuality || readRenderQuality())
   const [selectedEffects, setSelectedEffects] = useState(() => {
     try {
       const arr = JSON.parse(localStorage.getItem('selectedEffects') || '[]')
@@ -1783,9 +1790,17 @@ export default function BackgroundCanvas({ bgType = 'stars', style, beatRef: _be
     }
   })
 
+  useEffect(() => {
+    if (propRenderQuality) setRenderQuality(propRenderQuality)
+  }, [propRenderQuality])
+
   const profile = useMemo(() => getBackgroundProfile(bgType), [bgType])
-  const lowEndMode = useMemo(() => renderQuality === 'performance' || detectLowEndDevice(), [renderQuality])
-  const particleDensityScale = lowEndMode ? 0.5 : 1
+  const particleDensityScale = useMemo(() => {
+    if (renderQuality === 'ultra') return 1.8
+    if (renderQuality === 'quality') return 1.3
+    if (renderQuality === 'performance') return 0.5
+    return detectLowEndDevice() ? 0.65 : 1.0
+  }, [renderQuality])
   const parallaxStrength = profile?.parallax ?? 7
   const px = useMotionValue(0)
   const py = useMotionValue(0)
@@ -1806,8 +1821,17 @@ export default function BackgroundCanvas({ bgType = 'stars', style, beatRef: _be
         setRenderQuality(readRenderQuality())
       }
     }
+    const onConfigChange = (ev) => {
+      const q = ev?.detail?.renderQuality
+      if (q) setRenderQuality(q)
+      else setRenderQuality(readRenderQuality())
+    }
     window.addEventListener('storage', onStorage)
-    return () => window.removeEventListener('storage', onStorage)
+    window.addEventListener('tetris-config-change', onConfigChange)
+    return () => {
+      window.removeEventListener('storage', onStorage)
+      window.removeEventListener('tetris-config-change', onConfigChange)
+    }
   }, [])
 
   useEffect(() => {
@@ -1892,8 +1916,8 @@ export default function BackgroundCanvas({ bgType = 'stars', style, beatRef: _be
           gyroControls: false,
           minHeight: 200,
           minWidth: 200,
-          scale: 1.0,
-          scaleMobile: 1.0,
+          scale: renderQuality === 'ultra' ? 1.0 : renderQuality === 'quality' ? 1.0 : renderQuality === 'performance' ? 0.6 : 0.85,
+          scaleMobile: renderQuality === 'ultra' ? 1.0 : renderQuality === 'quality' ? 0.95 : renderQuality === 'performance' ? 0.5 : 0.75,
           ...activeOpts,
         })
         vantaBaseRef.current = {
@@ -2095,10 +2119,22 @@ export default function BackgroundCanvas({ bgType = 'stars', style, beatRef: _be
     canvas.addEventListener('webglcontextlost', handleContextLoss)
     canvas.addEventListener('webglcontextrestored', handleContextRestoration)
 
+    const nativeDpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1
+    const dpr = renderQuality === 'ultra' ? Math.min(nativeDpr, 3)
+              : renderQuality === 'quality' ? Math.min(nativeDpr, 2)
+              : renderQuality === 'balanced' ? Math.min(nativeDpr, 1.5)
+              : 1
+
     const resize = () => {
-      canvas.width  = canvas.offsetWidth  || window.innerWidth
-      canvas.height = canvas.offsetHeight || window.innerHeight
-      particles = createParticles(bgType, canvas.width, canvas.height, particleDensityScale)
+      const logicalW = canvas.offsetWidth || window.innerWidth
+      const logicalH = canvas.offsetHeight || window.innerHeight
+      const physW = Math.round(logicalW * dpr)
+      const physH = Math.round(logicalH * dpr)
+      if (canvas.width !== physW || canvas.height !== physH) {
+        canvas.width = physW
+        canvas.height = physH
+      }
+      particles = createParticles(bgType, logicalW, logicalH, particleDensityScale)
     }
     resize()
     window.addEventListener('resize', resize)
@@ -2110,6 +2146,12 @@ export default function BackgroundCanvas({ bgType = 'stars', style, beatRef: _be
         return
       }
       try {
+        const logicalW = canvas.offsetWidth || window.innerWidth
+        const logicalH = canvas.offsetHeight || window.innerHeight
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+        ctx.imageSmoothingEnabled = renderQuality !== 'performance'
+        ctx.imageSmoothingQuality = renderQuality === 'ultra' ? 'high' : 'medium'
+
         const baseDt = Math.min(now-lastTime, 50)
         lastTime = now
         const t = now-startTime
@@ -2120,7 +2162,7 @@ export default function BackgroundCanvas({ bgType = 'stars', style, beatRef: _be
         const comboPulse = clamp(comboBoostRef.current, 0, 1.1)
         const energy = Math.min(2.2, Math.max(beat, bpmPulse * 0.65) + comboPulse * 0.9)
         const dt = baseDt * (0.9 + energy * 0.6)
-        const w = canvas.width, hh = canvas.height
+        const w = logicalW, hh = logicalH
 
         const burst = clearBurstRef.current
         if (burst.pending > 0 && particles.length > 0) {
@@ -2218,7 +2260,7 @@ export default function BackgroundCanvas({ bgType = 'stars', style, beatRef: _be
       canvas.removeEventListener('webglcontextlost', handleContextLoss)
       canvas.removeEventListener('webglcontextrestored', handleContextRestoration)
     }
-  }, [bgType, activeType, bpm, _beatRef, particleDensityScale])
+  }, [bgType, activeType, bpm, _beatRef, particleDensityScale, renderQuality])
 
   const scanlinesOn = selectedEffects.includes('effect_retro_crt')
   const fluidFogOn = profile?.category === 'fluid'

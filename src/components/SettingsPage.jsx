@@ -3,7 +3,14 @@ import settingsIconUrl from '../icons/settings-button.png'
 import soundIconUrl from '../icons/sound-button.png'
 
 export default function SettingsPage({ config, onConfig, onClose, onClearCache }) {
-  const set = (key, val) => onConfig(prev => ({ ...prev, [key]: val }))
+  const set = (key, val) => onConfig(prev => {
+    const next = { ...prev, [key]: val }
+    try {
+      localStorage.setItem('tetris-config', JSON.stringify(next))
+      window.dispatchEvent(new CustomEvent('tetris-config-change', { detail: next }))
+    } catch {}
+    return next
+  })
   const { colorMode: _colorMode, setColorMode: _setColorMode } = useTheme()
 
   return (
@@ -103,6 +110,19 @@ export default function SettingsPage({ config, onConfig, onClose, onClearCache }
           </div>
 
           <div className="settings-row">
+            <span className="settings-label">Soft Drop (SDF) <span className="settings-val">{config.sdf >= 100 ? 'Instant (∞)' : `${config.sdf ?? 20}x`}</span></span>
+            <div className="settings-slider-wrap">
+              <input
+                type="range" min="5" max="100" step="5"
+                value={config.sdf ?? 20}
+                onChange={e => set('sdf', +e.target.value)}
+                className="settings-slider"
+              />
+            </div>
+          </div>
+
+
+          <div className="settings-row">
             <span className="settings-label">On-Screen Buttons</span>
             <button
               type="button"
@@ -156,14 +176,14 @@ export default function SettingsPage({ config, onConfig, onClose, onClearCache }
           <div className="settings-section-title">Graphics</div>
           <div className="settings-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
             <span className="settings-label" style={{ fontSize: '0.68rem', color: '#888' }}>
-              Render Quality — affects resolution, shadows, and smoothing
+              Render Quality — HiDPI resolution, dynamic DPR, particle density & shadows
             </span>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', fontSize: '0.62rem' }}>
               {[
-                { key: 'performance', label: 'Performance', desc: '1× res · no shadows · low smoothing' },
-                { key: 'balanced',    label: 'Balanced',    desc: '1.5× res · light shadows · medium smoothing' },
-                { key: 'quality',     label: 'Quality',     desc: '2× res (HiDPI) · shadows · high smoothing' },
-                { key: 'ultra',       label: 'Ultra',       desc: '3× res (4K) · strong shadows · best smoothing' },
+                { key: 'performance', label: 'Performance', desc: '1× res · Fast · Low battery' },
+                { key: 'balanced',    label: 'Balanced',    desc: '1.5× res · Crisp · Balanced' },
+                { key: 'quality',     label: 'Quality',     desc: '2× HiDPI · Retina/OLED sharp' },
+                { key: 'ultra',       label: 'Ultra',       desc: '3× 4K · Max detail & particles' },
               ].map(({ key, label, desc }) => (
                 <div key={key} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   <button
@@ -201,6 +221,17 @@ export default function SettingsPage({ config, onConfig, onClose, onClearCache }
               />
               <span className="settings-val">{((config.screenShakeMultiplier ?? 1.0) * 100).toFixed(0)}%</span>
             </div>
+          </div>
+
+          <div className="settings-row">
+            <span className="settings-label">Synesthesia Beat Pulse & Glow</span>
+            <button
+              type="button"
+              className={`settings-toggle${(config.synesthesiaEnabled ?? true) ? ' on' : ''}`}
+              onClick={() => set('synesthesiaEnabled', !(config.synesthesiaEnabled ?? true))}
+            >
+              <span className="settings-toggle-thumb" />
+            </button>
           </div>
         </div>
 

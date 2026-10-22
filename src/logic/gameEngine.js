@@ -70,7 +70,22 @@ const COMBO_GARBAGE    = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 4, 5]
 const DEFAULT_SETTINGS = {
   das: 110,
   arr: 25,
+  sdf: 20,
   lockDelay: 450,
+}
+
+export const getZoneTierName = (lines) => {
+  if (lines >= 21) return 'KIRISAME'
+  if (lines === 20) return 'ULTIMATRIS'
+  if (lines >= 18) return 'PERFECTIS'
+  if (lines >= 16) return 'DECAHEXATRIS'
+  if (lines >= 12) return 'DODECATRIS'
+  if (lines >= 8) return 'OCTORIS'
+  if (lines >= 4) return 'TETRIS'
+  if (lines === 3) return 'TRIPLE'
+  if (lines === 2) return 'DOUBLE'
+  if (lines === 1) return 'SINGLE'
+  return ''
 }
 
 const createEmptyBoard = () =>
@@ -304,6 +319,7 @@ export class TetrisEngine {
     this.zoneEndResult = null
     this.lastClear = null
     this.hardDropped = false
+    this.hardDropLockout = 0
     this.pieceLocked = false
     this.pieceHeld = false
     this.b2bCount = 0
@@ -431,23 +447,23 @@ export class TetrisEngine {
     return true
   }
 
-  // 180° rotation: prefers no offset, then downward kicks, then sideways
+  // 180° rotation using full TETR.IO SRS+ kick tables
   tryRotate180() {
     const from = this.current.rotation
     const to = (from + 2) % 4
     const rotated = rotateMatrix(rotateMatrix(this.current.matrix, 1), 1)
-    // Kicks in board space: [dx, dy] where positive dy = moving DOWN into the stack
-    const kicks = [[0, 0], [0, 1], [0, 2], [-1, 0], [1, 0], [0, -1]]
-    for (const [dx, dy] of kicks) {
-      const nx = this.current.x + dx
-      const ny = this.current.y + dy
-      if (!collides(this.board, { ...this.current, matrix: rotated }, nx, ny)) {
+    const kicks = getKicks(this.current.type, from, to)
+    for (let i = 0; i < kicks.length; i += 1) {
+      const [kickX, kickY] = kicks[i]
+      const x = this.current.x + kickX
+      const y = this.current.y - kickY
+      if (!collides(this.board, { ...this.current, matrix: rotated }, x, y)) {
         this.current.matrix = rotated
         this.current.rotation = to
-        this.current.x = nx
-        this.current.y = ny
+        this.current.x = x
+        this.current.y = y
         this.lastActionWasRotation = true
-        this.lastKickIndex = 0
+        this.lastKickIndex = i
         if (this.lockResets < 15) { this.lockTimer = 0; this.lockResets += 1 }
         return true
       }
@@ -473,6 +489,7 @@ export class TetrisEngine {
     this.score += dropped * 2
     this.lastActionWasRotation = false
     this.hardDropped = true
+    this.hardDropLockout = 90
     this.shake = Math.max(this.shake, 5)
     this.lockPiece()
   }
@@ -531,6 +548,7 @@ export class TetrisEngine {
     }
 
     if (rows.length) {
+      this.hardDropLockout = Math.max(this.hardDropLockout || 0, 150)
       const cleared = rows.length
       let points = 0
       let isSpecialClear = false
@@ -833,8 +851,17 @@ export class TetrisEngine {
       const bonus = this.zoneFloor * this.zoneFloor * 100 * this.level
       this.score += bonus
       this.shake = Math.min(15, 4 + this.zoneFloor)
+      const tierName = getZoneTierName(this.zoneFloor)
       // Store result for the big overlay in the renderer
-      this.zoneEndResult = { lines: this.zoneFloor, bonus, ttl: 4500 }
+      this.zoneEndResult = { lines: this.zoneFloor, bonus, name: tierName, ttl: 4500 }
+      if (this.zoneFloor >= 4) {
+        this.floatingTexts.push({
+          text: `✨ ${tierName || 'ZONE CLEAR'}! +${bonus.toLocaleString()}`,
+          x: 1, y: 8,
+          ttl: 3000, maxTtl: 3000,
+          big: true,
+        })
+      }
       for (let y = 0; y < BOARD_HEIGHT; y += 3) {
         for (let x = 0; x < BOARD_WIDTH; x += 2) {
           const hue = Math.floor(Math.random() * 360)
@@ -1061,15 +1088,23 @@ export class TetrisEngine {
       }
     } */
 
+    if (this.hardDropLockout > 0) {
+      this.hardDropLockout = Math.max(0, this.hardDropLockout - dt)
+    }
+
     if (actions.hold) this.holdPiece()
     if (actions.rotateCW) this.tryRotate(1)
     if (actions.rotateCCW) this.tryRotate(-1)
     if (actions.rotate180) this.tryRotate180()
     if (actions.activateZone) this.activateZone()
     if (actions.hardDrop) {
-      this.hardDrop()
-      return
+      if (this.hardDropLockout <= 0) {
+        this.hardDrop()
+        return
+      }
     }
+    if (actions.moveLeft) this.tryMove(-1)
+    if (actions.moveRight) this.tryMove(1)
 
     this.updateHorizontal(dt, held)
 
@@ -1085,12 +1120,19 @@ export class TetrisEngine {
     if (this.mode === GAME_MODE.MASTER && this.level >= 20) {
       this.current.y = getGhostY(this.board, this.current)
     } else {
-      this.gravityTimer += (dt / 1000) * (this.zoneActive && held.softDrop
-      ? SOFT_DROP_MULTIPLIER
-      : this.getGravity() * (held.softDrop ? SOFT_DROP_MULTIPLIER : 1))
-      while (this.gravityTimer >= 1) {
-        if (!this.softDrop()) break
-        this.gravityTimer -= 1
+      const sdf = this.settings.sdf ?? SOFT_DROP_MULTIPLIER
+      const isInstantSdf = sdf >= 100 || sdf === 'Infinity'
+      if (held.softDrop && isInstantSdf) {
+        this.current.y = getGhostY(this.board, this.current)
+      } else {
+        const dropMult = held.softDrop ? sdf : 1
+        this.gravityTimer += (dt / 1000) * (this.zoneActive && held.softDrop
+          ? dropMult
+          : this.getGravity() * dropMult)
+        while (this.gravityTimer >= 1) {
+          if (!this.softDrop()) break
+          this.gravityTimer -= 1
+        }
       }
     }
 

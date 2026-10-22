@@ -10,6 +10,7 @@ export function useGameAudio() {
 
     playMove: () => gameAudioController.playMove(),
     playRotate: () => gameAudioController.playRotate(),
+    playRotate180: () => gameAudioController.playRotate180(),
     playHold: () => gameAudioController.playHold(),
     playSoftDrop: () => gameAudioController.playSoftDrop(),
     playHardDrop: () => gameAudioController.playHardDrop(),
@@ -17,6 +18,7 @@ export function useGameAudio() {
     playLineClear: (comboCount = 0) => gameAudioController.playLineClear(comboCount),
     playTetris: () => gameAudioController.playTetris(),
     playZoneActivate: () => gameAudioController.playZoneActivate(),
+    playZoneEnd: (lines) => gameAudioController.playZoneEnd(lines),
 
     startMusicStems: () => gameAudioController.startMusicStems(),
     stopMusicStems: (fadeMs) => gameAudioController.stopMusicStems(fadeMs),

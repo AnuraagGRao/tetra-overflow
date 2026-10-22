@@ -18,17 +18,49 @@ import { useResponsiveHUD } from './useResponsiveHUD'
 
 const MAX_FRAME_MS = 34
 
-const DEFAULT_KEY_BINDINGS = {
-  ArrowLeft: { held: 'left' },
-  ArrowRight: { held: 'right' },
+export const DEFAULT_KEY_BINDINGS = {
+  // Arrow keys
+  ArrowLeft: { held: 'left', action: 'moveLeft' },
+  ArrowRight: { held: 'right', action: 'moveRight' },
   ArrowDown: { held: 'softDrop' },
   ArrowUp: { action: 'rotateCW' },
+
+  // WASD controls
+  KeyA: { held: 'left', action: 'moveLeft' },
+  KeyD: { held: 'right', action: 'moveRight' },
+  KeyS: { held: 'softDrop' },
+  KeyW: { action: 'hardDrop' },
+
+  // Rotation
   KeyZ: { action: 'rotateCCW' },
-  Space: { action: 'hardDrop' },
   KeyX: { action: 'rotate180' },
   KeyC: { action: 'hold' },
+  KeyQ: { action: 'rotateCCW' },
+  KeyE: { action: 'rotateCW' },
+  KeyF: { action: 'rotate180' },
+  KeyB: { action: 'rotate180' },
+
+  // Hard drop & hold
+  Space: { action: 'hardDrop' },
+  KeyH: { action: 'hold' },
+
+  // Zone
+  ShiftLeft: { action: 'activateZone' },
+  ShiftRight: { action: 'activateZone' },
+
+  // Pause
   Escape: { action: 'pause' },
   KeyP: { action: 'pause' },
+
+  // Numpad
+  Numpad4: { held: 'left', action: 'moveLeft' },
+  Numpad6: { held: 'right', action: 'moveRight' },
+  Numpad2: { held: 'softDrop' },
+  Numpad8: { action: 'hardDrop' },
+  Numpad1: { action: 'rotateCCW' },
+  Numpad3: { action: 'rotateCW' },
+  Numpad5: { action: 'rotate180' },
+  Numpad0: { action: 'hold' },
 }
 
 /**
@@ -74,11 +106,14 @@ export function useTetrisGame({
   const hudSizing = useResponsiveHUD(isLandscape)
 
   // Input refs
+  const activeRef = useRef(active)
+  activeRef.current = active
   const heldRef = useRef({ left: false, right: false, softDrop: false })
   const actionRef = useRef({})
   const levelStartLinesRef = useRef(0)
   const prevGameOverRef = useRef(false)
   const prevStateRef = useRef(null)
+  const lastHardDropTimeRef = useRef(0)
 
   // Metrics
   const statsRef = useRef({
@@ -100,9 +135,9 @@ export function useTetrisGame({
 
   useEffect(() => {
     try {
-      engine.setSettings({ das: config.das, arr: config.arr })
+      engine.setSettings({ das: config.das, arr: config.arr, sdf: config.sdf })
     } catch {}
-  }, [config.das, config.arr, engine])
+  }, [config.das, config.arr, config.sdf, engine])
 
   useEffect(() => {
     try {
@@ -116,10 +151,10 @@ export function useTetrisGame({
     } catch {}
   }, [focus])
 
-  // KeyF focus toggle
+  // KeyG focus toggle (KeyF is standard 180° rotation)
   useEffect(() => {
     const onKeyDown = event => {
-      if (event.code === 'KeyF') setFocus(value => !value)
+      if (event.code === 'KeyG') setFocus(value => !value)
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
@@ -154,20 +189,30 @@ export function useTetrisGame({
         togglePause()
         return
       }
-      if (paused || !active) return
+      if (paused || !activeRef.current) return
 
       const leftKey = mirrorControls ? 'right' : 'left'
       const rightKey = mirrorControls ? 'left' : 'right'
 
       switch (name) {
         case 'moveLeft':
+          actionRef.current[mirrorControls ? 'moveRight' : 'moveLeft'] = true
           heldRef.current[leftKey] = true
+          playMoveSFX(pieceTheme)
+          emitSynesthesia(SYNESTHESIA_EVENT.MOVE, { intensity: 0.95, source: 'action' })
+          try { window.dispatchEvent(new Event('bg-beat')) } catch {}
           break
         case 'moveRight':
+          actionRef.current[mirrorControls ? 'moveLeft' : 'moveRight'] = true
           heldRef.current[rightKey] = true
+          playMoveSFX(pieceTheme)
+          emitSynesthesia(SYNESTHESIA_EVENT.MOVE, { intensity: 0.95, source: 'action' })
+          try { window.dispatchEvent(new Event('bg-beat')) } catch {}
           break
         case 'softDrop':
           heldRef.current.softDrop = true
+          emitSynesthesia(SYNESTHESIA_EVENT.SOFT_DROP, { intensity: 0.85, source: 'action' })
+          try { window.dispatchEvent(new Event('bg-beat')) } catch {}
           break
         case 'rotateCW':
           if (!rotationLocked) {
@@ -187,10 +232,14 @@ export function useTetrisGame({
             actionRef.current.rotate180 = true
           }
           break
-        case 'hardDrop':
+        case 'hardDrop': {
+          const now = performance.now()
+          if (now - lastHardDropTimeRef.current < 110) return
+          lastHardDropTimeRef.current = now
           playHardDropSFX(pieceTheme)
           actionRef.current.hardDrop = true
           break
+        }
         case 'hold':
           playHoldSFX(pieceTheme)
           actionRef.current.hold = true
@@ -206,24 +255,39 @@ export function useTetrisGame({
           break
       }
     },
-    [paused, active, mirrorControls, rotationLocked, pieceTheme, state.zoneMeter, state.zoneActive, togglePause, onCustomAction]
+    [paused, mirrorControls, rotationLocked, pieceTheme, state.zoneMeter, state.zoneActive, togglePause, onCustomAction]
   )
 
   const handlePress = useCallback(
     (button, isHeld) => {
-      if (isHeld) {
-        if (button === 'left') {
-          heldRef.current[mirrorControls ? 'right' : 'left'] = true
-        } else if (button === 'right') {
-          heldRef.current[mirrorControls ? 'left' : 'right'] = true
-        } else if (button === 'softDrop') {
-          heldRef.current.softDrop = true
-        }
+      const leftKey = mirrorControls ? 'right' : 'left'
+      const rightKey = mirrorControls ? 'left' : 'right'
+
+      if (button === 'left') {
+        actionRef.current[mirrorControls ? 'moveRight' : 'moveLeft'] = true
+        if (isHeld) heldRef.current[leftKey] = true
+        playMoveSFX(pieceTheme)
+        emitSynesthesia(SYNESTHESIA_EVENT.MOVE, { intensity: 0.95, source: 'touch' })
+        try { window.dispatchEvent(new Event('bg-beat')) } catch {}
+        return
+      }
+      if (button === 'right') {
+        actionRef.current[mirrorControls ? 'moveLeft' : 'moveRight'] = true
+        if (isHeld) heldRef.current[rightKey] = true
+        playMoveSFX(pieceTheme)
+        emitSynesthesia(SYNESTHESIA_EVENT.MOVE, { intensity: 0.95, source: 'touch' })
+        try { window.dispatchEvent(new Event('bg-beat')) } catch {}
+        return
+      }
+      if (button === 'softDrop') {
+        if (isHeld) heldRef.current.softDrop = true
+        emitSynesthesia(SYNESTHESIA_EVENT.SOFT_DROP, { intensity: 0.86, source: 'touch' })
+        try { window.dispatchEvent(new Event('bg-beat')) } catch {}
         return
       }
       triggerAction(button)
     },
-    [mirrorControls, triggerAction]
+    [mirrorControls, pieceTheme, triggerAction]
   )
 
   const handleRelease = useCallback(
@@ -248,10 +312,11 @@ export function useTetrisGame({
   useEffect(() => {
     const bindings = { ...DEFAULT_KEY_BINDINGS, ...customKeyBindings }
     const down = event => {
+      if (event.target && (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA')) return
       const binding = bindings[event.code]
       if (!binding) return
       event.preventDefault()
-      if (event.repeat) return
+      if (event.repeat && !binding.held) return
 
       if (binding.held) {
         const hKey = binding.held
@@ -314,22 +379,26 @@ export function useTetrisGame({
       7: 'activateZone',
       9: 'pause',
     }
-    const previousButtons = {}
+    const prevButtons = {}
     let frameId
 
     const poll = () => {
       for (const gamepad of navigator.getGamepads?.() || []) {
         if (!gamepad) continue
+        const gpIndex = gamepad.index ?? 0
+        if (!prevButtons[gpIndex]) prevButtons[gpIndex] = {}
+        const prev = prevButtons[gpIndex]
+
         for (const [button, action] of Object.entries(actionMap)) {
           const pressed = gamepad.buttons[button]?.pressed === true
-          if (pressed && !previousButtons[button]) triggerAction(action)
-          previousButtons[button] = pressed
+          if (pressed && !prev[button]) triggerAction(action)
+          prev[button] = pressed
         }
-        const leftVal = gamepad.buttons[14]?.pressed || gamepad.axes[2] < -0.35
-        const rightVal = gamepad.buttons[15]?.pressed || gamepad.axes[2] > 0.35
+        const leftVal = gamepad.buttons[14]?.pressed || (gamepad.axes[0] != null && gamepad.axes[0] < -0.35)
+        const rightVal = gamepad.buttons[15]?.pressed || (gamepad.axes[0] != null && gamepad.axes[0] > 0.35)
         heldRef.current[mirrorControls ? 'right' : 'left'] = leftVal
         heldRef.current[mirrorControls ? 'left' : 'right'] = rightVal
-        heldRef.current.softDrop = gamepad.buttons[13]?.pressed || gamepad.axes[3] > 0.35
+        heldRef.current.softDrop = gamepad.buttons[13]?.pressed || (gamepad.axes[1] != null && gamepad.axes[1] > 0.35)
       }
       frameId = requestAnimationFrame(poll)
     }
@@ -377,7 +446,7 @@ export function useTetrisGame({
       lastTime = now
 
       if (!paused) {
-        const actions = actionRef.current
+        const actions = { ...actionRef.current }
         actionRef.current = {}
 
         // Custom tick callback (e.g. boss abilities, countdowns, glitch effects)

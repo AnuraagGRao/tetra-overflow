@@ -7,9 +7,11 @@ export const DEFAULT_GAME_CONFIG = Object.freeze({
   sfxVolume: 2,
   das: 110,
   arr: 25,
+  sdf: 20,
   showOnScreenControls: false,
   renderQuality: 'balanced',
   screenShakeMultiplier: 1,
+  synesthesiaEnabled: true,
 })
 
 export function isTouchDevice() {

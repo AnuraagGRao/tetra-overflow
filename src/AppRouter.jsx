@@ -23,6 +23,8 @@ import Season4MapPage from './pages/Season4MapPage'
 import Season4LevelPage from './pages/Season4LevelPage'
 import PantheonMapPage from './pages/PantheonMapPage'
 import PantheonLevelPage from './pages/PantheonLevelPage'
+import Season6TowerPage from './pages/Season6TowerPage'
+import Season6ClimbPage from './pages/Season6ClimbPage'
 import DownloadPage from './pages/DownloadPage'
 import ErrorBoundary from './components/ErrorBoundary'
 
@@ -192,6 +194,10 @@ export default function AppRouter() {
           <Route path="/s5/:bossId" element={<AuthRoute><PantheonLevelPage /></AuthRoute>} />
           <Route path="/pantheon" element={<Navigate to="/s5" replace />} />
           <Route path="/pantheon/:bossId" element={<LegacyPantheonLevelRedirect />} />
+          <Route path="/s6" element={<AuthRoute><Season6TowerPage /></AuthRoute>} />
+          <Route path="/s6/climb" element={<AuthRoute><Season6ClimbPage /></AuthRoute>} />
+          <Route path="/zenith" element={<Navigate to="/s6" replace />} />
+          <Route path="/tower" element={<Navigate to="/s6" replace />} />
           <Route path="/artwork" element={<ArtworkPage />} />
           <Route path="/info" element={<InfoPage />} />
           <Route path="/download" element={<DownloadPage />} />

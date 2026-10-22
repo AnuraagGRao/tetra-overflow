@@ -375,6 +375,7 @@ export default function ZodiacLevelPage() {
       focus={game.focus}
       setFocus={game.setFocus}
       config={game.config}
+      setConfig={game.setConfig}
       triggerAction={game.triggerAction}
       handlePress={game.handlePress}
       handleRelease={game.handleRelease}

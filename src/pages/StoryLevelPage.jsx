@@ -322,6 +322,7 @@ export default function StoryLevelPage() {
     onLevelComplete: handleLevelComplete,
     onGameOver: handleGameOver,
   })
+  const { resetGame } = game
 
   // ── Music Manager Lifecycle ────────────────────────────────────────────────
   useEffect(() => {
@@ -344,9 +345,9 @@ export default function StoryLevelPage() {
     const gm = found?.level?.gravityMult ?? 1.0
     const gravFactor = easyMode ? 0.6 : 1.0
     levelStartScoreRef.current = engine.score
-    game.resetGame({ gravityMult: gm * gravFactor })
+    resetGame({ gravityMult: gm * gravFactor })
     setPhase(PHASE.GAME)
-  }, [found, easyMode, engine, game.resetGame])
+  }, [found, easyMode, engine, resetGame])
   startLevelGameRef.current = startLevelGame
 
   const restartLevel = useCallback(() => {
@@ -413,7 +414,7 @@ export default function StoryLevelPage() {
       clearInterval(id)
       transitionAdvanceRef.current = null
     }
-  }, [phase, currentChapterId, currentLevelId, found, easyMode, engine, game.resetGame])
+  }, [phase, currentChapterId, currentLevelId, found, easyMode, engine, resetGame])
 
   // Matrix ascent countdown (6s)
   useEffect(() => {
@@ -694,6 +695,7 @@ export default function StoryLevelPage() {
       focus={game.focus}
       setFocus={game.setFocus}
       config={game.config}
+      setConfig={game.setConfig}
       triggerAction={game.triggerAction}
       handlePress={game.handlePress}
       handleRelease={game.handleRelease}

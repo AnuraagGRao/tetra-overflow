@@ -149,6 +149,14 @@ class GameAudioController {
     this._playNote(750, 0.02, rand(0.12, 0.18), 'sine', 0.01, r)
   }
 
+  playRotate180() {
+    if (!this._permit('rotate180', 30, 420, 11)) return
+    const r = pick(PENTATONIC_RATIOS) * rand(0.99, 1.02)
+    this._playNote(880, 0.04, rand(0.18, 0.26), 'triangle', 0, r)
+    this._playNote(1320, 0.035, rand(0.16, 0.22), 'triangle', 0.018, r)
+    this._playNote(1760, 0.03, rand(0.12, 0.18), 'sine', 0.035, r)
+  }
+
   playHold() {
     const r = rand(0.96, 1.04)
     this._playNote(660, 0.045, 0.18, 'triangle', 0, r)
@@ -221,6 +229,24 @@ class GameAudioController {
     if (!this._permit('zone', 220, 1800, 2)) return
     this._arp([131, 165, 196, 262, 330, 392, 523], 0.12, 0.16, 'triangle')
     this._playNoise(2500, 0.2, 0.16, 0.06)
+  }
+
+  playZoneEnd(lines = 0) {
+    if (lines <= 0) return
+    const isBig = lines >= 8
+    const notes = lines >= 16 
+      ? [261.6, 329.6, 392.0, 523.3, 659.3, 784.0, 1046.5, 1318.5]
+      : lines >= 8
+      ? [329.6, 392.0, 523.3, 659.3, 784.0, 1046.5]
+      : [392.0, 523.3, 659.3, 784.0]
+    
+    notes.forEach((f, i) => {
+      this._playNote(f, 0.16, isBig ? 0.22 : 0.15, 'triangle', i * 0.065)
+      this._playNote(f * 1.5, 0.12, 0.1, 'sine', i * 0.065 + 0.02)
+    })
+    if (isBig) {
+      this._playNoise(12000, 0.35, 0.25, 0.1)
+    }
   }
 
   playPause() {
