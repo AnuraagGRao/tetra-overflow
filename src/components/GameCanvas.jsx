@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useMemo } from 'react'
 import { BOARD_HEIGHT, BOARD_WIDTH, PIECES } from '../logic/tetrominoes'
 import { ZONE_DURATION_MS, GAME_MODE } from '../logic/gameEngine'
+import { gameAudioController } from '../audio/gameAudioController'
 import { useTheme } from '../contexts/ThemeContext'
 import { BG_TYPE_TO_PIECE_THEME } from '../logic/themeMappings'
 import catImageUrl from '../meme/oiia_cat_assets_by_awesomeconsoles7_djwlgwe-fullview.png'
@@ -22,6 +23,20 @@ const CELL_SIZE_MIN = 16  // minimum cell size for tiny screens
 const CELL_SIZE_MAX = 40  // maximum cell size for huge screens
 const CELL_SIZE_DEFAULT = 26
 const BOARD_BASE_ALPHA = 0.32 // lighter board so backgrounds show through
+
+// Authentic NES Tetris 10-level color palettes (Primary & Secondary)
+const NES_PALETTES = [
+  { prim: '#0058f8', sec: '#3cbcfc' }, // Lv 0 (Blue / Light Blue)
+  { prim: '#00a800', sec: '#84d800' }, // Lv 1 (Green / Light Green)
+  { prim: '#d800cc', sec: '#f878f8' }, // Lv 2 (Purple / Pink)
+  { prim: '#0058f8', sec: '#58f858' }, // Lv 3 (Blue / Lime)
+  { prim: '#00a844', sec: '#f83800' }, // Lv 4 (Sea Green / Red)
+  { prim: '#58f898', sec: '#9878f8' }, // Lv 5 (Aqua / Lilac)
+  { prim: '#d82800', sec: '#787878' }, // Lv 6 (Rust / Charcoal)
+  { prim: '#6844fc', sec: '#a80020' }, // Lv 7 (Deep Purple / Crimson)
+  { prim: '#0058f8', sec: '#d82800' }, // Lv 8 (Blue / Red)
+  { prim: '#fc7400', sec: '#fc9838' }, // Lv 9 (Orange / Gold)
+]
 
 // ── Theme colour maps ────────────────────────────────────────────────────────
 const DMG_MAP = {
@@ -278,6 +293,30 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
     const isLightTheme = theme === 'bauhaus'
 
     const drawCell = (ctx, x, y, rawColor, alpha = 1, blur = 12, pieceKey = null) => {
+      if (state.mode === GAME_MODE.CLASSIC && pieceKey) {
+        const pal = NES_PALETTES[(Math.max(0, (state.level || 1) - 1)) % 10]
+        let nesColor = '#ffffff'
+        if (pieceKey === 'T' || pieceKey === 'J' || pieceKey === 'O') nesColor = pal.prim
+        else if (pieceKey === 'S' || pieceKey === 'Z' || pieceKey === 'L') nesColor = pal.sec
+        else if (pieceKey === 'I') nesColor = '#ffffff'
+        else nesColor = pal.prim
+
+        ctx.save()
+        ctx.globalAlpha = alpha
+        ctx.fillStyle = nesColor
+        ctx.fillRect(x + 1, y + 1, CELL_SIZE - 2, CELL_SIZE - 2)
+        ctx.fillStyle = 'rgba(255,255,255,0.55)'
+        ctx.fillRect(x + 1, y + 1, CELL_SIZE - 2, 2)
+        ctx.fillRect(x + 1, y + 1, 2, CELL_SIZE - 2)
+        ctx.fillStyle = 'rgba(0,0,0,0.55)'
+        ctx.fillRect(x + 1, y + CELL_SIZE - 3, CELL_SIZE - 2, 2)
+        ctx.fillRect(x + CELL_SIZE - 3, y + 1, 2, CELL_SIZE - 2)
+        ctx.fillStyle = '#ffffff'
+        ctx.fillRect(x + 4, y + 4, 3, 3)
+        ctx.restore()
+        return
+      }
+
       const color = (isCustomTheme && pieceKey) ? (colorMap[pieceKey] ?? rawColor) : rawColor
       ctx.save()
       ctx.globalAlpha = alpha
@@ -1028,15 +1067,31 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
       ctx.restore()
     }
 
-    // Ghost piece
-    state.current.matrix.forEach((row, py) => {
-      row.forEach((cell, px) => {
-        if (!cell) return
-        const gx = (state.current.x + px) * CELL_SIZE
-        const gy = (state.ghostY + py) * CELL_SIZE
-        if (state.ghostY + py >= 0) drawGhost(ctx, gx, gy, state.current.type)
+    // Synesthesia audio perimeter pulse
+    const audioFreq = gameAudioController.getFrequencyData()
+    if (audioFreq.energy > 0.04) {
+      ctx.save()
+      const glowAlpha = Math.min(0.65, audioFreq.bass * 0.85 + audioFreq.energy * 0.3)
+      ctx.strokeStyle = state.mode === GAME_MODE.CLASSIC ? '#3cbcfc' : '#00d4ff'
+      ctx.lineWidth = 1 + audioFreq.bass * 3
+      ctx.shadowColor = state.mode === GAME_MODE.CLASSIC ? '#0058f8' : '#00f0ff'
+      ctx.shadowBlur = Math.round((8 + audioFreq.bass * 16) * qualityMultiplier)
+      ctx.globalAlpha = glowAlpha
+      ctx.strokeRect(0.5, 0.5, BOARD_WIDTH * CELL_SIZE - 1, BOARD_HEIGHT * CELL_SIZE - 1)
+      ctx.restore()
+    }
+
+    // Ghost piece (suppressed in Classic mode)
+    if (state.mode !== GAME_MODE.CLASSIC && state.ghostY !== null) {
+      state.current.matrix.forEach((row, py) => {
+        row.forEach((cell, px) => {
+          if (!cell) return
+          const gx = (state.current.x + px) * CELL_SIZE
+          const gy = (state.ghostY + py) * CELL_SIZE
+          if (state.ghostY + py >= 0) drawGhost(ctx, gx, gy, state.current.type)
+        })
       })
-    })
+    }
 
     // Active piece
     state.current.matrix.forEach((row, py) => {

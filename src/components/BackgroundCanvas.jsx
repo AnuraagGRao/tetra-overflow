@@ -4,6 +4,7 @@ import catImageUrl from '../meme/oiia_cat_assets_by_awesomeconsoles7_djwlgwe-ful
 import nyancatImageUrl from '../images/nyancat.jpg'
 import { SYNESTHESIA_EVENT, useSynesthesiaEvent } from '../logic/synesthesiaBus'
 import { BGTYPE_VANTA_CONFIG, getBackgroundProfile } from '../logic/backgroundProfiles'
+import { gameAudioController } from '../audio/gameAudioController'
 import '../styles/backgroundEffects.css'
 
 // ── Base fill colour per bgType ───────────────────────────────────────────────
@@ -2160,7 +2161,12 @@ export default function BackgroundCanvas({
         const bpmPulse = Math.pow((Math.sin((now / 1000) * (b / 60) * Math.PI * 2) + 1) / 2, 2)
         comboBoostRef.current *= Math.pow(0.94, baseDt / 16)
         const comboPulse = clamp(comboBoostRef.current, 0, 1.1)
-        const energy = Math.min(2.2, Math.max(beat, bpmPulse * 0.65) + comboPulse * 0.9)
+
+        // Real-time audio FFT synesthesia pulse from game audio bus
+        const audioFreq = gameAudioController.getFrequencyData()
+        const audioPulse = audioFreq.bass * 1.5 + audioFreq.energy * 0.85
+
+        const energy = Math.min(2.8, Math.max(beat, bpmPulse * 0.65) + comboPulse * 0.9 + audioPulse)
         const dt = baseDt * (0.9 + energy * 0.6)
         const w = logicalW, hh = logicalH
 

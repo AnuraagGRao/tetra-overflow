@@ -17,7 +17,17 @@ const createParticle = (props) => {
   return particle
 }
 
-export const GAME_MODE = { NORMAL: 'normal', SPRINT: 'sprint', BLITZ: 'blitz', MASTER: 'master', PURIFY: 'purify', VERSUS: 'versus', ZEN: 'zen', ULTIMATE: 'ultimate', EASY: 'easy' /*, TOWER: 'tower' — merged into ULTIMATE */ }
+export const GAME_MODE = { NORMAL: 'normal', SPRINT: 'sprint', BLITZ: 'blitz', MASTER: 'master', PURIFY: 'purify', VERSUS: 'versus', ZEN: 'zen', ULTIMATE: 'ultimate', EASY: 'easy', CLASSIC: 'classic' }
+// Authentic NES Tetris frame drop table (frames per cell at 60 Hz)
+const NES_FRAMES_PER_DROP = [
+  48, 43, 38, 33, 28, 23, 18, 13, 8, 6, // Lv 0-9
+  5, 5, 5,                              // Lv 10-12
+  4, 4, 4,                              // Lv 13-15
+  3, 3, 3,                              // Lv 16-18
+  2, 2, 2, 2, 2, 2, 2, 2, 2, 2,         // Lv 19-28
+  1                                     // Lv 29+ Kill Screen
+]
+const NES_SCORE_BY_CLEAR = [0, 40, 100, 300, 1200]
 export const PURIFY_DURATION_MS = 180000
 export const BLITZ_DURATION_MS  = 120000
 export const SPRINT_LINES       = 40
@@ -388,7 +398,7 @@ export class TetrisEngine {
     if (collides(this.board, this.current, nextX, this.current.y)) return false
     this.current.x = nextX
     this.lastActionWasRotation = false
-    if (this.lockResets < 15) { this.lockTimer = 0; this.lockResets += 1 }
+    if (this.mode !== GAME_MODE.CLASSIC && this.lockResets < 15) { this.lockTimer = 0; this.lockResets += 1 }
     return true
   }
 
@@ -414,7 +424,7 @@ export class TetrisEngine {
         this.current.y = y
         this.lastActionWasRotation = true
         this.lastKickIndex = i
-        if (this.lockResets < 15) { this.lockTimer = 0; this.lockResets += 1 }
+        if (this.mode !== GAME_MODE.CLASSIC && this.lockResets < 15) { this.lockTimer = 0; this.lockResets += 1 }
         return true
       }
     }
@@ -422,6 +432,7 @@ export class TetrisEngine {
   }
 
   holdPiece() {
+    if (this.mode === GAME_MODE.CLASSIC) return false
     if (!this.canHold) return false
     const currentType = this.current.type
     this.current = this.hold ? createPiece(this.hold) : this.nextPiece()
@@ -579,7 +590,13 @@ export class TetrisEngine {
       const isAllClear = this.board.every(row => row.every(c => !c))
 
       const prevB2B = this.backToBack
-      if (this.mode !== GAME_MODE.PURIFY) {
+      if (this.mode === GAME_MODE.CLASSIC) {
+        // Authentic NES Tetris scoring & level progression (every 10 lines)
+        points = (NES_SCORE_BY_CLEAR[cleared] ?? 0) * this.level
+        this.lines += cleared
+        this.score += points
+        this.level = Math.min(30, Math.floor(this.lines / 10) + 1)
+      } else if (this.mode !== GAME_MODE.PURIFY) {
         if (isSpecialClear && this.backToBack) {
           points = Math.floor(points * B2B_MULTIPLIER)
         }
@@ -596,12 +613,14 @@ export class TetrisEngine {
       } else {
         this.lines += cleared
       }
-      if (this.storyLevelOffset > 0) {
-        // Story mode: level rises gently from the story-defined base; only lines this level count
-        this.level = this.storyLevelOffset + Math.floor(Math.max(0, this.lines - this.storyLinesOffset) / 10)
-      } else {
-        // Cap at 20: gravity is already maxed at level ~19, so going beyond is just confusing
-        this.level = Math.min(20, Math.floor(this.lines / 10) + 1)
+      if (this.mode !== GAME_MODE.CLASSIC) {
+        if (this.storyLevelOffset > 0) {
+          // Story mode: level rises gently from the story-defined base; only lines this level count
+          this.level = this.storyLevelOffset + Math.floor(Math.max(0, this.lines - this.storyLinesOffset) / 10)
+        } else {
+          // Cap at 20: gravity is already maxed at level ~19, so going beyond is just confusing
+          this.level = Math.min(20, Math.floor(this.lines / 10) + 1)
+        }
       }
 
       // Tower Climb: track floor progress (also when merged into Ultimate)
@@ -931,6 +950,11 @@ export class TetrisEngine {
   getGravity() {
     // In Zone: gravity stops; manual drop only
     if (this.zoneActive) return 0
+    if (this.mode === GAME_MODE.CLASSIC) {
+      const lvl = Math.min(29, Math.max(0, this.level - 1))
+      const frames = NES_FRAMES_PER_DROP[lvl] ?? 1
+      return 60 / frames
+    }
     if (this.mode === GAME_MODE.MASTER) return Math.min(20, 1.2 + this.level * 0.35)
     // Exponential scaling: ~0.6 G/s at Lv1 → ~3 at Lv10 → ~9 at Lv15 → capped at 20
     const base = 0.6 * Math.pow(1.22, this.level - 1)
@@ -1144,6 +1168,11 @@ export class TetrisEngine {
     }
 
     if (collides(this.board, this.current, this.current.x, this.current.y + 1)) {
+      if (this.mode === GAME_MODE.CLASSIC) {
+        // Authentic NES: zero floor delay, piece locks instantly on downward contact
+        this.lockPiece()
+        return
+      }
       this.lockTimer += dt
       if (this.lockTimer >= this.settings.lockDelay) this.lockPiece()
     } else {
@@ -1184,13 +1213,13 @@ export class TetrisEngine {
     return {
       board: this.board,
       current: this.current,
-      hold: this.hold,
-      queue: this.queue,
+      hold: this.mode === GAME_MODE.CLASSIC ? null : this.hold,
+      queue: this.mode === GAME_MODE.CLASSIC ? this.queue.slice(0, 1) : this.queue,
       score: this.score,
       lines: this.lines,
       level: this.level,
       gameOver: this.gameOver,
-      ghostY: this.current ? getGhostY(this.board, this.current) : 0,
+      ghostY: this.mode === GAME_MODE.CLASSIC ? null : (this.current ? getGhostY(this.board, this.current) : 0),
       particles: this.particles,
       floatingTexts: this.floatingTexts,
       shake: this.shake,

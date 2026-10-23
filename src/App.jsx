@@ -64,6 +64,7 @@ import { hardResetAndReload } from './logic/hardReset'
 import { useTheme } from './contexts/ThemeContext'
 import { useAuth } from './contexts/AuthContext'
 import { MusicManager } from './audio/musicManager'
+import { gameAudioController } from './audio/gameAudioController'
 import { Howl, Howler } from 'howler'
 import { GAME_CONFIG_KEY as CONFIG_KEY, readGameConfig as loadConfig } from './logic/gameConfig'
 import { saveGameResult, addCoinsWithLedger } from './firebase/db'
@@ -117,6 +118,7 @@ const setSfxVolume = (v) => { _sfxVol = Math.max(0, Math.min(1, v)) }
 // Temporary ducking multiplier for SFX (0–1) — used during jumpscares etc.
 let _sfxDuck = 1.0
 const setSfxDuck = (v) => { _sfxDuck = Math.max(0, Math.min(1, v)) }
+let _currentGameMode = GAME_MODE.NORMAL
 
 // SFX anti-spam gate: prevents rapid-fire repeats that can sound like loops
 const _sfxGate = {}
@@ -193,6 +195,10 @@ const playNoise = (lpFreq, gain, dur, offset = 0) => {
 let _lastMoveBeep = 0
 const playMoveSFX = (theme = 'classic') => {
   sfxLog('move')
+  if (_currentGameMode === GAME_MODE.CLASSIC) {
+    gameAudioController.playClassicMove()
+    return
+  }
   const now = performance.now();
   if (now - _lastMoveBeep < 75) return;
   _lastMoveBeep = now;
@@ -223,7 +229,7 @@ const playMoveSFX = (theme = 'classic') => {
       playNote(330, 0.026, 0.25, 'triangle');
       break;
     default:
-      playNote(380, 0.022, 0.26, 'triangle');
+      gameAudioController.playMove()
       break;
   }
 };
@@ -326,6 +332,10 @@ const playSwipeSFX = (dir, theme = 'classic') => {
 
 const playRotateSFX = (theme = 'classic') => {
   if (!sfxPermit('rotate', 30, 400, 10)) return
+  if (_currentGameMode === GAME_MODE.CLASSIC) {
+    gameAudioController.playClassicRotate()
+    return
+  }
   switch (theme) {
     case 'sketch':
       // Pencil twist: short burst noise + mild note
@@ -353,8 +363,7 @@ const playRotateSFX = (theme = 'classic') => {
       playNote(1200, 0.025, 0.15, 'triangle');
       break;
     default:
-      playNote(1100, 0.032, 0.24, 'triangle');
-      playNote(750,  0.022, 0.18, 'sine', 0.010);
+      gameAudioController.playRotate()
       break;
   }
 };
@@ -406,6 +415,10 @@ const playLockSFX = (theme = 'classic') => {
 
 const playHardDropSFX = (theme = 'classic') => {
   if (!sfxPermit('hardDrop', 80, 600, 6)) return
+  if (_currentGameMode === GAME_MODE.CLASSIC) {
+    gameAudioController.playClassicDrop()
+    return
+  }
   switch (theme) {
     case 'sketch':
       // Loud paper slam: wideband noise + low triangle blop
@@ -440,16 +453,17 @@ const playHardDropSFX = (theme = 'classic') => {
       playNote(82, 0.22, 0.19, 'sine');
       break;
     default:
-      // Classic – deep thud, medium click, short noise
-      playNote(75, 0.18, 0.44, 'sine');
-      playNote(410, 0.06, 0.14, 'triangle', 0.010);
-      playNoise(900, 0.18, 0.06, 0.012);
+      gameAudioController.playHardDrop()
       break;
   }
 };
 
-const playLineClearSFX = (theme = 'classic') => {
+const playLineClearSFX = (theme = 'classic', lines = 1) => {
   if (!sfxPermit('lineClear', 70, 800, 6)) return
+  if (_currentGameMode === GAME_MODE.CLASSIC) {
+    gameAudioController.playClassicClear()
+    return
+  }
   switch (theme) {
     case 'sketch':
       // Paper scrap: sharp filtered noise and soft "bristle" tap
@@ -481,8 +495,7 @@ const playLineClearSFX = (theme = 'classic') => {
       arp([392, 659, 784], 0.083, 0.11, 'sine');
       break;
     default:
-      playNoise(9000, 0.18, 0.11);
-      arp([392, 523, 659, 784], 0.095, 0.18, 'sine');
+      gameAudioController.playLineClear(lines)
       break;
   }
 };
@@ -532,6 +545,10 @@ const playTSpinSFX = (theme = 'classic') => {
 
 const playTetrisSFX = (theme = 'classic') => {
   if (!sfxPermit('tetris', 120, 1000, 3)) return
+  if (_currentGameMode === GAME_MODE.CLASSIC) {
+    gameAudioController.playClassicTetris()
+    return
+  }
   switch (theme) {
     case 'sketch':
       // Ripping paper & celebratory "clap"
@@ -569,10 +586,7 @@ const playTetrisSFX = (theme = 'classic') => {
       playNoise(3600, 0.08, 0.06, 0.022);
       break;
     default:
-      // Classic: celebratory sweep + bass slap
-      arp([262, 330, 392, 523, 659, 784, 1047, 1319], 0.11, 0.18, 'sine');
-      playNote(131, 0.41, 0.34, 'triangle', 0.13);
-      playNoise(1900, 0.25, 0.18, 0.027);
+      gameAudioController.playTetris()
       break;
   }
 };
@@ -1128,7 +1142,7 @@ const loadHighScores = () => {
 import PiecePreview from './components/PiecePreview'
 
 // ─── App ──────────────────────────────────────────────────────────────────────
-export default function App() {
+export default function App({ defaultMode = null } = {}) {
   const [showSWBanner, setShowSWBanner] = useState(false)
 
   useEffect(() => {
@@ -1146,7 +1160,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true)
   const [state,  setState]  = useState(() => engine.getState())
   const [config, setConfig] = useState(loadConfig)
-  const [gameMode, setGameMode]   = useState(GAME_MODE.NORMAL)
+  const [gameMode, setGameMode]   = useState(defaultMode || GAME_MODE.NORMAL)
   const [musicOn, setMusicOn]     = useState(false)
   const [nowPlaying, setNowPlaying] = useState('—')
   const [coinDelta, setCoinDelta] = useState(0)
@@ -1186,7 +1200,13 @@ export default function App() {
   const prevZoneActiveRef = useRef(false)
   const musicOnRef  = useRef(false)
   const countdownActiveRef = useRef(false)
-  const gameModeRef = useRef(GAME_MODE.NORMAL)
+  const gameModeRef = useRef(defaultMode || GAME_MODE.NORMAL)
+
+  useEffect(() => {
+    if (defaultMode && defaultMode !== gameModeRef.current) {
+      startGame(defaultMode)
+    }
+  }, [defaultMode])
   const botDiffRef    = useRef('medium')
   const isMobileRef   = useRef(window.innerWidth < 768 || (window.innerHeight < 600 && ('ontouchstart' in window || navigator.maxTouchPoints > 0)) || (window.innerWidth > window.innerHeight && ('ontouchstart' in window || navigator.maxTouchPoints > 0)))
   const zenResettingRef = useRef(false)
@@ -1497,6 +1517,7 @@ export default function App() {
   // ─── Start game ────────────────────────────────────────────────────────────
   const startGame = (mode) => {
     getAudioCtx()
+    _currentGameMode = mode
     setGameMode(mode); gameModeRef.current = mode
     engine.reset(mode, 'easy')
     
@@ -1758,10 +1779,14 @@ export default function App() {
         }
       }
       if (ns.lastCombo > 1) spawnPopup(`✕${ns.lastCombo} COMBO`, '#f59e0b')
-      if (ns.lastCombo > 0 && sfxOn) playComboSFX(ns.lastCombo, theme)
+      if (ns.lastCombo > 0 && sfxOn && ns.mode !== GAME_MODE.CLASSIC) playComboSFX(ns.lastCombo, theme)
       if (ns.pieceLocked) sessionPiecesPlacedRef.current += 1
       if (ns.pieceHeld) sessionHoldUsesRef.current += 1
       if (ns.hardDropped) sessionHardDropsRef.current += 1
+
+      // Dynamic Audio Intensity Synesthesia
+      const pps = sessionPiecesPlacedRef.current / Math.max(1, (ns.elapsedTime || 1000) / 1000)
+      gameAudioController.setIntensity({ pps, combo: ns.combo, level: ns.level })
       // B2B streak start
       if (ns.backToBack && !prevBackToBackRef.current && sfxOn) playB2BSFX(theme)
       prevBackToBackRef.current = ns.backToBack
@@ -2205,7 +2230,8 @@ export default function App() {
   const isPurify   = state.mode === GAME_MODE.PURIFY
   const isUltimate = state.mode === GAME_MODE.ULTIMATE
   const isVersus   = state.mode === GAME_MODE.VERSUS
-  const showZone   = state.mode === GAME_MODE.NORMAL || state.mode === GAME_MODE.ULTIMATE
+  const isClassic  = state.mode === GAME_MODE.CLASSIC
+  const showZone   = (state.mode === GAME_MODE.NORMAL || state.mode === GAME_MODE.ULTIMATE) && !isClassic
   const illusionFilterStyle = hasIllusion
     ? { filter: 'hue-rotate(var(--illusion-hue, 0deg))' } : {}
 
@@ -2362,6 +2388,7 @@ export default function App() {
   // ─── MODES ──────────────────────────────────────────────────────────────────
   const MODES = [
     { mode: GAME_MODE.NORMAL, label: 'Normal' },
+    { mode: GAME_MODE.CLASSIC, label: '🕹️ Classic' },
     { mode: GAME_MODE.SPRINT, label: 'Sprint' },
     { mode: GAME_MODE.BLITZ,  label: 'Blitz'  },
     { mode: GAME_MODE.PURIFY, label: 'Purify' },
@@ -2447,10 +2474,12 @@ export default function App() {
     const circClass = `zone-circle-fill${state.zoneActive ? ' zone-active' : ''}${zoneReady && !state.zoneActive ? ' zone-ready' : ''}`
     return (
       <div className="flank flank-right">
-        <div>
-          <div className="flank-label">Hold</div>
-          <PiecePreview type={state.hold} />
-        </div>
+        {!isClassic && (
+          <div>
+            <div className="flank-label">Hold</div>
+            <PiecePreview type={state.hold} />
+          </div>
+        )}
 
         {showZone && (
           <div className="zone-block" style={{ marginTop: '0.4rem' }}>
@@ -2716,13 +2745,15 @@ export default function App() {
 
       {/* ═══ LEFT PANEL: HOLD + Stats ═══ */}
       <div className="ls-left">
-        {/* HOLD piece display — always visible */}
-        <div className="ls-hold-container">
-          <div className="ls-hold-label">HOLD</div>
-          <div className="ls-hold-preview">
-            <PiecePreview type={state.hold} small={false} />
+        {/* HOLD piece display — suppressed in Classic mode */}
+        {!isClassic && (
+          <div className="ls-hold-container">
+            <div className="ls-hold-label">HOLD</div>
+            <div className="ls-hold-preview">
+              <PiecePreview type={state.hold} small={false} />
+            </div>
           </div>
-        </div>
+        )}
 
         {/* ── STATS SECTION ── */}
         <div className="ls-stats-section">
@@ -2917,6 +2948,7 @@ export default function App() {
         <div className="ls-modes">
           {[ 
             { mode: GAME_MODE.NORMAL,  label: 'Normal'  },
+            { mode: GAME_MODE.CLASSIC, label: '🕹️ Classic' },
             { mode: GAME_MODE.SPRINT,  label: 'Sprint'  },
             { mode: GAME_MODE.BLITZ,   label: 'Blitz'   },
             { mode: GAME_MODE.ZEN,     label: 'Zen'     },
@@ -3143,6 +3175,7 @@ export default function App() {
         <div className="ls-modes">
           {[ 
             { mode: GAME_MODE.NORMAL, label: 'Normal' },
+            { mode: GAME_MODE.CLASSIC, label: '🕹️ Classic' },
             { mode: GAME_MODE.SPRINT, label: 'Sprint' },
             { mode: GAME_MODE.BLITZ,  label: 'Blitz'  },
             { mode: GAME_MODE.ZEN,    label: 'Zen'    },

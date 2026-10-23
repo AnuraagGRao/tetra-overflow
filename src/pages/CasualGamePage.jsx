@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import App from '../App'
 import BackgroundCanvas from '../components/BackgroundCanvas'
 import { useTheme, THEMES } from '../contexts/ThemeContext'
@@ -9,8 +9,10 @@ import homeIconUrl from '../icons/home-button.png'
 const BG_ITEMS_MAP = Object.fromEntries(STORE_ITEMS.filter(i => i.type === 'bg').map(i => [i.id, i]))
 const THEME_MAP = Object.fromEntries(THEMES.map(t => [t.id, t]))
 
-export default function CasualGamePage() {
+export default function CasualGamePage({ initialMode = null }) {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const mode = initialMode || searchParams.get('mode') || null
   const { theme, setTheme, bgTheme, setBgTheme, favThemes } = useTheme()
   const [favOpen, setFavOpen] = useState(false)
 
@@ -21,7 +23,7 @@ export default function CasualGamePage() {
         <BackgroundCanvas bgType={bgTheme || 'abyss'} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
       </div>
 
-      <App />
+      <App defaultMode={mode} />
 
       {/* ← MENU */}
       <button

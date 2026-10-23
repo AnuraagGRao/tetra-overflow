@@ -20,5 +20,11 @@ export const playZoneEndSFX = (lines = 0) => gameAudioController.playZoneEnd(lin
 export const playPauseSFX = (_theme = 'classic') => gameAudioController.playPause()
 export const playResumeSFX = (_theme = 'classic') => gameAudioController.playResume()
 export const playComboSFX = (c = 1, _theme = 'classic') => gameAudioController.playCombo(c)
-export const playGameOverSFX = (_theme = 'classic') => gameAudioController.playGameOver()
+export const setAudioIntensity = (params) => gameAudioController.setIntensity(params)
+export const getAudioFrequencyData = () => gameAudioController.getFrequencyData()
 
+export const playClassicMoveSFX = () => gameAudioController.playClassicMove()
+export const playClassicRotateSFX = () => gameAudioController.playClassicRotate()
+export const playClassicDropSFX = () => gameAudioController.playClassicDrop()
+export const playClassicClearSFX = () => gameAudioController.playClassicClear()
+export const playClassicTetrisSFX = () => gameAudioController.playClassicTetris()

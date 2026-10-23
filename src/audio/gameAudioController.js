@@ -6,7 +6,7 @@ const STEM_SOURCES = {
   synth: new URL('./Pattern_Perfect.mp3', import.meta.url).href,
 }
 
-const PENTATONIC_RATIOS = [0.5, 0.5625, 0.6667, 0.75, 0.84375, 1.0, 1.125, 1.3333, 1.5]
+const PENTATONIC_FREQS = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25] // C4..E5
 
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v))
 const rand = (min, max) => min + Math.random() * (max - min)
@@ -21,7 +21,21 @@ class GameAudioController {
     this.stemTargets = { bass: 0, drums: 0, synth: 0 }
     this._syncTimer = null
     this._lastHit = {}
+
+    // Dynamic Filter & Synesthesia Bus
+    this._masterSfxGain = null
+    this._dynamicFilter = null
+    this._analyser = null
+    this._fftArray = null
+    this._rotNoteStep = 0
+    this._currentIntensity = 0
+
+    // DSP Buffer Cache
+    this.dspBuffers = {}
+    this._dspLoaded = false
+
     this._initHowls()
+    this._preloadDspSoundbank()
   }
 
   _initHowls() {
@@ -37,8 +51,40 @@ class GameAudioController {
     })
   }
 
+  _preloadDspSoundbank() {
+    if (typeof window === 'undefined') return
+    const dspFiles = [
+      'chime_c4', 'chime_d4', 'chime_e4', 'chime_g4', 'chime_a4', 'chime_c5', 'chime_d5', 'chime_e5',
+      'sub_impact', 'chord_single', 'chord_double', 'chord_triple', 'chord_tetris', 'chord_tspin',
+      'nes_move', 'nes_rotate', 'nes_drop', 'nes_clear', 'nes_tetris'
+    ]
+
+    const baseUrl = import.meta.env.BASE_URL || '/'
+    const dspBase = `${baseUrl.endsWith('/') ? baseUrl : baseUrl + '/'}audio/dsp/`
+
+    Promise.all(
+      dspFiles.map(async (name) => {
+        try {
+          const res = await fetch(`${dspBase}${name}.wav`)
+          if (!res.ok) return
+          const arrayBuffer = await res.arrayBuffer()
+          const ctx = this._getCtx()
+          if (!ctx) return
+          const audioBuffer = await ctx.decodeAudioData(arrayBuffer)
+          this.dspBuffers[name] = audioBuffer
+        } catch {
+          // Non-fatal: procedural fallback is always available
+        }
+      })
+    ).then(() => {
+      this._dspLoaded = true
+    }).catch(() => {})
+  }
+
   unlock() {
     try {
+      const ctx = this._getCtx()
+      if (ctx?.state === 'suspended') ctx.resume()
       if (Howler.ctx?.state === 'suspended') Howler.ctx.resume()
     } catch {
       // Non-fatal: audio unlock failures should never break gameplay.
@@ -47,10 +93,18 @@ class GameAudioController {
 
   setSfxVolume(v) {
     this.sfxVolume = clamp(v ?? 1, 0, 1)
+    if (this._masterSfxGain && this._ctx) {
+      const vol = clamp(this.sfxVolume * this.sfxDuck, 0, 1)
+      this._masterSfxGain.gain.setValueAtTime(vol, this._ctx.currentTime)
+    }
   }
 
   setSfxDuck(v) {
     this.sfxDuck = clamp(v ?? 1, 0, 2)
+    if (this._masterSfxGain && this._ctx) {
+      const vol = clamp(this.sfxVolume * this.sfxDuck, 0, 1)
+      this._masterSfxGain.gain.setValueAtTime(vol, this._ctx.currentTime)
+    }
   }
 
   setMusicVolume(v) {
@@ -77,18 +131,123 @@ class GameAudioController {
     try {
       if (Howler.ctx) {
         if (Howler.ctx.state === 'suspended') Howler.ctx.resume()
+        this._ensureBusPipeline(Howler.ctx)
         return Howler.ctx
       }
     } catch {}
 
     if (typeof window === 'undefined') return null
-    const Ctx = window.AudioContext || window.webkitAudioContext
-    if (!Ctx) return null
-    const ctx = new Ctx()
+    if (!this._ctx) {
+      const Ctx = window.AudioContext || window.webkitAudioContext
+      if (!Ctx) return null
+      this._ctx = new Ctx()
+      try {
+        Howler.ctx = this._ctx
+      } catch {}
+    }
+    this._ensureBusPipeline(this._ctx)
+    return this._ctx
+  }
+
+  _ensureBusPipeline(ctx) {
+    if (this._masterSfxGain && this._dynamicFilter && this._analyser) return
+
     try {
-      Howler.ctx = ctx
+      this._masterSfxGain = ctx.createGain()
+      this._masterSfxGain.gain.setValueAtTime(clamp(this.sfxVolume * this.sfxDuck, 0, 1), ctx.currentTime)
+
+      this._dynamicFilter = ctx.createBiquadFilter()
+      this._dynamicFilter.type = 'lowpass'
+      this._dynamicFilter.frequency.setValueAtTime(1400, ctx.currentTime)
+      this._dynamicFilter.Q.setValueAtTime(1.8, ctx.currentTime)
+
+      this._analyser = ctx.createAnalyser()
+      this._analyser.fftSize = 64
+      this._analyser.smoothingTimeConstant = 0.75
+      this._fftArray = new Uint8Array(this._analyser.frequencyBinCount)
+
+      // Pipeline: masterSfxGain -> dynamicFilter -> analyser -> ctx.destination
+      this._masterSfxGain.connect(this._dynamicFilter)
+      this._dynamicFilter.connect(this._analyser)
+      this._analyser.connect(ctx.destination)
+    } catch {
+      // Audio pipeline fallback
+    }
+  }
+
+  // Tetris Effect: Connected style dynamic filter sweep based on PPS, combo, and level
+  setIntensity({ pps = 0, combo = 0, level = 1 } = {}) {
+    const ctx = this._getCtx()
+    if (!ctx || !this._dynamicFilter) return
+
+    const ppsFactor = clamp((pps - 0.5) / 2.5, 0, 1)
+    const comboFactor = clamp(combo / 8, 0, 1)
+    const levelFactor = clamp((level - 1) / 15, 0, 1)
+
+    const targetIntensity = clamp(ppsFactor * 0.45 + comboFactor * 0.35 + levelFactor * 0.2, 0, 1)
+    this._currentIntensity = targetIntensity
+
+    // Cutoff sweeps from 700 Hz (relaxed) up to 18,500 Hz (hyper-fast high adrenaline)
+    const targetCutoff = 700 + Math.pow(targetIntensity, 1.35) * (18500 - 700)
+    const targetQ = 1.2 + targetIntensity * 1.8
+
+    try {
+      this._dynamicFilter.frequency.setTargetAtTime(targetCutoff, ctx.currentTime, 0.08)
+      this._dynamicFilter.Q.setTargetAtTime(targetQ, ctx.currentTime, 0.08)
     } catch {}
-    return ctx
+  }
+
+  // Real-time audio FFT telemetry for BackgroundCanvas & GameCanvas synesthesia
+  getFrequencyData() {
+    if (!this._analyser || !this._fftArray) {
+      return { bass: 0, mid: 0, treble: 0, energy: 0 }
+    }
+    try {
+      this._analyser.getByteFrequencyData(this._fftArray)
+      let bSum = 0
+      for (let i = 0; i < 4; i++) bSum += this._fftArray[i]
+      const bass = bSum / (4 * 255)
+
+      let mSum = 0
+      for (let i = 4; i < 13; i++) mSum += this._fftArray[i]
+      const mid = mSum / (9 * 255)
+
+      let tSum = 0
+      for (let i = 13; i < 32; i++) tSum += this._fftArray[i]
+      const treble = tSum / (19 * 255)
+
+      const energy = clamp(bass * 0.55 + mid * 0.30 + treble * 0.15, 0, 1)
+      return { bass, mid, treble, energy }
+    } catch {
+      return { bass: 0, mid: 0, treble: 0, energy: 0 }
+    }
+  }
+
+  _playDspBuffer(name, gain = 1, rate = 1) {
+    const ctx = this._getCtx()
+    const buf = this.dspBuffers[name]
+    if (!ctx || !buf) return false
+
+    try {
+      const src = ctx.createBufferSource()
+      src.buffer = buf
+      src.playbackRate.value = clamp(rate, 0.25, 4)
+
+      const g = ctx.createGain()
+      g.gain.setValueAtTime(gain, ctx.currentTime)
+
+      src.connect(g)
+      if (this._masterSfxGain) {
+        g.connect(this._masterSfxGain)
+      } else {
+        g.connect(ctx.destination)
+      }
+
+      src.start()
+      return true
+    } catch {
+      return false
+    }
   }
 
   _playNote(freq, dur, gain, type = 'sine', offset = 0, rate = 1) {
@@ -97,7 +256,11 @@ class GameAudioController {
     const osc = ctx.createOscillator()
     const g = ctx.createGain()
     osc.connect(g)
-    g.connect(ctx.destination)
+    if (this._masterSfxGain) {
+      g.connect(this._masterSfxGain)
+    } else {
+      g.connect(ctx.destination)
+    }
     osc.type = type
     osc.frequency.value = freq * clamp(rate, 0.5, 2)
     const t = ctx.currentTime + offset
@@ -123,7 +286,11 @@ class GameAudioController {
     const g = ctx.createGain()
     src.connect(flt)
     flt.connect(g)
-    g.connect(ctx.destination)
+    if (this._masterSfxGain) {
+      g.connect(this._masterSfxGain)
+    } else {
+      g.connect(ctx.destination)
+    }
     const t = ctx.currentTime + offset
     const vol = clamp(gain * this.sfxVolume * this.sfxDuck, 0, 1)
     g.gain.setValueAtTime(vol, t)
@@ -132,48 +299,57 @@ class GameAudioController {
     src.stop(t + dur + 0.01)
   }
 
-  _arp(notes, dur = 0.07, gain = 0.12, type = 'triangle') {
-    notes.forEach((f, i) => this._playNote(f, dur, gain, type, i * dur * 0.65))
-  }
-
   playMove() {
-    if (!this._permit('move', 55, 260, 10)) return
-    const r = pick(PENTATONIC_RATIOS) * rand(0.985, 1.015)
-    this._playNote(380, 0.02, rand(0.16, 0.24), 'triangle', 0, r)
+    if (!this._permit('move', 50, 260, 10)) return
+    const f = pick(PENTATONIC_FREQS) * rand(0.985, 1.015)
+    this._playNote(f * 0.5, 0.025, rand(0.12, 0.18), 'triangle')
   }
 
   playRotate() {
-    if (!this._permit('rotate', 30, 420, 11)) return
-    const r = pick(PENTATONIC_RATIOS) * rand(0.995, 1.03)
-    this._playNote(1100, 0.03, rand(0.16, 0.24), 'triangle', 0, r)
-    this._playNote(750, 0.02, rand(0.12, 0.18), 'sine', 0.01, r)
+    if (!this._permit('rotate', 25, 420, 12)) return
+    const noteIdx = this._rotNoteStep % PENTATONIC_FREQS.length
+    this._rotNoteStep = (this._rotNoteStep + 1) % PENTATONIC_FREQS.length
+
+    const dspNames = ['chime_c4', 'chime_d4', 'chime_e4', 'chime_g4', 'chime_a4', 'chime_c5', 'chime_d5', 'chime_e5']
+    const dspName = dspNames[noteIdx]
+
+    if (!this._playDspBuffer(dspName, 0.65 * this.sfxVolume * this.sfxDuck)) {
+      const f = PENTATONIC_FREQS[noteIdx]
+      this._playNote(f, 0.15, rand(0.16, 0.22), 'sine')
+      this._playNote(f * 2, 0.08, rand(0.08, 0.12), 'triangle', 0.005)
+    }
   }
 
   playRotate180() {
-    if (!this._permit('rotate180', 30, 420, 11)) return
-    const r = pick(PENTATONIC_RATIOS) * rand(0.99, 1.02)
-    this._playNote(880, 0.04, rand(0.18, 0.26), 'triangle', 0, r)
-    this._playNote(1320, 0.035, rand(0.16, 0.22), 'triangle', 0.018, r)
-    this._playNote(1760, 0.03, rand(0.12, 0.18), 'sine', 0.035, r)
+    if (!this._permit('rotate180', 25, 420, 12)) return
+    const f1 = PENTATONIC_FREQS[(this._rotNoteStep + 2) % PENTATONIC_FREQS.length]
+    const f2 = PENTATONIC_FREQS[(this._rotNoteStep + 4) % PENTATONIC_FREQS.length]
+    this._rotNoteStep = (this._rotNoteStep + 2) % PENTATONIC_FREQS.length
+
+    this._playNote(f1, 0.12, 0.18, 'triangle')
+    this._playNote(f2, 0.15, 0.16, 'sine', 0.02)
+    this._playNote(f2 * 2, 0.08, 0.09, 'sine', 0.035)
   }
 
   playHold() {
-    const r = rand(0.96, 1.04)
-    this._playNote(660, 0.045, 0.18, 'triangle', 0, r)
-    this._playNote(990, 0.03, 0.12, 'triangle', 0.018, r)
+    const f = PENTATONIC_FREQS[3] // G4
+    this._playNote(f, 0.08, 0.18, 'triangle')
+    this._playNote(f * 1.5, 0.06, 0.12, 'sine', 0.02)
   }
 
   playSoftDrop() {
-    if (!this._permit('softDrop', 75, 420, 8)) return
-    this._playNote(300, 0.022, rand(0.08, 0.12), 'triangle', 0, rand(0.98, 1.02))
+    if (!this._permit('softDrop', 70, 420, 8)) return
+    this._playNote(220, 0.025, rand(0.06, 0.10), 'triangle', 0, rand(0.98, 1.02))
   }
 
   playHardDrop() {
-    if (!this._permit('hardDrop', 90, 600, 6)) return
-    const r = rand(0.98, 1.02)
-    this._playNote(75, 0.18, rand(0.3, 0.42), 'sine', 0, r)
-    this._playNote(410, 0.06, rand(0.1, 0.15), 'triangle', 0.01, r)
-    this._playNoise(900, rand(0.12, 0.2), 0.06, 0.012)
+    if (!this._permit('hardDrop', 80, 600, 6)) return
+    if (!this._playDspBuffer('sub_impact', 0.85 * this.sfxVolume * this.sfxDuck)) {
+      const r = rand(0.98, 1.02)
+      this._playNote(65, 0.22, rand(0.35, 0.48), 'sine', 0, r)
+      this._playNote(380, 0.05, rand(0.12, 0.16), 'triangle', 0.008, r)
+      this._playNoise(900, rand(0.14, 0.22), 0.06, 0.01)
+    }
   }
 
   playLock() {
@@ -183,11 +359,15 @@ class GameAudioController {
     const osc = ctx.createOscillator()
     const g = ctx.createGain()
     osc.connect(g)
-    g.connect(ctx.destination)
+    if (this._masterSfxGain) {
+      g.connect(this._masterSfxGain)
+    } else {
+      g.connect(ctx.destination)
+    }
     osc.type = 'sine'
     const t = ctx.currentTime
-    osc.frequency.setValueAtTime(110, t)
-    osc.frequency.exponentialRampToValueAtTime(52, t + 0.07)
+    osc.frequency.setValueAtTime(120, t)
+    osc.frequency.exponentialRampToValueAtTime(55, t + 0.07)
     const vol = clamp(0.18 * this.sfxVolume * this.sfxDuck, 0, 1)
     g.gain.setValueAtTime(vol, t)
     g.gain.exponentialRampToValueAtTime(0.001, t + 0.1)
@@ -195,23 +375,81 @@ class GameAudioController {
     osc.stop(t + 0.11)
   }
 
-  playLineClear(comboCount = 0) {
-    if (!this._permit('lineClear', 70, 850, 6)) return
-    const comboRate = 1 + clamp((comboCount || 0) * 0.055, 0, 0.55)
-    this._playNoise(9000, rand(0.12, 0.18), 0.11)
-    this._arp([392, 523, 659, 784].map((n) => n * comboRate), 0.09, 0.14, 'sine')
+  playLineClear(linesOrCombo = 1, comboCount = 0) {
+    if (!this._permit('lineClear', 60, 850, 6)) return
+    const lines = typeof linesOrCombo === 'number' && linesOrCombo <= 4 ? linesOrCombo : 1
+    const combo = typeof comboCount === 'number' ? comboCount : (typeof linesOrCombo === 'number' && linesOrCombo > 4 ? linesOrCombo : 0)
+
+    const chordMap = {
+      1: 'chord_single',
+      2: 'chord_double',
+      3: 'chord_triple',
+    }
+    const dsp = chordMap[lines]
+
+    if (!dsp || !this._playDspBuffer(dsp, 0.85 * this.sfxVolume * this.sfxDuck)) {
+      const comboRate = 1 + clamp(combo * 0.05, 0, 0.5)
+      this._playNoise(8000, rand(0.12, 0.18), 0.11)
+      const baseChords = {
+        1: [392, 523, 659],
+        2: [330, 392, 523, 659],
+        3: [262, 330, 392, 523, 659, 784],
+      }
+      const chord = (baseChords[lines] || baseChords[1]).map(f => f * comboRate)
+      this._arp(chord, 0.08, 0.16, 'sine')
+    }
   }
 
   playTetris() {
     if (!this._permit('tetris', 120, 1000, 4)) return
-    this._arp([262, 330, 392, 523, 659, 784, 1047], 0.1, 0.16, 'sine')
-    this._playNote(131, 0.35, 0.24, 'triangle', 0.12)
+    if (!this._playDspBuffer('chord_tetris', 0.95 * this.sfxVolume * this.sfxDuck)) {
+      this._arp([261.6, 329.6, 392.0, 523.3, 659.3, 784.0, 1046.5], 0.09, 0.18, 'sine')
+      this._playNote(65.4, 0.45, 0.35, 'sine', 0.08)
+    }
   }
 
   playTSpin() {
     if (!this._permit('tspin', 120, 900, 4)) return
-    this._arp([330, 415, 523, 659, 784, 988], 0.075, 0.16, 'triangle')
-    this._playNote(330, 0.18, 0.11, 'sine', 0.06)
+    if (!this._playDspBuffer('chord_tspin', 0.9 * this.sfxVolume * this.sfxDuck)) {
+      this._arp([329.6, 415.3, 493.9, 659.3, 830.6, 987.8], 0.07, 0.16, 'triangle')
+      this._playNote(164.8, 0.28, 0.18, 'sine', 0.05)
+    }
+  }
+
+  // ── Authentic NES Classic 8-bit Audio ────────────────────────────────────────
+  playClassicMove() {
+    if (!this._permit('classicMove', 45, 260, 10)) return
+    if (!this._playDspBuffer('nes_move', 0.7 * this.sfxVolume * this.sfxDuck)) {
+      this._playNote(220, 0.022, 0.22, 'square')
+    }
+  }
+
+  playClassicRotate() {
+    if (!this._permit('classicRotate', 25, 420, 12)) return
+    if (!this._playDspBuffer('nes_rotate', 0.75 * this.sfxVolume * this.sfxDuck)) {
+      this._playNote(440, 0.035, 0.24, 'square')
+    }
+  }
+
+  playClassicDrop() {
+    if (!this._permit('classicDrop', 60, 600, 6)) return
+    if (!this._playDspBuffer('nes_drop', 0.8 * this.sfxVolume * this.sfxDuck)) {
+      this._playNote(110, 0.06, 0.3, 'square')
+    }
+  }
+
+  playClassicClear() {
+    if (!this._permit('classicClear', 70, 850, 6)) return
+    if (!this._playDspBuffer('nes_clear', 0.85 * this.sfxVolume * this.sfxDuck)) {
+      this._arp([440, 554, 659, 880], 0.06, 0.25, 'square')
+    }
+  }
+
+  playClassicTetris() {
+    if (!this._permit('classicTetris', 120, 1000, 4)) return
+    if (!this._playDspBuffer('nes_tetris', 0.9 * this.sfxVolume * this.sfxDuck)) {
+      this._arp([262, 330, 392, 523, 659, 784, 1047, 1318], 0.08, 0.28, 'square')
+    }
   }
 
   playAllClear() {

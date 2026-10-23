@@ -172,6 +172,7 @@ export default function AppRouter() {
           <Route path="/" element={<MainMenuPage />} />
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/play" element={<CasualGamePage />} />
+          <Route path="/classic" element={<CasualGamePage initialMode="classic" />} />
           <Route path="/s1" element={<AuthRoute><StoryMapPage /></AuthRoute>} />
           <Route path="/s1/:chapterId/:levelId" element={<AuthRoute><StoryLevelPage /></AuthRoute>} />
           <Route path="/story" element={<AuthRoute><StoryEntryRedirect /></AuthRoute>} />

@@ -75,15 +75,16 @@ function useFallingPieces() {
 
 // ─── Main menu items ───────────────────────────────────────────────────────────
 const MENU_ITEMS = [
-  { label: 'SOLO',     sub: 'CLASSIC PLAY',   iconSrc: playIconUrl,       path: '/play',        color: '#00d4ff', public: true },
-  { label: 'STORY',    sub: 'CAMPAIGN',        iconSrc: storyIconUrl,  path: '/story',       color: '#a855f7' },
-  { label: 'VERSUS',   sub: 'ONLINE MATCH',    icon: '⚡', path: '/multiplayer', color: '#f97316' },
-  { label: 'THEMES',   sub: 'WORLD + PIECES',  icon: '◉',  path: '/themes',      color: '#e879f9' },
-  { label: 'STORE',    sub: 'SHOP',            iconSrc: storeIconUrl,  path: '/store',       color: '#22c55e' },
-  { label: 'STATS',    sub: 'LEADERBOARD',     iconSrc: leaderboardIconUrl, path: '/stats',      color: '#eab308' },
-  { label: 'LORE',     sub: 'STORY TEXTS',     icon: '✦',  path: '/lore',        color: '#22c55e' },
-  { label: 'SOUNDTRACK', sub: 'VOTE TRACKS',   iconSrc: soundIconUrl,    path: '/artwork',     color: '#ec4899', public: true },
-  { label: 'SETTINGS', sub: 'CONTROLS · AUDIO', iconSrc: settingsIconUrl, action: 'settings', color: '#94a3b8', public: true },
+  { label: 'SOLO',       sub: 'MODERN PLAY',     iconSrc: playIconUrl,        path: '/play',        color: '#00d4ff', public: true },
+  { label: 'CLASSIC',    sub: 'AUTHENTIC NES',   icon: '🕹️',                  path: '/classic',     color: '#f59e0b', public: true },
+  { label: 'STORY',      sub: 'CAMPAIGN',        iconSrc: storyIconUrl,       path: '/story',       color: '#a855f7' },
+  { label: 'VERSUS',     sub: 'ONLINE MATCH',    icon: '⚡',                   path: '/multiplayer', color: '#f97316' },
+  { label: 'THEMES',     sub: 'WORLD + PIECES',  icon: '◉',                    path: '/themes',      color: '#e879f9' },
+  { label: 'STORE',      sub: 'SHOP',            iconSrc: storeIconUrl,       path: '/store',       color: '#22c55e' },
+  { label: 'STATS',      sub: 'LEADERBOARD',     iconSrc: leaderboardIconUrl, path: '/stats',       color: '#eab308' },
+  { label: 'LORE',       sub: 'STORY TEXTS',     icon: '✦',                    path: '/lore',        color: '#22c55e' },
+  { label: 'SOUNDTRACK', sub: 'VOTE TRACKS',     iconSrc: soundIconUrl,       path: '/artwork',     color: '#ec4899', public: true },
+  { label: 'SETTINGS',   sub: 'CONTROLS · AUDIO', iconSrc: settingsIconUrl,   action: 'settings',   color: '#94a3b8', public: true },
 ]
 
 // ─── Components ───────────────────────────────────────────────────────────────
