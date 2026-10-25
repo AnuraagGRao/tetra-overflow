@@ -6,6 +6,7 @@ const STEM_SOURCES = {
   synth: new URL('./Pattern_Perfect.mp3', import.meta.url).href,
 }
 
+const PENTATONIC_RATIOS = [1, 9 / 8, 5 / 4, 3 / 2, 5 / 3]
 const PENTATONIC_FREQS = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25] // C4..E5
 
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v))
@@ -54,8 +55,6 @@ class GameAudioController {
   _preloadDspSoundbank() {
     if (typeof window === 'undefined') return
     const dspFiles = [
-      'chime_c4', 'chime_d4', 'chime_e4', 'chime_g4', 'chime_a4', 'chime_c5', 'chime_d5', 'chime_e5',
-      'sub_impact', 'chord_single', 'chord_double', 'chord_triple', 'chord_tetris', 'chord_tspin',
       'nes_move', 'nes_rotate', 'nes_drop', 'nes_clear', 'nes_tetris'
     ]
 
@@ -301,55 +300,42 @@ class GameAudioController {
 
   playMove() {
     if (!this._permit('move', 50, 260, 10)) return
-    const f = pick(PENTATONIC_FREQS) * rand(0.985, 1.015)
-    this._playNote(f * 0.5, 0.025, rand(0.12, 0.18), 'triangle')
+    const r = pick(PENTATONIC_RATIOS) * rand(0.985, 1.015)
+    this._playNote(380, 0.02, rand(0.16, 0.24), 'triangle', 0, r)
   }
 
   playRotate() {
     if (!this._permit('rotate', 25, 420, 12)) return
-    const noteIdx = this._rotNoteStep % PENTATONIC_FREQS.length
-    this._rotNoteStep = (this._rotNoteStep + 1) % PENTATONIC_FREQS.length
-
-    const dspNames = ['chime_c4', 'chime_d4', 'chime_e4', 'chime_g4', 'chime_a4', 'chime_c5', 'chime_d5', 'chime_e5']
-    const dspName = dspNames[noteIdx]
-
-    if (!this._playDspBuffer(dspName, 0.65 * this.sfxVolume * this.sfxDuck)) {
-      const f = PENTATONIC_FREQS[noteIdx]
-      this._playNote(f, 0.15, rand(0.16, 0.22), 'sine')
-      this._playNote(f * 2, 0.08, rand(0.08, 0.12), 'triangle', 0.005)
-    }
+    const r = pick(PENTATONIC_RATIOS) * rand(0.995, 1.03)
+    this._playNote(1100, 0.03, rand(0.16, 0.24), 'triangle', 0, r)
+    this._playNote(750, 0.02, rand(0.12, 0.18), 'sine', 0.01, r)
   }
 
   playRotate180() {
     if (!this._permit('rotate180', 25, 420, 12)) return
-    const f1 = PENTATONIC_FREQS[(this._rotNoteStep + 2) % PENTATONIC_FREQS.length]
-    const f2 = PENTATONIC_FREQS[(this._rotNoteStep + 4) % PENTATONIC_FREQS.length]
-    this._rotNoteStep = (this._rotNoteStep + 2) % PENTATONIC_FREQS.length
-
-    this._playNote(f1, 0.12, 0.18, 'triangle')
-    this._playNote(f2, 0.15, 0.16, 'sine', 0.02)
-    this._playNote(f2 * 2, 0.08, 0.09, 'sine', 0.035)
+    const r = pick(PENTATONIC_RATIOS) * rand(0.99, 1.02)
+    this._playNote(880, 0.04, rand(0.18, 0.26), 'triangle', 0, r)
+    this._playNote(1320, 0.035, rand(0.16, 0.22), 'triangle', 0.018, r)
+    this._playNote(1760, 0.03, rand(0.12, 0.18), 'sine', 0.035, r)
   }
 
   playHold() {
-    const f = PENTATONIC_FREQS[3] // G4
-    this._playNote(f, 0.08, 0.18, 'triangle')
-    this._playNote(f * 1.5, 0.06, 0.12, 'sine', 0.02)
+    const r = rand(0.96, 1.04)
+    this._playNote(660, 0.045, 0.18, 'triangle', 0, r)
+    this._playNote(990, 0.03, 0.12, 'triangle', 0.018, r)
   }
 
   playSoftDrop() {
     if (!this._permit('softDrop', 70, 420, 8)) return
-    this._playNote(220, 0.025, rand(0.06, 0.10), 'triangle', 0, rand(0.98, 1.02))
+    this._playNote(300, 0.022, rand(0.08, 0.12), 'triangle', 0, rand(0.98, 1.02))
   }
 
   playHardDrop() {
     if (!this._permit('hardDrop', 80, 600, 6)) return
-    if (!this._playDspBuffer('sub_impact', 0.85 * this.sfxVolume * this.sfxDuck)) {
-      const r = rand(0.98, 1.02)
-      this._playNote(65, 0.22, rand(0.35, 0.48), 'sine', 0, r)
-      this._playNote(380, 0.05, rand(0.12, 0.16), 'triangle', 0.008, r)
-      this._playNoise(900, rand(0.14, 0.22), 0.06, 0.01)
-    }
+    const r = rand(0.98, 1.02)
+    this._playNote(75, 0.18, rand(0.3, 0.42), 'sine', 0, r)
+    this._playNote(410, 0.06, rand(0.1, 0.15), 'triangle', 0.01, r)
+    this._playNoise(900, rand(0.14, 0.22), 0.06, 0.012)
   }
 
   playLock() {
@@ -366,8 +352,8 @@ class GameAudioController {
     }
     osc.type = 'sine'
     const t = ctx.currentTime
-    osc.frequency.setValueAtTime(120, t)
-    osc.frequency.exponentialRampToValueAtTime(55, t + 0.07)
+    osc.frequency.setValueAtTime(110, t)
+    osc.frequency.exponentialRampToValueAtTime(52, t + 0.07)
     const vol = clamp(0.18 * this.sfxVolume * this.sfxDuck, 0, 1)
     g.gain.setValueAtTime(vol, t)
     g.gain.exponentialRampToValueAtTime(0.001, t + 0.1)
@@ -377,43 +363,24 @@ class GameAudioController {
 
   playLineClear(linesOrCombo = 1, comboCount = 0) {
     if (!this._permit('lineClear', 60, 850, 6)) return
-    const lines = typeof linesOrCombo === 'number' && linesOrCombo <= 4 ? linesOrCombo : 1
-    const combo = typeof comboCount === 'number' ? comboCount : (typeof linesOrCombo === 'number' && linesOrCombo > 4 ? linesOrCombo : 0)
-
-    const chordMap = {
-      1: 'chord_single',
-      2: 'chord_double',
-      3: 'chord_triple',
-    }
-    const dsp = chordMap[lines]
-
-    if (!dsp || !this._playDspBuffer(dsp, 0.85 * this.sfxVolume * this.sfxDuck)) {
-      const comboRate = 1 + clamp(combo * 0.05, 0, 0.5)
-      this._playNoise(8000, rand(0.12, 0.18), 0.11)
-      const baseChords = {
-        1: [392, 523, 659],
-        2: [330, 392, 523, 659],
-        3: [262, 330, 392, 523, 659, 784],
-      }
-      const chord = (baseChords[lines] || baseChords[1]).map(f => f * comboRate)
-      this._arp(chord, 0.08, 0.16, 'sine')
-    }
+    const combo = typeof comboCount === 'number' && comboCount > 0
+      ? comboCount
+      : (typeof linesOrCombo === 'number' ? linesOrCombo : 0)
+    const comboRate = 1 + clamp(combo * 0.055, 0, 0.55)
+    this._playNoise(9000, rand(0.12, 0.18), 0.11)
+    this._arp([392, 523, 659, 784].map((n) => n * comboRate), 0.09, 0.14, 'sine')
   }
 
   playTetris() {
     if (!this._permit('tetris', 120, 1000, 4)) return
-    if (!this._playDspBuffer('chord_tetris', 0.95 * this.sfxVolume * this.sfxDuck)) {
-      this._arp([261.6, 329.6, 392.0, 523.3, 659.3, 784.0, 1046.5], 0.09, 0.18, 'sine')
-      this._playNote(65.4, 0.45, 0.35, 'sine', 0.08)
-    }
+    this._arp([262, 330, 392, 523, 659, 784, 1047], 0.1, 0.16, 'sine')
+    this._playNote(131, 0.35, 0.24, 'triangle', 0.12)
   }
 
   playTSpin() {
     if (!this._permit('tspin', 120, 900, 4)) return
-    if (!this._playDspBuffer('chord_tspin', 0.9 * this.sfxVolume * this.sfxDuck)) {
-      this._arp([329.6, 415.3, 493.9, 659.3, 830.6, 987.8], 0.07, 0.16, 'triangle')
-      this._playNote(164.8, 0.28, 0.18, 'sine', 0.05)
-    }
+    this._arp([330, 415, 523, 659, 784, 988], 0.075, 0.16, 'triangle')
+    this._playNote(330, 0.18, 0.11, 'sine', 0.06)
   }
 
   // ── Authentic NES Classic 8-bit Audio ────────────────────────────────────────
