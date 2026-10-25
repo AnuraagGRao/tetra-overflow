@@ -36,7 +36,18 @@ class GameAudioController {
     this._dspLoaded = false
 
     this._initHowls()
+    this._initAutoplayUnlock()
     this._preloadDspSoundbank()
+  }
+
+  _initAutoplayUnlock() {
+    if (typeof window === 'undefined') return
+    const unlockEvents = ['pointerdown', 'keydown', 'touchstart']
+    const onFirstInteraction = () => {
+      this.unlock()
+      unlockEvents.forEach((e) => window.removeEventListener(e, onFirstInteraction))
+    }
+    unlockEvents.forEach((e) => window.addEventListener(e, onFirstInteraction, { passive: true, once: true }))
   }
 
   _initHowls() {
@@ -67,10 +78,18 @@ class GameAudioController {
           const res = await fetch(`${dspBase}${name}.wav`)
           if (!res.ok) return
           const arrayBuffer = await res.arrayBuffer()
-          const ctx = this._getCtx()
-          if (!ctx) return
-          const audioBuffer = await ctx.decodeAudioData(arrayBuffer)
-          this.dspBuffers[name] = audioBuffer
+          // Use OfflineAudioContext for decoding to avoid triggering browser autoplay restriction warnings
+          const OfflineCtx = window.OfflineAudioContext || window.webkitOfflineAudioContext
+          if (OfflineCtx) {
+            const decodeCtx = new OfflineCtx(1, 1, 44100)
+            const audioBuffer = await decodeCtx.decodeAudioData(arrayBuffer)
+            this.dspBuffers[name] = audioBuffer
+          } else {
+            const ctx = this._getCtx()
+            if (!ctx) return
+            const audioBuffer = await ctx.decodeAudioData(arrayBuffer)
+            this.dspBuffers[name] = audioBuffer
+          }
         } catch {
           // Non-fatal: procedural fallback is always available
         }
@@ -83,7 +102,7 @@ class GameAudioController {
   unlock() {
     try {
       const ctx = this._getCtx()
-      if (ctx?.state === 'suspended') ctx.resume()
+      if (ctx?.state === 'suspended') ctx.resume().catch(() => {})
       if (Howler.ctx?.state === 'suspended') Howler.ctx.resume()
     } catch {
       // Non-fatal: audio unlock failures should never break gameplay.
@@ -298,6 +317,11 @@ class GameAudioController {
     src.stop(t + dur + 0.01)
   }
 
+  _arp(notes, dur = 0.07, gain = 0.12, type = 'triangle') {
+    if (!Array.isArray(notes)) return
+    notes.forEach((f, i) => this._playNote(f, dur, gain, type, i * dur * 0.65))
+  }
+
   playMove() {
     if (!this._permit('move', 50, 260, 10)) return
     const r = pick(PENTATONIC_RATIOS) * rand(0.985, 1.015)
@@ -363,12 +387,23 @@ class GameAudioController {
 
   playLineClear(linesOrCombo = 1, comboCount = 0) {
     if (!this._permit('lineClear', 60, 850, 6)) return
+    const lines = typeof linesOrCombo === 'number' && linesOrCombo >= 1 && linesOrCombo <= 4
+      ? linesOrCombo
+      : 1
     const combo = typeof comboCount === 'number' && comboCount > 0
       ? comboCount
-      : (typeof linesOrCombo === 'number' ? linesOrCombo : 0)
+      : (typeof linesOrCombo === 'number' && linesOrCombo > 4 ? linesOrCombo : 0)
     const comboRate = 1 + clamp(combo * 0.055, 0, 0.55)
+
+    const baseChords = {
+      1: [392, 523, 659],
+      2: [330, 392, 523, 659],
+      3: [262, 330, 392, 523, 659, 784],
+    }
+    const notes = (baseChords[lines] || [392, 523, 659, 784]).map((n) => n * comboRate)
+
     this._playNoise(9000, rand(0.12, 0.18), 0.11)
-    this._arp([392, 523, 659, 784].map((n) => n * comboRate), 0.09, 0.14, 'sine')
+    this._arp(notes, 0.075, 0.15, 'sine')
   }
 
   playTetris() {
