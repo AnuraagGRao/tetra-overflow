@@ -174,10 +174,10 @@ export default function GameShell({
                 const nextVal = !currentShow
                 try {
                   const saved = JSON.parse(localStorage.getItem('tetris-config') || '{}')
-                  localStorage.setItem('tetris-config', JSON.stringify({ ...saved, showOnScreenControls: nextVal }))
+                  localStorage.setItem('tetris-config', JSON.stringify({ ...saved, showOnScreenControls: nextVal, userConfiguredControls: true }))
                 } catch {}
-                setConfig(prev => ({ ...prev, showOnScreenControls: nextVal }))
-                window.dispatchEvent(new CustomEvent('tetris-config-change', { detail: { showOnScreenControls: nextVal } }))
+                setConfig(prev => ({ ...prev, showOnScreenControls: nextVal, userConfiguredControls: true }))
+                window.dispatchEvent(new CustomEvent('tetris-config-change', { detail: { showOnScreenControls: nextVal, userConfiguredControls: true } }))
               }}
               title="Toggle On-Screen Controls"
               aria-label="Toggle On-Screen Controls"
@@ -405,7 +405,16 @@ export default function GameShell({
           onZoom={() => {}}
           onSettings={() => onOpenSettings?.()}
         >
-          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'visible' }}>
+          <div style={{
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'visible',
+            paddingBottom: (config.showOnScreenControls ?? isTouch) ? 'calc(clamp(3.8rem, 12vh, 5.5rem) + env(safe-area-inset-bottom, 0px))' : 0,
+            boxSizing: 'border-box',
+          }}>
             <div style={{ transform: `scale(${zoom})`, transformOrigin: 'center center', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <GameCanvas
                 state={state}
@@ -447,7 +456,7 @@ export default function GameShell({
             alignItems: 'center',
             justifyContent: 'center',
             overflow: 'hidden',
-            paddingBottom: focus && config.showOnScreenControls ? 'calc(4.5rem + env(safe-area-inset-bottom, 0px))' : 0,
+            paddingBottom: focus && (config.showOnScreenControls ?? isTouch) ? 'calc(4.5rem + env(safe-area-inset-bottom, 0px))' : 0,
           }}
         >
           <div
@@ -536,10 +545,10 @@ export default function GameShell({
       )}
 
       {/* Touch controls */}
-      {(config.showOnScreenControls ?? isTouch) && !focus && (
+      {(config.showOnScreenControls ?? isTouch) && !focus && !isLandscape && (
         <TouchControls onPress={handlePress} onRelease={handleRelease} />
       )}
-      {(config.showOnScreenControls ?? isTouch) && focus && !isLandscape && (
+      {(config.showOnScreenControls ?? isTouch) && (focus || isLandscape) && (
         <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 60, pointerEvents: 'auto' }}>
           <TouchControls onPress={handlePress} onRelease={handleRelease} />
         </div>

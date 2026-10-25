@@ -1347,7 +1347,7 @@ export default function GameCanvas({ state, onTap, onTwoFingerTap, onDragBegin, 
 
   const handlePointerDown = (event) => {
     event.preventDefault()
-    event.currentTarget.setPointerCapture(event.pointerId)
+    try { event.currentTarget.setPointerCapture(event.pointerId) } catch {}
     // Register pointer for multi-finger detection
     if (event.pointerType === "touch") {
       activePointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY, time: performance.now() })

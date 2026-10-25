@@ -28,10 +28,17 @@ export function readGameConfig() {
   if (typeof localStorage === 'undefined') return { ...DEFAULT_GAME_CONFIG, showOnScreenControls: isTouch }
   try {
     const saved = JSON.parse(localStorage.getItem(GAME_CONFIG_KEY) || '{}')
+    let showControls
+    if (saved.userConfiguredControls === true && typeof saved.showOnScreenControls === 'boolean') {
+      showControls = saved.showOnScreenControls
+    } else {
+      // Default to isTouch: on mobile/tablets, controls are ON by default!
+      showControls = isTouch ? true : Boolean(saved.showOnScreenControls)
+    }
     return {
       ...DEFAULT_GAME_CONFIG,
-      showOnScreenControls: saved.showOnScreenControls ?? isTouch,
       ...saved,
+      showOnScreenControls: showControls,
     }
   } catch {
     return { ...DEFAULT_GAME_CONFIG, showOnScreenControls: isTouch }

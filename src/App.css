@@ -672,13 +672,13 @@ html { scroll-behavior: smooth; }
 .control-button {
   min-height: 3.2rem;
   border-radius: 10px;
-    border: 1px solid var(--c-border2);
-    background: var(--c-glass);
-    color: var(--c-text);
+  border: 1px solid var(--c-border2);
+  background: var(--c-glass);
+  color: var(--c-text);
   transition: background 0.08s;
   user-select: none;
   -webkit-user-select: none;
-  touch-action: manipulation;
+  touch-action: none;
 }
 .control-button:active { background: rgba(0, 229, 255, 0.18); }
 
@@ -945,6 +945,11 @@ html { scroll-behavior: smooth; }
     padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
   }
 
+  /* When on-screen controls are shown in normal portrait mode, balance bottom panel height */
+  .app.osc-on .mobile-layout:not(.ui-hidden) .pt-panel {
+    max-height: min(220px, 24svh);
+  }
+
   /* ── Floating UI toggle tab ── */
   .ui-toggle-tab {
     position: fixed;
@@ -1194,8 +1199,8 @@ html { scroll-behavior: smooth; }
   display: none;
 }
 
-/* In fullscreen with on-screen controls, reserve bottom space */
-.app.osc-on .mobile-ls.ui-hidden .ls-canvas-wrap {
+/* With on-screen controls in landscape, reserve bottom space */
+.app.osc-on .mobile-ls .ls-canvas-wrap {
   padding-bottom: calc(clamp(4rem, 12vh, 6rem) + env(safe-area-inset-bottom, 0px));
 }
 

@@ -628,8 +628,15 @@ export default function MultiplayerPage() {
   // WS streaming disabled — Firestore-only path remains
 
   const showOnScreenControls = (() => {
-    try { return JSON.parse(localStorage.getItem('tetris-config') ?? '{}').showOnScreenControls ?? false }
-    catch { return false }
+    try {
+      const saved = JSON.parse(localStorage.getItem('tetris-config') ?? '{}')
+      const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0
+      return saved.userConfiguredControls === true && typeof saved.showOnScreenControls === 'boolean'
+        ? saved.showOnScreenControls
+        : (isTouch ? true : Boolean(saved.showOnScreenControls))
+    } catch {
+      return 'ontouchstart' in window || navigator.maxTouchPoints > 0
+    }
   })()
 
   // ── Init SFX volume from config; stop music on unmount ────────────────────────
@@ -1086,11 +1093,23 @@ export default function MultiplayerPage() {
 
   // ── Input callbacks ───────────────────────────────────────────────────────────
   const triggerAction  = useCallback((a) => { actionRef.current[a] = true }, [])
-  const handlePress    = useCallback((k, held) => { if (held) heldRef.current[k] = true; else triggerAction(k) }, [triggerAction])
+  const handlePress    = useCallback((k, held) => {
+    if (held) {
+      if (k === 'left') { actionRef.current.moveLeft = true; heldRef.current.left = true }
+      else if (k === 'right') { actionRef.current.moveRight = true; heldRef.current.right = true }
+      else heldRef.current[k] = true
+    } else {
+      triggerAction(k)
+    }
+  }, [triggerAction])
   const handleRelease  = useCallback((k) => { heldRef.current[k] = false }, [])
 
   const handleDragBegin = useCallback((dir) => {
-    if (dir === 'left' || dir === 'right') handlePress(dir, true)
+    if (dir === 'left' || dir === 'right') {
+      const act = dir === 'left' ? 'moveLeft' : 'moveRight'
+      actionRef.current[act] = (actionRef.current[act] || 0) + 1
+      handlePress(dir, true)
+    }
     else if (dir === 'down') { playSoftDropSFX('classic'); handlePress('softDrop', true) }
     else if (dir === 'up')   triggerAction('hold')
   }, [handlePress, triggerAction])

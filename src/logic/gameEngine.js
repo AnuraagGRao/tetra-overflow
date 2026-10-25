@@ -1127,8 +1127,14 @@ export class TetrisEngine {
         return
       }
     }
-    if (actions.moveLeft) this.tryMove(-1)
-    if (actions.moveRight) this.tryMove(1)
+    if (actions.moveLeft) {
+      const steps = typeof actions.moveLeft === 'number' ? actions.moveLeft : 1
+      for (let i = 0; i < steps; i++) this.tryMove(-1)
+    }
+    if (actions.moveRight) {
+      const steps = typeof actions.moveRight === 'number' ? actions.moveRight : 1
+      for (let i = 0; i < steps; i++) this.tryMove(1)
+    }
 
     this.updateHorizontal(dt, held)
 

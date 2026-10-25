@@ -1959,15 +1959,26 @@ export default function App({ defaultMode = null } = {}) {
     const hapticOn = configRef.current.hapticEnabled
     const bgBeat = () => { try { window.dispatchEvent(new Event('bg-beat')) } catch {} }
     if (hold) {
-      heldRef.current[key] = true
-      if (key === 'left' || key === 'right') {
+      if (key === 'left') {
+        actionRef.current.moveLeft = true
+        heldRef.current.left = true
+        emitSynesthesia(SYNESTHESIA_EVENT.MOVE, { intensity: 0.95, source: 'touch' })
+        if (sfxOn) playMoveSFX(theme)
+        bgBeat()
+        if (hapticOn) navigator.vibrate?.(20)
+      } else if (key === 'right') {
+        actionRef.current.moveRight = true
+        heldRef.current.right = true
         emitSynesthesia(SYNESTHESIA_EVENT.MOVE, { intensity: 0.95, source: 'touch' })
         if (sfxOn) playMoveSFX(theme)
         bgBeat()
         if (hapticOn) navigator.vibrate?.(20)
       } else if (key === 'softDrop') {
+        heldRef.current.softDrop = true
         emitSynesthesia(SYNESTHESIA_EVENT.SOFT_DROP, { intensity: 0.86, source: 'touch' })
         if (hapticOn) navigator.vibrate?.(15)
+      } else {
+        heldRef.current[key] = true
       }
     } else {
       triggerAction(key); bgBeat()
@@ -1977,6 +1988,8 @@ export default function App({ defaultMode = null } = {}) {
   const handleDragBegin = (dir) => {
     const sfxOn = configRef.current.sfxEnabled
     if (dir === 'left' || dir === 'right') {
+      const act = dir === 'left' ? 'moveLeft' : 'moveRight'
+      actionRef.current[act] = (actionRef.current[act] || 0) + 1
       heldRef.current[dir] = true
       emitSynesthesia(SYNESTHESIA_EVENT.MOVE, { intensity: 1.05, source: 'drag' })
       if (sfxOn) playSwipeSFX(dir, theme); try { window.dispatchEvent(new Event('bg-beat')) } catch {}
@@ -2883,8 +2896,8 @@ export default function App({ defaultMode = null } = {}) {
           {renderCountdown()}
           {renderFloatPopups()}
 
-          {/* Fullscreen controls when UI hidden */}
-          {isUiHidden && config.showOnScreenControls && (
+          {/* On-screen controls in landscape */}
+          {config.showOnScreenControls && (
             <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 22, pointerEvents: 'auto' }}>
               <TouchControls onPress={_handlePress} onRelease={_handleRelease} />
             </div>
@@ -3137,8 +3150,13 @@ export default function App({ defaultMode = null } = {}) {
         )}
       </SynesthesiaMotionLayer>
 
+      {/* On-screen touch controls in normal portrait mode */}
+      {config.showOnScreenControls && !isUiHidden && (
+        <TouchControls onPress={_handlePress} onRelease={_handleRelease} />
+      )}
+
       {/* Focus/fullscreen controls: keep touch inputs available when UI is hidden */}
-      {isUiHidden && config.showOnScreenControls && (
+      {config.showOnScreenControls && isUiHidden && (
         <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 60, pointerEvents: 'auto' }}>
           <TouchControls onPress={_handlePress} onRelease={_handleRelease} />
         </div>

@@ -20,20 +20,29 @@ function ControlBtn({ btn, onPress, onRelease }) {
       type="button"
       className="control-button"
       aria-label={btn.ariaLabel}
+      style={{ touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none' }}
+      onContextMenu={(e) => e.preventDefault()}
+      onTouchStart={(e) => e.stopPropagation()}
       onPointerDown={(e) => {
         e.preventDefault()
+        e.stopPropagation()
         try { e.currentTarget.setPointerCapture(e.pointerId) } catch {}
         onPress(btn.key, btn.hold)
       }}
       onPointerUp={(e) => {
         e.preventDefault()
+        e.stopPropagation()
         try { e.currentTarget.releasePointerCapture(e.pointerId) } catch {}
         onRelease(btn.key, btn.hold)
       }}
       onPointerCancel={(e) => {
         e.preventDefault()
+        e.stopPropagation()
         try { e.currentTarget.releasePointerCapture(e.pointerId) } catch {}
         onRelease(btn.key, btn.hold)
+      }}
+      onPointerLeave={() => {
+        if (btn.hold) onRelease(btn.key, btn.hold)
       }}
     >
       {btn.label}
@@ -43,7 +52,12 @@ function ControlBtn({ btn, onPress, onRelease }) {
 
 export default function TouchControls({ onPress, onRelease }) {
   return (
-    <div className="touch-controls">
+    <div
+      className="touch-controls"
+      style={{ touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none' }}
+      onContextMenu={(e) => e.preventDefault()}
+      onTouchStart={(e) => e.stopPropagation()}
+    >
       <div className="touch-left">
         {LEFT_BTNS.map(btn => (
           <ControlBtn key={btn.key} btn={btn} onPress={onPress} onRelease={onRelease} />

@@ -127,7 +127,16 @@ export default function SettingsPage({ config, onConfig, onClose, onClearCache }
             <button
               type="button"
               className={`settings-toggle${config.showOnScreenControls ? ' on' : ''}`}
-              onClick={() => set('showOnScreenControls', !config.showOnScreenControls)}
+              onClick={() => {
+                onConfig(prev => {
+                  const next = { ...prev, showOnScreenControls: !config.showOnScreenControls, userConfiguredControls: true }
+                  try {
+                    localStorage.setItem('tetris-config', JSON.stringify(next))
+                    window.dispatchEvent(new CustomEvent('tetris-config-change', { detail: next }))
+                  } catch {}
+                  return next
+                })
+              }}
             >
               {config.showOnScreenControls ? 'ON' : 'OFF'}
             </button>
